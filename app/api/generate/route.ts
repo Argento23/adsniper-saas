@@ -1,0 +1,489 @@
+import { NextResponse } from 'next/server';
+import { auth, clerkClient } from '@clerk/nextjs/server';
+
+async function scrapeProductMetadata(url: string) {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+        const response = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            }
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) return null;
+
+        const html = await response.text();
+
+        const getMeta = (prop: string) => {
+            const match = html.match(new RegExp(`<meta property="${prop}" content="([^"]*)"`, 'i')) ||
+                html.match(new RegExp(`<meta name="${prop}" content="([^"]*)"`, 'i'));
+            return match ? match[1] : null;
+        };
+
+        const getTitle = () => {
+            const match = html.match(/<title>([^<]*)<\/title>/i);
+            return match ? match[1] : null;
+        };
+
+        return {
+            title: getMeta('og:title') || getTitle() || 'Producto',
+            description: getMeta('og:description') || getMeta('description') || '',
+            image: getMeta('og:image') || ''
+        };
+
+    } catch (error) {
+        console.error('Scraping failed:', error);
+        return null;
+    }
+}
+
+// TEMPLATE RANDOMIZER
+const TEMPLATES = {
+    AIDA: [
+        (prod: string, desc: string) => ({ hd: `Descubre ${prod}`, txt: `¿Buscas calidad? ${desc}...\n\nDiseñado pensando en ti. ✨\nPrueba la diferencia hoy mismo.` }),
+        (prod: string, desc: string) => ({ hd: `Nuevo ${prod}`, txt: `Atención: ${desc}...\n\nNo te pierdas de esta oportunidad única.\n👉 Compra ahora.` }),
+        (prod: string, desc: string) => ({ hd: `${prod}: Lo que esperabas`, txt: `Imagina tener ${desc}...\n\nHazlo realidad hoy.\nCalidad premium garantizada.` })
+    ],
+    PAS: [
+        (prod: string, desc: string) => ({ hd: `${prod}: La Solución`, txt: `¿Cansado de opciones mediocres? ${prod} cambia el juego.\n\n✓ ${desc}\n✓ Resultados probados.` }),
+        (prod: string, desc: string) => ({ hd: `¿Problemas con... ?`, txt: `Deja de sufrir. ${prod} es la respuesta.\n\nBeneficios:\n✓ ${desc}\n\nNo esperes más.` }),
+        (prod: string, desc: string) => ({ hd: `El secreto de ${prod}`, txt: `Muchos luchan con encontrar calidad. Tú no tienes por qué.\n\n${prod} te ofrece: ${desc}.` })
+    ],
+    PROOF: [
+        (prod: string, desc: string) => ({ hd: `${prod} - 5 Estrellas`, txt: `⭐⭐⭐⭐⭐ "Increíble experiencia".\n\n"${desc}"\n\nÚnete a cientos de clientes satisfechos.` }),
+        (prod: string, desc: string) => ({ hd: `Clientes Felices con ${prod}`, txt: `⭐⭐⭐⭐⭐ "No puedo vivir sin esto".\n\n${desc} que realmente funciona.\nCompra segura.` }),
+        (prod: string, desc: string) => ({ hd: `Lo más vendido: ${prod}`, txt: `⭐⭐⭐⭐⭐ Miles de unidades vendidas.\n\nDescubre por qué todos aman "${desc}".` })
+    ]
+};
+
+const getRandom = (arr: any[]) => arr[Math.floor(Math.random() * arr.length)];
+
+// LOCAL FALLBACK GENERATOR (Ad Copy) - Supports COUNT
+function generateLocalAds(productName: string, desc: string, image: string, visualTheme?: string, count: number = 3) {
+    const basePrompt = productName.substring(0, 40).replace(/[^a-zA-Z0-9 ]/g, " ").trim();
+    const styleSuffix = visualTheme ? `, ${visualTheme},` : ', professional product photography,';
+
+    // Pollinations URL generator (PROXY WRAPPED to avoid 1033)
+    const getUrl = (angleStyle: string) => {
+        const seed = Math.floor(Math.random() * 9999);
+        const p = `${basePrompt}, ${angleStyle}${styleSuffix} 8k, photorealistic, cinematic lighting`;
+        const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(p)}?width=1024&height=1024&nologo=true&seed=${seed}`;
+        // ROUTE THROUGH PROXY
+        return `/api/proxy-image?url=${encodeURIComponent(rawUrl)}`;
+    };
+
+    // Smart Description Truncation
+    const cleanDesc = desc.replace(/\n/g, ' ').substring(0, 150).trim();
+
+    const ads = [];
+    for (let i = 0; i < count; i++) {
+        let type = "";
+        let template;
+
+        const mode = i % 3;
+        if (mode === 0) {
+            type = "AIDA";
+            template = getRandom(TEMPLATES.AIDA)(productName, cleanDesc);
+        } else if (mode === 1) {
+            type = "PAS";
+            template = getRandom(TEMPLATES.PAS)(productName, cleanDesc);
+        } else {
+            type = "Social Proof";
+            template = getRandom(TEMPLATES.PROOF)(productName, cleanDesc);
+        }
+
+        ads.push({
+            type: `${type} (Variant ${i + 1})`,
+            headline: template.hd,
+            primary_text: template.txt,
+            generated_image_url: getUrl(type === "AIDA" ? "vibrant close-up" : type === "PAS" ? "minimalist studio" : "lifestyle usage"),
+            product_image_fallback: image
+        });
+    }
+
+    return ads;
+}
+
+// HUGGING FACE GENERATOR (Premium)
+async function generateHFImage(prompt: string) {
+    const token = process.env.HF_TOKEN;
+    if (!token || token.length < 10) return null;
+
+    try {
+        console.log("🚀 Attempting Hugging Face Generation (Flux.1)...");
+        const response = await fetch(
+            "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell",
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+                method: "POST",
+                body: JSON.stringify({ inputs: prompt }),
+            }
+        );
+
+        if (!response.ok) {
+            console.error(`HF Error: ${response.status} ${response.statusText}`);
+            return null;
+        }
+
+        const blob = await response.blob();
+        const arrayBuffer = await blob.arrayBuffer();
+        const base64 = Buffer.from(arrayBuffer).toString('base64');
+        return `data:image/jpeg;base64,${base64}`;
+
+    } catch (error) {
+        console.error("HF Generation Failed:", error);
+        return null;
+    }
+}
+
+// GROQ API GENERATOR (Llama 3 70B) - Professional Copy & Prompts
+async function generateGroqAds(productName: string, desc: string, count: number, lang: string = 'es') {
+    const apiKey = process.env.GROQ_API_KEY;
+    console.log(`🔑 Groq Check: Key Present? ${!!apiKey && apiKey.length > 5}`);
+
+    if (!apiKey || apiKey.length < 10) {
+        console.warn("⚠️ Groq Key missing or too short.");
+        return [{ type: "ERROR", headline: "GROQ KEY MISSING IN ENV", primary_text: "Check .env.local", image_prompt: "error" }];
+    }
+    try {
+        console.log(`🦙 Generating ${count} ads with Llama 3 (70b-8192) on Groq...`);
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                model: "llama-3.3-70b-versatile", // Revert to LATEST STABLE
+                messages: [
+                    {
+                        role: "system",
+                        content: `You are a strict JSON generator. Return a JSON array with key "ads" containing ${count} ad objects. 
+                        Each object: type, headline, primary_text, image_prompt. Language: ${lang}.
+                        No extra text. Only JSON.`
+                    },
+                    {
+                        role: "user",
+                        content: `Product: ${productName}\nDescription: ${desc}\n\nGenerate ${count} variations.`
+                    }
+                ],
+                temperature: 0.7
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`❌ Groq API Error: ${response.status} ${response.statusText}`, errorText);
+            throw new Error(`Groq API Error: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+
+        const json = await response.json();
+        const content = json.choices[0].message.content;
+
+        // Robust JSON Extraction
+        let parsed;
+        try {
+            parsed = JSON.parse(content);
+        } catch (e) {
+            // Try to find JSON block
+            const match = content.match(/\{[\s\S]*\}/);
+            if (match) {
+                try {
+                    parsed = JSON.parse(match[0]);
+                } catch (e2) {
+                    console.error("❌ JSON Parse Failed (Regex):", content);
+                    return null;
+                }
+            } else {
+                console.error("❌ No JSON found in response:", content);
+                return null;
+            }
+        }
+
+        const ads = parsed.ads || parsed;
+        if (!Array.isArray(ads)) {
+            console.error("❌ Groq returned invalid structure (not array):", ads);
+            throw new Error(`Invalid JSON Structure: ${JSON.stringify(ads).substring(0, 50)}...`);
+        }
+        return ads;
+
+    } catch (error: any) {
+        console.error("Groq Generation Failed:", error);
+        return [{ type: "ERROR", headline: `GROQ ERROR: ${error.message || error}`, primary_text: "Please check logs.", image_prompt: "error" }];
+    }
+}
+
+// LOCAL FALLBACK GENERATOR (Video Scripts) - MULTI-LANGUAGE
+function generateLocalScripts(productName: string, desc: string, lang: string = 'es') {
+    const isEs = lang === 'es' || lang.includes('es'); // Default to ES if not specified
+
+    // Clean benefit: remove generic intros like "Te presentamos" or "Conoce" if they exist at start
+    let benefit = desc.replace(/^(Te presentamos|Conoce|Descubre|Mira) /i, "");
+    benefit = benefit.length > 20 ? benefit.substring(0, 80) + "..." : (isEs ? "transformar tu rutina" : "transform your daily routine");
+
+    if (isEs) {
+        return [
+            {
+                title: "Estrategia Viral (Hook)",
+                angle: "Problema/Agitación",
+                audio_suggestion: "Audio en Tendencia 'Suspenso'",
+                sections: [
+                    { type: "Gancho", content: `¡Deja de hacer scroll si quieres solucionar tu problema con ${productName}!`, duration: "3s" },
+                    { type: "Cuerpo", content: `Encontré este cambio de juego. Mira esto: ${benefit}.`, duration: "15s" },
+                    { type: "CTA", content: "¡Consigue el tuyo en el link de la bio antes de que se agote!", duration: "5s" }
+                ]
+            },
+            {
+                title: "Unboxing ASMR",
+                angle: "Satisfacción Visual",
+                audio_suggestion: "Lo-fi Chill Beat",
+                sections: [
+                    { type: "Gancho", content: `(Sin hablar) *Sonido de abrir ${productName}*`, duration: "5s" },
+                    { type: "Cuerpo", content: `Mira esta calidad. La textura es una locura. Efectivamente logra ${benefit}.`, duration: "10s" },
+                    { type: "CTA", content: "Link en bio para comprar.", duration: "3s" }
+                ]
+            }
+        ];
+    } else {
+        return [
+            {
+                title: "Viral Hook Strategy",
+                angle: "Problem/Agitation",
+                audio_suggestion: "Trending 'Suspense' Audio",
+                sections: [
+                    { type: "Hook", content: `Stop scrolling if you want to fix your problem with ${productName}!`, duration: "3s" },
+                    { type: "Body", content: `I found this game-changer. Look at this: ${benefit}.`, duration: "15s" },
+                    { type: "CTA", content: "Get yours now at the link in bio before it's gone!", duration: "5s" }
+                ]
+            },
+            {
+                title: "ASMR Unboxing",
+                angle: "Satisfying/Visual",
+                audio_suggestion: "Lo-fi Chill Beat",
+                sections: [
+                    { type: "Hook", content: `(No talking) *Sound of unboxing ${productName}*`, duration: "5s" },
+                    { type: "Body", content: `Look at this quality. The texture is insane. Effectively ${benefit}.`, duration: "10s" },
+                    { type: "CTA", content: "Link in bio to shop.", duration: "3s" }
+                ]
+            }
+        ];
+    }
+}
+
+export async function POST(request: Request) {
+    try {
+        const body = await request.json();
+        const { productUrl, manual_title, manual_description, manual_image_prompt, manual_image_base64, brand, count = 3, language = 'es' } = body;
+
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const user = await (await clerkClient()).users.getUser(userId);
+        const credits = typeof user.publicMetadata.credits === 'number' ? user.publicMetadata.credits : 3; // Default 3 credits
+
+        // ADMIN OVERRIDE (Optional: your email)
+        const isAdmin = user.emailAddresses.some(e => e.emailAddress === 'gustavo@neurova.ai'); // Replace with your email if needed
+
+        if (credits <= 0 && !isAdmin) {
+            return NextResponse.json({ error: 'NO_CREDITS', message: 'You have run out of free credits.' }, { status: 403 });
+        }
+
+        // Validation: Need EITHER URL OR Manual Data
+        if (!productUrl && !manual_title) {
+            return NextResponse.json({ error: 'URL or Product Name required' }, { status: 400 });
+        }
+
+        // DEDUCT CREDIT (Optimistic - we deduct before generation to prevent spam, can refund on error if strict)
+        if (!isAdmin) {
+            await (await clerkClient()).users.updateUserMetadata(userId, {
+                publicMetadata: {
+                    credits: credits - 1
+                }
+            });
+        }
+
+        console.log(`🎯 Generating ${count} ads for: ${productUrl || manual_title} (Lang: ${language})`);
+
+        let scrapedTitle = manual_title || 'Producto';
+        let scrapedDesc = manual_description || '';
+        // Prioritize Uploaded Image over Placeholder
+        let scrapedImage = manual_image_base64 || ('https://placehold.co/1024x1024/101827/ffffff.png?text=' + encodeURIComponent(manual_title || 'Product'));
+        // Only scrape if URL provided (Link Mode)
+        if (productUrl) {
+            const scraped = await scrapeProductMetadata(productUrl);
+            if (scraped) {
+                scrapedTitle = scraped.title;
+                scrapedDesc = scraped.description;
+                if (scraped.image) scrapedImage = scraped.image;
+            }
+        }
+
+        // Base n8n URL
+        const n8nBaseUrl = process.env.N8N_WEBHOOK_URL ? process.env.N8N_WEBHOOK_URL.replace(/\/shopify-adsniper.*$/, '') : 'https://manager.generarise.space/webhook';
+        let n8nUrl = `${n8nBaseUrl}/shopify-adsniper-v8`;
+
+        const payload = {
+            product_url: productUrl || 'https://manual-input.com',
+            language: language,
+            brand: brand || {},
+            scraped_title: scrapedTitle,
+            scraped_description: scrapedDesc,
+            manual_image_prompt: manual_image_prompt,
+            count: count
+        };
+
+        let response;
+        let data: any = { ads: [] };
+
+        try {
+            // DEBUG: Disable n8n to force Groq - HARD RESET
+            if (Date.now() > 0) throw new Error("n8n DISABLED - HARD RESET");
+
+            /*
+            response = await fetch(n8nUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (response.ok) {
+                 data = await response.json();
+                 // PARANOID CHECK
+                 if (!data || !data.ads || !Array.isArray(data.ads) || data.ads.length === 0) {
+                     console.warn("⚠️ n8n returned empty/invalid ads. Triggering LOCAL FALLBACK.");
+                     throw new Error("n8n returned empty ads");
+                 }
+            } else {
+                 throw new Error(`n8n Status: ${response.status}`);
+            }
+            */
+
+        } catch (n8nError) {
+            console.error('⚠️ n8n Failed/Empty, using SMART LOCAL FALLBACK:', n8nError);
+            // We use count here to generate ALL ads locally
+            data = {
+                ads: [], // Leave empty to trigger GROQ HYBRID FILL below
+                scripts: generateLocalScripts(scrapedTitle, scrapedDesc, language),
+                product_title: scrapedTitle,
+                product_image: scrapedImage,
+                _mode: "local_to_groq_fallback"
+            };
+        }
+
+        // HYBRID FILL: If n8n returned fewer ads than requested, fill the gap locally
+        if (data.ads && Array.isArray(data.ads) && data.ads.length < count) {
+            // Try Groq First
+            const groqAds = await generateGroqAds(scrapedTitle, scrapedDesc, count - data.ads.length, language);
+
+            if (groqAds && Array.isArray(groqAds) && groqAds.length > 0) {
+                // Check for ERROR object
+                if (groqAds[0].type === "ERROR") {
+                    console.log("⚠️ Groq Failed with Error, showing in UI.");
+                    data.ads = [...data.ads, ...groqAds]; // SHOW ERROR IN UI
+                } else {
+                    console.log(`✅ Specific Llama 3 ads generated: ${groqAds.length}`);
+                    data.ads = [...data.ads, ...groqAds];
+                }
+            } else {
+                const needed = count - data.ads.length;
+                console.log(`⚠️ Falling back to Local Templates for ${needed} ads.`);
+                const extraAds = generateLocalAds(scrapedTitle, scrapedDesc, scrapedImage, manual_image_prompt, needed);
+                // Add DEBUG Marker
+                extraAds[0].headline = "DEBUG: LOCAL FALLBACK TRIGGERED";
+                data.ads = [...data.ads, ...extraAds];
+            }
+        }
+
+        // Process Ads (Hybrid Image Strategy + Visual Theme + Proxy)
+        if (data.ads && Array.isArray(data.ads)) {
+            data.ads = data.ads.map((ad: any) => {
+                let imageUrl = scrapedImage;
+
+                // Determine Visual Theme (User Input > AI Prompt > Default)
+                const visualTheme = manual_image_prompt ? `, ${manual_image_prompt}` : '';
+
+                if (ad.image_prompt || manual_image_prompt) {
+                    let promptToUse = ad.image_prompt || manual_title;
+                    if (manual_image_prompt) promptToUse = `${promptToUse} ${manual_image_prompt}`;
+
+                    const cleanPrompt = promptToUse.substring(0, 200).replace(/[^a-zA-Z0-9 ,]/g, "");
+                    const seed = Math.floor(Math.random() * 9999);
+
+                    // Use PROXY for everything
+                    const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=1024&height=1024&nologo=true&seed=${seed}&enhance=true`;
+                    imageUrl = `/api/proxy-image?url=${encodeURIComponent(rawUrl)}&fallback=${encodeURIComponent(scrapedImage)}`;
+
+                } else if (ad.generated_image_url && !manual_image_prompt) {
+                    // Even pre-generated URLs should go through proxy if they are Pollinations
+                    if (ad.generated_image_url.includes('pollinations.ai')) {
+                        imageUrl = `/api/proxy-image?url=${encodeURIComponent(ad.generated_image_url)}&fallback=${encodeURIComponent(scrapedImage)}`;
+                    } else {
+                        imageUrl = ad.generated_image_url;
+                    }
+                } else if (!ad.generated_image_url && !ad.image_prompt && manual_image_prompt) {
+                    const p = `${scrapedTitle}, ${manual_image_prompt}`;
+                    const seed = Math.floor(Math.random() * 9999);
+                    const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(p)}?width=1024&height=1024&nologo=true&seed=${seed}&enhance=true`;
+                    imageUrl = `/api/proxy-image?url=${encodeURIComponent(rawUrl)}&fallback=${encodeURIComponent(scrapedImage)}`;
+                }
+
+                return {
+                    ...ad,
+                    generated_image_url: imageUrl,
+                    product_image_fallback: scrapedImage
+                };
+            });
+
+            if (process.env.HF_TOKEN && process.env.HF_TOKEN.length > 10 && !manual_image_base64) {
+                console.log("💎 Upgrading images with Hugging Face...");
+                // process in parallel but await all
+                data.ads = await Promise.all(data.ads.map(async (ad: any) => {
+                    let finalUrl = ad.generated_image_url;
+
+                    // Construct prompt from ad type + product
+                    // If ad.image_prompt exists, use it. If not, use generated prompt.
+                    // Wait, ad object has image_prompt usually from n8n.
+                    // Or we can infer it.
+                    let baseP = ad.image_prompt || manual_image_prompt || manual_title || scrapedTitle;
+                    const p = `${baseP}, professional product photography, 8k, cinematic lighting, high quality`;
+
+                    // Try HF
+                    const hfImage = await generateHFImage(p);
+                    if (hfImage) {
+                        finalUrl = hfImage; // Base64 Data URL (bypass proxy)
+                    }
+
+                    return {
+                        ...ad,
+                        generated_image_url: finalUrl
+                    };
+                }));
+            }
+        }
+
+        // Ensure scripts are not undefined if n8n failed to return them
+        if (!data.scripts || !Array.isArray(data.scripts) || data.scripts.length === 0) {
+            data.scripts = generateLocalScripts(scrapedTitle, scrapedDesc, language);
+        }
+
+        return NextResponse.json({
+            ...data,
+            product_image: scrapedImage,
+            product_title: scrapedTitle || data.product_title,
+            _mode: data._mode || "hybrid_ai"
+        });
+
+    } catch (error: any) {
+        console.error('CRITICAL ERROR:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+}
