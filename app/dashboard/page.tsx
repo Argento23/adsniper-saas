@@ -58,6 +58,7 @@ const AdCard = ({ ad, index, brand, productImage }: { ad: any, index: number, br
     const [imgSrc, setImgSrc] = useState(ad.generated_image_url || productImage || FALLBACK_IMAGE);
     const [hasError, setHasError] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [showImageModal, setShowImageModal] = useState(false);
 
     useEffect(() => {
         // Reset state when ad changes
@@ -161,12 +162,45 @@ const AdCard = ({ ad, index, brand, productImage }: { ad: any, index: number, br
                     </div>
                 </div>
 
-                {/* DEBUG LINK FOR USER */}
+                {/* DEBUG BUTTON - Opens Modal Instead of New Tab */}
                 {(ad.generated_image_url || imgSrc) && (
-                    <div className="bg-yellow-100 p-2 text-center text-xs text-yellow-800 border-b border-yellow-200">
-                        <a href={ad.generated_image_url || imgSrc} target="_blank" rel="noopener noreferrer" className="underline font-bold">
+                    <div className="bg-yellow-100 p-2 text-center border-b border-yellow-200">
+                        <button
+                            onClick={() => setShowImageModal(true)}
+                            className="text-xs text-yellow-800 font-bold underline hover:text-yellow-900 transition-colors"
+                        >
                             🔍 CLICK PARA VER IMAGEN (DEBUG)
-                        </a>
+                        </button>
+                    </div>
+                )}
+
+                {/* Image Preview Modal */}
+                {showImageModal && (
+                    <div
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
+                        onClick={() => setShowImageModal(false)}
+                    >
+                        <div className="relative max-w-6xl max-h-[90vh] w-full h-full flex flex-col">
+                            <div className="absolute top-4 right-4 z-10">
+                                <button
+                                    onClick={() => setShowImageModal(false)}
+                                    className="bg-white/10 hover:bg-white/20 text-white rounded-full p-3 backdrop-blur-md border border-white/20 transition-all"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                            <div className="flex-1 flex items-center justify-center overflow-hidden">
+                                <img
+                                    src={ad.generated_image_url || imgSrc}
+                                    alt="Vista previa de imagen"
+                                    className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                            </div>
+                            <div className="mt-4 text-center text-white/70 text-sm">
+                                Click fuera de la imagen para cerrar
+                            </div>
+                        </div>
                     </div>
                 )}
 
