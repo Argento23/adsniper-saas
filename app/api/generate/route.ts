@@ -292,7 +292,7 @@ export async function POST(request: Request) {
         const credits = typeof user.publicMetadata.credits === 'number' ? user.publicMetadata.credits : 3; // Default 3 credits
 
         // ADMIN OVERRIDE (Optional: your email)
-        const isAdmin = user.emailAddresses.some(e => e.emailAddress === 'gustavo@neurova.ai'); // Replace with your email if needed
+        const isAdmin = user.emailAddresses.some(e => e.emailAddress === 'gustavodornhofer@gmail.com'); // Replace with your email if needed
 
         if (credits <= 0 && !isAdmin) {
             return NextResponse.json({ error: 'NO_CREDITS', message: 'You have run out of free credits.' }, { status: 403 });
@@ -487,3 +487,4 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
