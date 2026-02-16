@@ -45,19 +45,19 @@ async function scrapeProductMetadata(url: string) {
 // TEMPLATE RANDOMIZER
 const TEMPLATES = {
     AIDA: [
-        (prod: string, desc: string) => ({ hd: `Descubre ${prod}`, txt: `¿Buscas calidad? ${desc}...\n\nDiseñado pensando en ti. ✨\nPrueba la diferencia hoy mismo.` }),
-        (prod: string, desc: string) => ({ hd: `Nuevo ${prod}`, txt: `Atención: ${desc}...\n\nNo te pierdas de esta oportunidad única.\n👉 Compra ahora.` }),
-        (prod: string, desc: string) => ({ hd: `${prod}: Lo que esperabas`, txt: `Imagina tener ${desc}...\n\nHazlo realidad hoy.\nCalidad premium garantizada.` })
+        (prod: string, desc: string) => ({ hd: `🔥 ${prod}: El Cambio Que Esperabas`, txt: `¿Cansado de lo mismo de siempre?\n\n${desc}\n\n✨ Resultados desde el día 1\n💎 Calidad premium garantizada\n⚡ Stock limitado\n\n👉 No dejes pasar esta oportunidad.` }),
+        (prod: string, desc: string) => ({ hd: `Esto Va a Cambiar Tu Vida 🚀`, txt: `${prod} no es solo un producto.\nEs una inversión en ti mismo.\n\n💪 ${desc}\n\n¿Listo para dar el siguiente paso?\n▶️ Click aquí antes de que se agote.` }),
+        (prod: string, desc: string) => ({ hd: `La Tendencia Que Todos Quieren`, txt: `Miles ya lo tienen. ¿Y tú?\n\n${prod} es el producto del momento:\n✓ ${desc}\n✓ Envío express\n✓ Garantía 100%\n\n🎁 Oferta exclusiva HOY.` })
     ],
     PAS: [
-        (prod: string, desc: string) => ({ hd: `${prod}: La Solución`, txt: `¿Cansado de opciones mediocres? ${prod} cambia el juego.\n\n✓ ${desc}\n✓ Resultados probados.` }),
-        (prod: string, desc: string) => ({ hd: `¿Problemas con... ?`, txt: `Deja de sufrir. ${prod} es la respuesta.\n\nBeneficios:\n✓ ${desc}\n\nNo esperes más.` }),
-        (prod: string, desc: string) => ({ hd: `El secreto de ${prod}`, txt: `Muchos luchan con encontrar calidad. Tú no tienes por qué.\n\n${prod} te ofrece: ${desc}.` })
+        (prod: string, desc: string) => ({ hd: `¿Seguirás Esperando? ⏰`, txt: `El problema: Sigues buscando la solución perfecta.\n\nLa realidad: Cada día que pasa pierdes oportunidades.\n\nLa solución: ${prod}\n\n✅ ${desc}\n✅ Sin complicaciones\n✅ Resultados comprobados\n\n🔗 Haz click ahora.` }),
+        (prod: string, desc: string) => ({ hd: `El Error Que Te Cuesta Caro 💸`, txt: `Problema: Gastas dinero en cosas que no funcionan.\n\n${prod} es diferente.\n\nPorque realmente:\n• ${desc}\n• Diseño pensado en ti\n• Precio justo, calidad superior\n\n⚡ Última chance de conseguirlo.` }),
+        (prod: string, desc: string) => ({ hd: `Ya Basta de Conformarte`, txt: `Te mereces algo mejor.\n\n${prod} llega para cambiar las reglas:\n\n🎯 ${desc}\n🎯 Fácil de usar\n🎯 Recomendado por expertos\n\n👉 Mejora tu vida HOY.` })
     ],
     PROOF: [
-        (prod: string, desc: string) => ({ hd: `${prod} - 5 Estrellas`, txt: `⭐⭐⭐⭐⭐ "Increíble experiencia".\n\n"${desc}"\n\nÚnete a cientos de clientes satisfechos.` }),
-        (prod: string, desc: string) => ({ hd: `Clientes Felices con ${prod}`, txt: `⭐⭐⭐⭐⭐ "No puedo vivir sin esto".\n\n${desc} que realmente funciona.\nCompra segura.` }),
-        (prod: string, desc: string) => ({ hd: `Lo más vendido: ${prod}`, txt: `⭐⭐⭐⭐⭐ Miles de unidades vendidas.\n\nDescubre por qué todos aman "${desc}".` })
+        (prod: string, desc: string) => ({ hd: `⭐⭐⭐⭐⭐ +10,000 Clientes Felices`, txt: `"Nunca había visto algo así"\n"Cambió completamente mi rutina"\n"Lo recomiendo 100%"\n\n${prod}: ${desc}\n\n🏆 Producto más vendido del mes\n✅ Garantía de satisfacción\n\n¿Serás el próximo en probarlo?` }),
+        (prod: string, desc: string) => ({ hd: `Esto Es Lo Que Dicen Nuestros Clientes 💬`, txt: `⭐⭐⭐⭐⭐ "Superó mis expectativas"\n⭐⭐⭐⭐⭐ "Lo uso todos los días"\n⭐⭐⭐⭐⭐ "Relación calidad-precio perfecta"\n\n${prod} - ${desc}\n\n🎁 Aprovecha la oferta de lanzamiento.` }),
+        (prod: string, desc: string) => ({ hd: `🔥 Viral en Redes: ${prod}`, txt: `Todos hablan de esto.\n\n📸 +50K publicaciones\n❤️ Miles de reseñas positivas\n⚡ Se está agotando\n\nPor qué lo aman:\n• ${desc}\n• Envío rápido\n• Atención 24/7\n\n🛒 Consigue el tuyo antes de que sea tarde.` })
     ]
 };
 
@@ -166,13 +166,35 @@ async function generateGroqAds(productName: string, desc: string, count: number,
                 messages: [
                     {
                         role: "system",
-                        content: `You are a strict JSON generator. Return a JSON array with key "ads" containing ${count} ad objects. 
-                        Each object: type, headline, primary_text, image_prompt. Language: ${lang}.
-                        No extra text. Only JSON.`
+                        content: `You are an expert Meta Ads copywriter and creative director. Generate ${count} high-converting ad variations in ${lang === 'es' ? 'SPANISH' : 'ENGLISH'}.
+
+RETURN ONLY VALID JSON with this EXACT structure:
+{
+  "ads": [
+    {
+      "type": "Hook Name (e.g. AIDA, PAS, Social Proof)",
+      "headline": "Attention-grabbing headline (max 40 chars)",
+      "primary_text": "Compelling body copy with emojis, line breaks, benefits-focused, 80-120 words. Use persuasive language, urgency, and social proof.",
+      "image_prompt": "Detailed visual description for AI image generation: style, mood, composition, lighting, colors (e.g. 'product on marble surface, soft natural lighting, minimalist aesthetic, pastel colors, 8k, professional photography')"
+    }
+  ]
+}
+
+GUIDELINES:
+- Use varied persuasion frameworks (AIDA, PAS, Social Proof, Storytelling)
+- Include emojis strategically (2-4 per ad)
+- Create urgency and FOMO
+- Focus on benefits, not features
+- Use power words and sensory language
+- Add line breaks (\\n) for readability
+- Image prompts must be highly detailed and visual
+- Each ad must feel UNIQUE and creative
+
+NO MARKDOWN. NO EXPLANATIONS. ONLY JSON.`
                     },
                     {
                         role: "user",
-                        content: `Product: ${productName}\nDescription: ${desc}\n\nGenerate ${count} variations.`
+                        content: `Product: ${productName}\n\nDescription: ${desc}\n\nGenerate ${count} CREATIVE, HIGH-CONVERTING ad variations that feel premium and persuasive.`
                     }
                 ],
                 temperature: 0.7
@@ -292,7 +314,7 @@ export async function POST(request: Request) {
         const credits = typeof user.publicMetadata.credits === 'number' ? user.publicMetadata.credits : 3; // Default 3 credits
 
         // ADMIN OVERRIDE (Optional: your email)
-        const isAdmin = user.emailAddresses.some(e => e.emailAddress === 'gustavodornhofer@gmail.com'); // Replace with your email if needed
+        const isAdmin = user.emailAddresses.some(e => e.emailAddress === 'gustavodornhofer@gmail.com'); // Admin account with unlimited credits
 
         if (credits <= 0 && !isAdmin) {
             return NextResponse.json({ error: 'NO_CREDITS', message: 'You have run out of free credits.' }, { status: 403 });
@@ -346,26 +368,22 @@ export async function POST(request: Request) {
         let data: any = { ads: [] };
 
         try {
-            // DEBUG: Disable n8n to force Groq - HARD RESET
-            if (Date.now() > 0) throw new Error("n8n DISABLED - HARD RESET");
-
-            /*
+            // n8n ENABLED - Try it first for best results
             response = await fetch(n8nUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
             if (response.ok) {
-                 data = await response.json();
-                 // PARANOID CHECK
-                 if (!data || !data.ads || !Array.isArray(data.ads) || data.ads.length === 0) {
-                     console.warn("⚠️ n8n returned empty/invalid ads. Triggering LOCAL FALLBACK.");
-                     throw new Error("n8n returned empty ads");
-                 }
+                data = await response.json();
+                // PARANOID CHECK
+                if (!data || !data.ads || !Array.isArray(data.ads) || data.ads.length === 0) {
+                    console.warn("⚠️ n8n returned empty/invalid ads. Triggering LOCAL FALLBACK.");
+                    throw new Error("n8n returned empty ads");
+                }
             } else {
-                 throw new Error(`n8n Status: ${response.status}`);
+                throw new Error(`n8n Status: ${response.status}`);
             }
-            */
 
         } catch (n8nError) {
             console.error('⚠️ n8n Failed/Empty, using SMART LOCAL FALLBACK:', n8nError);
@@ -487,4 +505,3 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
-
