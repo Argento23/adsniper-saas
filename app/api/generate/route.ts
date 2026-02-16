@@ -243,13 +243,30 @@ NO MARKDOWN. NO EXPLANATIONS. ONLY JSON.`
     }
 }
 
-// LOCAL FALLBACK GENERATOR (Video Scripts) - MULTI-LANGUAGE
 function generateLocalScripts(productName: string, desc: string, lang: string = 'es') {
     const isEs = lang === 'es' || lang.includes('es'); // Default to ES if not specified
 
-    // Clean benefit: remove generic intros like "Te presentamos" or "Conoce" if they exist at start
-    let benefit = desc.replace(/^(Te presentamos|Conoce|Descubre|Mira) /i, "");
-    benefit = benefit.length > 20 ? benefit.substring(0, 80) + "..." : (isEs ? "transformar tu rutina" : "transform your daily routine");
+    // Smart benefit extraction: Use actual description, clean up generic intros
+    let benefit = desc
+        .replace(/^(Te presentamos|Conoce|Descubre|Mira|Introducing|Meet|Discover|Check out) /gi, "")
+        .replace(/\n/g, ' ')
+        .trim();
+
+    // If still too long, truncate intelligently at sentence/phrase boundary
+    if (benefit.length > 100) {
+        const truncated = benefit.substring(0, 100);
+        const lastPeriod = truncated.lastIndexOf('.');
+        const lastComma = truncated.lastIndexOf(',');
+        const cutPoint = lastPeriod > 50 ? lastPeriod + 1 : (lastComma > 50 ? lastComma : 100);
+        benefit = truncated.substring(0, cutPoint).trim();
+    }
+
+    // Final fallback ONLY if description is completely empty
+    if (!benefit || benefit.length < 5) {
+        benefit = isEs
+            ? `mejorar tu experiencia con ${productName}`
+            : `improve your experience with ${productName}`;
+    }
 
     if (isEs) {
         return [
