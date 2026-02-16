@@ -438,70 +438,67 @@ export async function POST(request: Request) {
             }
         }
 
-        // Process Ads (Hybrid Image Strategy + Visual Theme + Proxy)
+
+        // Process Ads (HUGGING FACE FIRST STRATEGY - Pollinations.ai is blocked)
         if (data.ads && Array.isArray(data.ads)) {
-            data.ads = data.ads.map((ad: any) => {
-                let imageUrl = scrapedImage;
+            // First, try to generate images with Hugging Face if available
+            if (process.env.HF_TOKEN && process.env.HF_TOKEN.length > 10) {
+                console.log("💎 Generating images with Hugging Face Flux.1 (Pollinations.ai is blocked)...");
 
-                // Determine Visual Theme (User Input > AI Prompt > Default)
-                const visualTheme = manual_image_prompt ? `, ${manual_image_prompt}` : '';
-
-                if (ad.image_prompt || manual_image_prompt) {
-                    let promptToUse = ad.image_prompt || manual_title;
-                    if (manual_image_prompt) promptToUse = `${promptToUse} ${manual_image_prompt}`;
-
-                    const cleanPrompt = promptToUse.substring(0, 200).replace(/[^a-zA-Z0-9 ,]/g, "");
-                    const seed = Math.floor(Math.random() * 9999);
-
-                    // Use PROXY for everything
-                    const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=1024&height=1024&nologo=true&seed=${seed}&enhance=true`;
-                    imageUrl = `/api/proxy-image?url=${encodeURIComponent(rawUrl)}&fallback=${encodeURIComponent(scrapedImage)}`;
-
-                } else if (ad.generated_image_url && !manual_image_prompt) {
-                    // Even pre-generated URLs should go through proxy if they are Pollinations
-                    if (ad.generated_image_url.includes('pollinations.ai')) {
-                        imageUrl = `/api/proxy-image?url=${encodeURIComponent(ad.generated_image_url)}&fallback=${encodeURIComponent(scrapedImage)}`;
-                    } else {
-                        imageUrl = ad.generated_image_url;
-                    }
-                } else if (!ad.generated_image_url && !ad.image_prompt && manual_image_prompt) {
-                    const p = `${scrapedTitle}, ${manual_image_prompt}`;
-                    const seed = Math.floor(Math.random() * 9999);
-                    const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(p)}?width=1024&height=1024&nologo=true&seed=${seed}&enhance=true`;
-                    imageUrl = `/api/proxy-image?url=${encodeURIComponent(rawUrl)}&fallback=${encodeURIComponent(scrapedImage)}`;
-                }
-
-                return {
-                    ...ad,
-                    generated_image_url: imageUrl,
-                    product_image_fallback: scrapedImage
-                };
-            });
-
-            if (process.env.HF_TOKEN && process.env.HF_TOKEN.length > 10 && !manual_image_base64) {
-                console.log("💎 Upgrading images with Hugging Face...");
-                // process in parallel but await all
                 data.ads = await Promise.all(data.ads.map(async (ad: any) => {
-                    let finalUrl = ad.generated_image_url;
+                    let imageUrl = scrapedImage; // Default fallback
 
-                    // Construct prompt from ad type + product
-                    // If ad.image_prompt exists, use it. If not, use generated prompt.
-                    // Wait, ad object has image_prompt usually from n8n.
-                    // Or we can infer it.
-                    let baseP = ad.image_prompt || manual_image_prompt || manual_title || scrapedTitle;
-                    const p = `${baseP}, professional product photography, 8k, cinematic lighting, high quality`;
+                    // Build prompt priority: AI-generated > User input > Product title
+                    let basePrompt = ad.image_prompt || manual_image_prompt || manual_title || scrapedTitle;
 
-                    // Try HF
-                    const hfImage = await generateHFImage(p);
+                    // Add visual style if provided by user
+                    if (manual_image_prompt && !ad.image_prompt) {
+                        basePrompt = `${basePrompt}, ${manual_image_prompt}`;
+                    }
+
+                    // Enhance with professional photography keywords
+                    const fullPrompt = `${basePrompt}, professional product photography, 8k, cinematic lighting, high quality, studio setup`;
+
+                    // Generate with Hugging Face
+                    const hfImage = await generateHFImage(fullPrompt);
                     if (hfImage) {
-                        finalUrl = hfImage; // Base64 Data URL (bypass proxy)
+                        imageUrl = hfImage; // Base64 Data URL (no proxy needed)
+                        console.log(`✅ HF image generated for ad: ${ad.type || 'unknown'}`);
+                    } else {
+                        console.warn(`⚠️ HF failed for ad, using fallback: ${scrapedImage.substring(0, 50)}...`);
                     }
 
                     return {
                         ...ad,
-                        generated_image_url: finalUrl
+                        generated_image_url: imageUrl,
+                        product_image_fallback: scrapedImage
                     };
                 }));
+
+            } else {
+                // No HF_TOKEN - use fallback logic with Pollinations (will fail but proxy handles it)
+                console.warn("⚠️ HF_TOKEN not configured, images may not load (Pollinations.ai blocked)");
+
+                data.ads = data.ads.map((ad: any) => {
+                    let imageUrl = scrapedImage;
+
+                    if (ad.image_prompt || manual_image_prompt) {
+                        let promptToUse = ad.image_prompt || manual_title;
+                        if (manual_image_prompt) promptToUse = `${promptToUse} ${manual_image_prompt}`;
+
+                        const cleanPrompt = promptToUse.substring(0, 200).replace(/[^a-zA-Z0-9 ,]/g, "");
+                        const seed = Math.floor(Math.random() * 9999);
+
+                        const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=1024&height=1024&nologo=true&seed=${seed}&enhance=true`;
+                        imageUrl = `/api/proxy-image?url=${encodeURIComponent(rawUrl)}&fallback=${encodeURIComponent(scrapedImage)}`;
+                    }
+
+                    return {
+                        ...ad,
+                        generated_image_url: imageUrl,
+                        product_image_fallback: scrapedImage
+                    };
+                });
             }
         }
 
