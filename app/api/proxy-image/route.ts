@@ -70,13 +70,7 @@ export async function GET(request: Request) {
         if (!response.ok) {
             console.error(`Proxy: Upstream error ${response.status} for url: ${targetUrl}`);
 
-            // ULTIMATE FALLBACK: If proxy fails, redirect to Product Image (if defined)
-            const fallbackUrl = searchParams.get('fallback');
-            if (fallbackUrl && fallbackUrl.startsWith('http')) {
-                return NextResponse.redirect(fallbackUrl);
-            }
-
-            // Else: Generative Art SVG
+            // Return Generative Art SVG directly
             const svgBuffer = generateGenerativeSVG(prompt);
             return new NextResponse(svgBuffer, {
                 headers: {
@@ -99,13 +93,7 @@ export async function GET(request: Request) {
     } catch (error) {
         console.error('Proxy Error:', error);
 
-        // ULTIMATE FALLBACK: If proxy fails, redirect to Product Image (if defined)
-        const fallbackUrl = searchParams.get('fallback');
-        if (fallbackUrl && fallbackUrl.startsWith('http')) {
-            return NextResponse.redirect(fallbackUrl);
-        }
-
-        // Else: Generative Art SVG
+        // Return Generative Art SVG directly
         const svgBuffer = generateGenerativeSVG(prompt);
         return new NextResponse(svgBuffer, {
             headers: {
@@ -115,3 +103,4 @@ export async function GET(request: Request) {
         });
     }
 }
+
