@@ -70,13 +70,18 @@ function generateLocalAds(productName: string, desc: string, image: string, visu
     const basePrompt = productName.substring(0, 40).replace(/[^a-zA-Z0-9 ]/g, " ").trim();
     const styleSuffix = visualTheme ? `, ${visualTheme},` : ', professional product photography,';
 
-    // Pollinations URL generator (PROXY WRAPPED to avoid 1033)
+    // Pollinations URL generator
     const getUrl = (angleStyle: string) => {
         const seed = Math.floor(Math.random() * 9999);
-        const p = `${basePrompt}, ${angleStyle}${styleSuffix} 8k, photorealistic, cinematic lighting`;
-        const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(p)}?width=1024&height=1024&nologo=true&seed=${seed}`;
-        // ROUTE THROUGH PROXY
-        return `/api/proxy-image?url=${encodeURIComponent(rawUrl)}`;
+        // ULTRA-CLEAN: No accents, no special chars, underscores only
+        const cleanP = `${productName} ${angleStyle}`
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
+            .replace(/[^\w\s]/gi, '') // Remove non-alphanumeric
+            .substring(0, 100).trim().replace(/\s+/g, '_');
+
+        const rawUrl = `https://image.pollinations.ai/prompt/${cleanP}?width=1024&height=1024&nologo=true&seed=${seed}`;
+        // WRAP IN PROXY to avoid browser interventions
+        return `/api/proxy-image?url=${encodeURIComponent(rawUrl)}&fallback=${encodeURIComponent(image || '')}`;
     };
 
     // Smart Description Truncation
@@ -117,28 +122,37 @@ async function generateHFImage(prompt: string) {
     if (!token || token.length < 10) return null;
 
     try {
-        console.log("🚀 Attempting Hugging Face Generation (Flux.1)...");
-        const response = await fetch(
-            "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell",
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                },
-                method: "POST",
-                body: JSON.stringify({ inputs: prompt }),
+        // Try common endpoints if one fails
+        const endpoints = [
+            `https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell`,
+            `https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell`
+        ];
+
+        for (const url of endpoints) {
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        "Content-Type": "application/json",
+                        "x-use-cache": "false",
+                        "Cache-Control": "no-cache"
+                    },
+                    method: "POST",
+                    body: JSON.stringify({ inputs: prompt }),
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const arrayBuffer = await blob.arrayBuffer();
+                    const base64 = Buffer.from(arrayBuffer).toString('base64');
+                    return `data:image/jpeg;base64,${base64}`;
+                }
+                console.warn(`HF Endpoint ${url} failed: ${response.status}`);
+            } catch (e) {
+                console.error(`HF internal error for ${url}:`, e);
             }
-        );
-
-        if (!response.ok) {
-            console.error(`HF Error: ${response.status} ${response.statusText}`);
-            return null;
         }
-
-        const blob = await response.blob();
-        const arrayBuffer = await blob.arrayBuffer();
-        const base64 = Buffer.from(arrayBuffer).toString('base64');
-        return `data:image/jpeg;base64,${base64}`;
+        return null;
 
     } catch (error) {
         console.error("HF Generation Failed:", error);
@@ -345,10 +359,12 @@ export async function POST(request: Request) {
         }
 
         // DEDUCT CREDIT (Optimistic - we deduct before generation to prevent spam, can refund on error if strict)
+        let remainingCredits = credits;
         if (!isAdmin) {
+            remainingCredits = credits - 1;
             await (await clerkClient()).users.updateUserMetadata(userId, {
                 publicMetadata: {
-                    credits: credits - 1
+                    credits: remainingCredits
                 }
             });
         }
@@ -370,8 +386,7 @@ export async function POST(request: Request) {
         }
 
         // Base n8n URL
-        const n8nBaseUrl = process.env.N8N_WEBHOOK_URL ? process.env.N8N_WEBHOOK_URL.replace(/\/shopify-adsniper.*$/, '') : 'https://manager.generarise.space/webhook';
-        let n8nUrl = `${n8nBaseUrl}/shopify-adsniper-v8`;
+        const n8nUrl = process.env.N8N_WEBHOOK_URL || 'https://manager.generarise.space/webhook/shopify-adsniper';
 
         const payload = {
             product_url: productUrl || 'https://manual-input.com',
@@ -446,22 +461,21 @@ export async function POST(request: Request) {
         }
 
 
-        // Process Ads (REPLICATE FIRST STRATEGY - Best Quality & Reliability)
+        // Process Ads (REPLICATE FIRST STRATEGY - Sequential to avoid Rate Limits)
         if (data.ads && Array.isArray(data.ads)) {
-            console.log("💎 Generating images with Replicate Flux.1 Schnell...");
+            console.log(`💎 Generating ${data.ads.length} images sequences with Replicate Flux.1 Schnell...`);
 
-            data.ads = await Promise.all(data.ads.map(async (ad: any) => {
+            const processedAds = [];
+            for (const ad of data.ads) {
                 let imageUrl = scrapedImage; // Default fallback
 
                 // Build prompt priority: AI-generated > User input > Product title
                 let basePrompt = ad.image_prompt || manual_image_prompt || manual_title || scrapedTitle;
 
-                // Add visual style if provided by user
                 if (manual_image_prompt && !ad.image_prompt) {
                     basePrompt = `${basePrompt}, ${manual_image_prompt}`;
                 }
 
-                // Enhance with professional photography keywords
                 const fullPrompt = `${basePrompt}, professional product photography, 8k, cinematic lighting, high quality, studio setup`;
 
                 try {
@@ -474,27 +488,50 @@ export async function POST(request: Request) {
                         throw new Error("Replicate returned no URL");
                     }
                 } catch (replicateError: any) {
-                    console.warn(`⚠️ Replicate failed: ${replicateError.message}. Trying HF Fallback...`);
+                    console.error(`❌ Replicate failed for ad: ${replicateError.message}`);
+                    ad._replicate_error = replicateError.message;
 
-                    // 2. Try Hugging Face Fallback
-                    if (process.env.HF_TOKEN && process.env.HF_TOKEN.length > 10) {
-                        const hfImage = await generateHFImage(fullPrompt);
-                        if (hfImage) {
-                            imageUrl = hfImage;
-                            console.log(`✅ HF fallback image generated`);
-                        } else {
-                            console.warn("⚠️ HF Fallback also failed.");
+                    // 2. Try Fallbacks
+                    try {
+                        let hfSuccess = false;
+                        if (process.env.HF_TOKEN && process.env.HF_TOKEN.length > 10) {
+                            const hfImage = await generateHFImage(fullPrompt);
+                            if (hfImage) {
+                                imageUrl = hfImage;
+                                console.log(`✅ HF fallback image generated`);
+                                hfSuccess = true;
+                            }
                         }
+
+                        if (!hfSuccess) {
+                            console.log("🔍 Using Pollinations flux as AI fallback...");
+                            // ULTRA-CLEAN: No accents, no special chars, underscores only
+                            const cleanPrompt = fullPrompt
+                                .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
+                                .replace(/[^\w\s]/gi, '') // Remove non-alphanumeric
+                                .substring(0, 100).trim().replace(/\s+/g, '_');
+
+                            const seed = Math.floor(Math.random() * 1000000);
+                            const rawPollUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
+                            // WRAP IN PROXY
+                            imageUrl = `/api/proxy-image?url=${encodeURIComponent(rawPollUrl)}&fallback=${encodeURIComponent(scrapedImage || '')}`;
+                            console.log(`✅ Proxy-wrapped Fallback URL Generated`);
+                        }
+                    } catch (fallbackErr) {
+                        console.error("⚠️ All AI fallbacks failed, using product image.");
                     }
                 }
 
-                // 3. Final logic: if still no image, use the product image
-                return {
+                processedAds.push({
                     ...ad,
                     generated_image_url: imageUrl,
                     product_image_fallback: scrapedImage
-                };
-            }));
+                });
+
+                // Optional: small delay if multiple to be safe
+                if (data.ads.length > 1) await new Promise(r => setTimeout(r, 500));
+            }
+            data.ads = processedAds;
         }
 
         // Ensure scripts are not undefined if n8n failed to return them
@@ -502,14 +539,14 @@ export async function POST(request: Request) {
             data.scripts = generateLocalScripts(scrapedTitle, scrapedDesc, language);
         }
 
-        // Optional safety wait: Ensure image URLs are fully propagated (requested by user)
-        await new Promise(resolve => setTimeout(resolve, 3000));
 
         return NextResponse.json({
             ...data,
             product_image: scrapedImage,
             product_title: scrapedTitle || data.product_title,
-            _mode: data._mode || "hybrid_ai"
+            _mode: data._mode || "hybrid_ai",
+            credits: remainingCredits,
+            VERSION_MARKER: "PROXY_V2" // For browser verification
         });
 
     } catch (error: any) {
@@ -517,5 +554,3 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
-
-
