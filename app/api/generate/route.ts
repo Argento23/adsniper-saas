@@ -6,7 +6,7 @@ import { checkAndTrackUsage } from '@/lib/usageTracker';
 async function scrapeProductMetadata(url: string) {
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
 
         const response = await fetch(url, {
             signal: controller.signal,
@@ -388,11 +388,16 @@ export async function POST(request: Request) {
 
         try {
             // n8n ENABLED - Try it first for best results
+            const n8nController = new AbortController();
+            const n8nTimeout = setTimeout(() => n8nController.abort(), 12000); // 12s timeout for n8n
+
             response = await fetch(n8nUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
+                signal: n8nController.signal
             });
+            clearTimeout(n8nTimeout);
             if (response.ok) {
                 data = await response.json();
                 // PARANOID CHECK
@@ -441,67 +446,55 @@ export async function POST(request: Request) {
         }
 
 
-        // Process Ads (HUGGING FACE FIRST STRATEGY - Pollinations.ai is blocked)
+        // Process Ads (REPLICATE FIRST STRATEGY - Best Quality & Reliability)
         if (data.ads && Array.isArray(data.ads)) {
-            // First, try to generate images with Hugging Face if available
-            if (process.env.HF_TOKEN && process.env.HF_TOKEN.length > 10) {
-                console.log("💎 Generating images with Hugging Face Flux.1 (Pollinations.ai is blocked)...");
+            console.log("💎 Generating images with Replicate Flux.1 Schnell...");
 
-                data.ads = await Promise.all(data.ads.map(async (ad: any) => {
-                    let imageUrl = scrapedImage; // Default fallback
+            data.ads = await Promise.all(data.ads.map(async (ad: any) => {
+                let imageUrl = scrapedImage; // Default fallback
 
-                    // Build prompt priority: AI-generated > User input > Product title
-                    let basePrompt = ad.image_prompt || manual_image_prompt || manual_title || scrapedTitle;
+                // Build prompt priority: AI-generated > User input > Product title
+                let basePrompt = ad.image_prompt || manual_image_prompt || manual_title || scrapedTitle;
 
-                    // Add visual style if provided by user
-                    if (manual_image_prompt && !ad.image_prompt) {
-                        basePrompt = `${basePrompt}, ${manual_image_prompt}`;
-                    }
+                // Add visual style if provided by user
+                if (manual_image_prompt && !ad.image_prompt) {
+                    basePrompt = `${basePrompt}, ${manual_image_prompt}`;
+                }
 
-                    // Enhance with professional photography keywords
-                    const fullPrompt = `${basePrompt}, professional product photography, 8k, cinematic lighting, high quality, studio setup`;
+                // Enhance with professional photography keywords
+                const fullPrompt = `${basePrompt}, professional product photography, 8k, cinematic lighting, high quality, studio setup`;
 
-                    // Generate with Hugging Face
-                    const hfImage = await generateHFImage(fullPrompt);
-                    if (hfImage) {
-                        imageUrl = hfImage; // Base64 Data URL (no proxy needed)
-                        console.log(`✅ HF image generated for ad: ${ad.type || 'unknown'}`);
+                try {
+                    // 1. Try Replicate First
+                    const replicateResult = await generateReplicateImage(fullPrompt);
+                    if (replicateResult && replicateResult.imageUrl) {
+                        imageUrl = replicateResult.imageUrl;
+                        console.log(`✅ Replicate image generated for ad: ${ad.type || 'unknown'}`);
                     } else {
-                        console.warn(`⚠️ HF failed for ad, using fallback: ${scrapedImage.substring(0, 50)}...`);
+                        throw new Error("Replicate returned no URL");
                     }
+                } catch (replicateError: any) {
+                    console.warn(`⚠️ Replicate failed: ${replicateError.message}. Trying HF Fallback...`);
 
-                    return {
-                        ...ad,
-                        generated_image_url: imageUrl,
-                        product_image_fallback: scrapedImage
-                    };
-                }));
-
-            } else {
-                // No HF_TOKEN - use fallback logic with Pollinations (will fail but proxy handles it)
-                console.warn("⚠️ HF_TOKEN not configured, images may not load (Pollinations.ai blocked)");
-
-                data.ads = data.ads.map((ad: any) => {
-                    let imageUrl = scrapedImage;
-
-                    if (ad.image_prompt || manual_image_prompt) {
-                        let promptToUse = ad.image_prompt || manual_title;
-                        if (manual_image_prompt) promptToUse = `${promptToUse} ${manual_image_prompt}`;
-
-                        const cleanPrompt = promptToUse.substring(0, 200).replace(/[^a-zA-Z0-9 ,]/g, "");
-                        const seed = Math.floor(Math.random() * 9999);
-
-                        const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=1024&height=1024&nologo=true&seed=${seed}&enhance=true`;
-                        imageUrl = `/api/proxy-image?url=${encodeURIComponent(rawUrl)}&fallback=${encodeURIComponent(scrapedImage)}`;
+                    // 2. Try Hugging Face Fallback
+                    if (process.env.HF_TOKEN && process.env.HF_TOKEN.length > 10) {
+                        const hfImage = await generateHFImage(fullPrompt);
+                        if (hfImage) {
+                            imageUrl = hfImage;
+                            console.log(`✅ HF fallback image generated`);
+                        } else {
+                            console.warn("⚠️ HF Fallback also failed.");
+                        }
                     }
+                }
 
-                    return {
-                        ...ad,
-                        generated_image_url: imageUrl,
-                        product_image_fallback: scrapedImage
-                    };
-                });
-            }
+                // 3. Final logic: if still no image, use the product image
+                return {
+                    ...ad,
+                    generated_image_url: imageUrl,
+                    product_image_fallback: scrapedImage
+                };
+            }));
         }
 
         // Ensure scripts are not undefined if n8n failed to return them
