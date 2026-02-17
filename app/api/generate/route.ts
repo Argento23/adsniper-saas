@@ -502,6 +502,9 @@ export async function POST(request: Request) {
             data.scripts = generateLocalScripts(scrapedTitle, scrapedDesc, language);
         }
 
+        // Optional safety wait: Ensure image URLs are fully propagated (requested by user)
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
         return NextResponse.json({
             ...data,
             product_image: scrapedImage,
@@ -514,3 +517,5 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
+
