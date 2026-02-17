@@ -5,7 +5,19 @@ const isProtectedRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
-    if (isProtectedRoute(req)) await auth.protect();
+    const url = new URL(req.url);
+    if (isProtectedRoute(req)) {
+        console.log(`🛡️ Middleware: Protecting route ${url.pathname}`);
+        try {
+            await auth.protect();
+            console.log(`✅ Middleware: Auth approved for ${url.pathname}`);
+        } catch (err) {
+            console.error(`❌ Middleware: Auth FAILED for ${url.pathname}. Redirecting...`);
+            throw err;
+        }
+    } else {
+        console.log(`🔓 Middleware: Public route ${url.pathname}`);
+    }
 });
 
 export const config = {
@@ -16,3 +28,4 @@ export const config = {
         '/(api|trpc)(.*)',
     ],
 };
+
