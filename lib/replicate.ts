@@ -27,7 +27,7 @@ export async function generateReplicateImage(
                 'Prefer': 'wait' // Wait for completion instead of polling
             },
             body: JSON.stringify({
-                version: 'black-forest-labs/flux-schnell:latest',
+                version: 'f71ec0ed4052912b575748e4e941fca4eec03b44cc483995804369e5d6190ec3',
                 input: {
                     prompt,
                     width,
