@@ -1,4 +1,3 @@
-
 interface ReplicateImageResponse {
     imageUrl: string;
     cost: number; // Costo en USD
@@ -10,6 +9,7 @@ export async function generateReplicateImage(
     height: number = 1024
 ): Promise<ReplicateImageResponse> {
     const apiKey = process.env.REPLICATE_API_KEY;
+    console.log(`🔑 Replicate API Key detected: ${apiKey ? apiKey.substring(0, 5) + '...' : 'MISSING'}`);
 
     if (!apiKey) {
         throw new Error('REPLICATE_API_KEY not configured');
@@ -27,7 +27,7 @@ export async function generateReplicateImage(
                 'Prefer': 'wait' // Wait for completion instead of polling
             },
             body: JSON.stringify({
-                version: 'f71ec0ed4052912b575748e4e941fca4eec03b44cc483995804369e5d6190ec3',
+                version: 'c846a69991daf4c0e5d016514849d14ee5b2e6846ce6b9d6f21369e564cfe51e',
                 input: {
                     prompt,
                     width,
@@ -119,7 +119,7 @@ export async function generateReplicateVideo(
     try {
         console.log(`🎥 Replicate: Generating video from image...`);
 
-        // Use Stable Video Diffusion model
+        // Use Stable Video Diffusion model (latest stable version hash)
         const response = await fetch('https://api.replicate.com/v1/predictions', {
             method: 'POST',
             headers: {
@@ -127,11 +127,12 @@ export async function generateReplicateVideo(
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                version: 'stability-ai/stable-video-diffusion:latest',
+                version: '3f0c27440306122d431c3c97693f18e54e488f7b789a712c4c8b2a0c841f3d82',
                 input: {
-                    input_image: imageUrl,
-                    num_frames: 25, // ~1 second at 25fps
-                    motion_bucket_id: 127 // Medium motion
+                    image: imageUrl,
+                    video_length: '14_frames_with_svd',
+                    motion_bucket_id: 127,
+                    fps: 6
                 }
             })
         });
