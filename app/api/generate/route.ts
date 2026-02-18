@@ -203,7 +203,7 @@ GUIDELINES:
 - Focus on benefits, not features
 - Use power words and sensory language
 - Add line breaks (\\n) for readability
-- Image prompts must be highly detailed and visual
+- Image prompts must be highly detailed and visual. DO NOT include any text, words, or letters in the image_prompt.
 - Each ad must feel UNIQUE and creative
 
 NO MARKDOWN. NO EXPLANATIONS. ONLY JSON.`
@@ -476,7 +476,7 @@ export async function POST(request: Request) {
                     basePrompt = `${basePrompt}, ${manual_image_prompt}`;
                 }
 
-                const fullPrompt = `${basePrompt}, professional product photography, 8k, cinematic lighting, high quality, studio setup`;
+                const fullPrompt = `${basePrompt}, clean background, no text, no words, no letters, no logos, professional product photography, 8k, cinematic lighting, high quality, studio setup`;
 
                 try {
                     // 1. Try Replicate First
@@ -554,3 +554,4 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
