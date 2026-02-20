@@ -22,7 +22,7 @@ export async function generateReplicateImage(
         const response = await fetch('https://api.replicate.com/v1/predictions', {
             method: 'POST',
             headers: {
-                'Authorization': `Token ${apiKey}`,
+                'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json',
                 'Prefer': 'wait' // Wait for completion instead of polling
             },
@@ -67,7 +67,7 @@ export async function generateReplicateImage(
                 `https://api.replicate.com/v1/predictions/${predictionId}`,
                 {
                     headers: {
-                        'Authorization': `Token ${apiKey}`
+                        'Authorization': `Bearer ${apiKey}`
                     }
                 }
             );
@@ -106,7 +106,7 @@ export async function generateReplicateImage(
     }
 }
 
-// Video generation with Runway or similar (for future Pro plan)
+// Video generation using Wan 2.5 image-to-video (modern, reliable)
 export async function generateReplicateVideo(
     imageUrl: string
 ): Promise<string> {
@@ -117,22 +117,21 @@ export async function generateReplicateVideo(
     }
 
     try {
-        console.log(`🎥 Replicate: Generating video from image...`);
+        console.log(`🎥 Replicate: Generating video from image with Wan 2.5...`);
 
-        // Use Stable Video Diffusion model (latest stable version hash)
-        const response = await fetch('https://api.replicate.com/v1/predictions', {
+        // Use official model API (no version hash needed)
+        const response = await fetch('https://api.replicate.com/v1/models/wan-video/wan-2.5-i2v/predictions', {
             method: 'POST',
             headers: {
-                'Authorization': `Token ${apiKey}`,
+                'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                version: '3f0c27440306122d431c3c97693f18e54e488f7b789a712c4c8b2a0c841f3d82',
                 input: {
                     image: imageUrl,
-                    video_length: '14_frames_with_svd',
-                    motion_bucket_id: 127,
-                    fps: 6
+                    prompt: "Smooth cinematic motion, professional product showcase, subtle camera movement, high quality 4K",
+                    max_frames: 81,
+                    enable_safety_checker: true
                 }
             })
         });
@@ -147,14 +146,14 @@ export async function generateReplicateVideo(
 
         // Poll for video (takes longer than images)
         let attempts = 0;
-        while (attempts < 60) {
+        while (attempts < 90) {
             await new Promise(resolve => setTimeout(resolve, 2000));
 
             const statusResponse = await fetch(
                 `https://api.replicate.com/v1/predictions/${predictionId}`,
                 {
                     headers: {
-                        'Authorization': `Token ${apiKey}`
+                        'Authorization': `Bearer ${apiKey}`
                     }
                 }
             );
@@ -166,7 +165,7 @@ export async function generateReplicateVideo(
             const statusData = await statusResponse.json();
 
             if (statusData.status === 'succeeded') {
-                const videoUrl = statusData.output;
+                const videoUrl = Array.isArray(statusData.output) ? statusData.output[0] : statusData.output;
 
                 if (!videoUrl) {
                     throw new Error('No video URL in prediction output');
@@ -183,10 +182,11 @@ export async function generateReplicateVideo(
             attempts++;
         }
 
-        throw new Error('Video generation timeout after 120s');
+        throw new Error('Video generation timeout after 180s');
 
     } catch (error: any) {
         console.error('❌ Replicate Video Generation Failed:', error.message);
         throw error;
     }
 }
+
