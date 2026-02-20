@@ -9,23 +9,47 @@ import UpgradeModal from './components/UpgradeModal';
 
 const MOCK_SCRIPTS = [
     {
-        title: "Viral Hook Strategy",
-        angle: "Problem/Agitation",
-        audio_suggestion: "Trending 'Suspense' Audio",
+        title: "POV: Descubrí esto",
+        angle: "Storytelling",
+        audio_suggestion: "Trending 'Oh No' remix",
+        platform: "TikTok",
         sections: [
-            { type: "Hook", content: "Stop scrolling if you are tired of [Problem related to Product]...", duration: "3s" },
-            { type: "Body", content: "I found this game-changer. It literally solves the problem in seconds.", duration: "15s" },
-            { type: "CTA", content: "Get yours now at the link in bio before it's gone!", duration: "5s" }
+            { type: "Gancho", content: "POV: Estás por descubrir algo que cambia todo.", duration: "3s" },
+            { type: "Cuerpo", content: "(Cámara en mano) Miren lo que acabo de encontrar. La diferencia se nota desde el primer uso.", duration: "12s" },
+            { type: "CTA", content: "Link en bio. Quedan pocas unidades.", duration: "4s" }
         ]
     },
     {
-        title: "ASMR Unboxing",
-        angle: "Satisfying/Visual",
-        audio_suggestion: "Lo-fi Chill Beat",
+        title: "Tutorial Express",
+        angle: "How-To",
+        audio_suggestion: "Lo-fi study beats",
+        platform: "Reels",
         sections: [
-            { type: "Hook", content: "(No talking) *Sound of package opening*", duration: "5s" },
-            { type: "Body", content: "Look at this quality. The texture is insane. Truly nailed it.", duration: "10s" },
-            { type: "CTA", content: "Link in bio to shop.", duration: "3s" }
+            { type: "Gancho", content: "3 formas de usarlo que no conocías 👇", duration: "3s" },
+            { type: "Cuerpo", content: "Tip 1: Uso principal. Tip 2: Hack creativo. Tip 3: El secreto que nadie te cuenta.", duration: "15s" },
+            { type: "CTA", content: "Guardá este video y comprá en el link de la bio.", duration: "3s" }
+        ]
+    },
+    {
+        title: "Antes vs Después",
+        angle: "Transformación",
+        audio_suggestion: "Dramatic reveal sound",
+        platform: "TikTok",
+        sections: [
+            { type: "Gancho", content: "ANTES vs DESPUÉS 😱", duration: "3s" },
+            { type: "Cuerpo", content: "(Split screen) El cambio es increíble. La transformación habla sola.", duration: "10s" },
+            { type: "CTA", content: "Comentá '🔥' y te mando el link.", duration: "3s" }
+        ]
+    },
+    {
+        title: "Cosas que no sabías",
+        angle: "Educativo Viral",
+        audio_suggestion: "Audio 'Cosas que no sabías'",
+        platform: "Shorts",
+        sections: [
+            { type: "Gancho", content: "Cosas que no sabías sobre este producto:", duration: "2s" },
+            { type: "Cuerpo", content: "1. Beneficio clave. 2. Lo usan profesionales. 3. Dato sorprendente. *Green screen*", duration: "12s" },
+            { type: "CTA", content: "Seguime para más y link en bio.", duration: "3s" }
         ]
     }
 ];
@@ -749,3 +773,5 @@ export default function Dashboard() {
         </div>
     );
 }
+
+
