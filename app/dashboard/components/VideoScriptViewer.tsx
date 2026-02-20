@@ -13,6 +13,7 @@ interface VideoScript {
     title: string;
     angle: string;
     audio_suggestion?: string;
+    platform?: string;
     sections: ScriptSection[];
 }
 
@@ -51,6 +52,12 @@ export default function VideoScriptViewer({ scripts }: VideoScriptViewerProps) {
                                 <h3 className="font-bold text-white">{script.title || `Guion Viral #${i + 1}`}</h3>
                             </div>
                             <span className="text-xs text-slate-500 uppercase tracking-wider font-bold">{script.angle} Angle</span>
+                            {script.platform && (
+                                <span className={`text-xs ml-2 px-2 py-0.5 rounded-full font-bold ${script.platform.includes('TikTok') ? 'bg-pink-900/30 text-pink-300 border border-pink-500/20' :
+                                        script.platform.includes('Reels') ? 'bg-purple-900/30 text-purple-300 border border-purple-500/20' :
+                                            'bg-red-900/30 text-red-300 border border-red-500/20'
+                                    }`}>{script.platform}</span>
+                            )}
                         </div>
                         <div className="p-2 bg-slate-900 rounded-lg border border-slate-800 text-slate-400">
                             <FaVideo className="w-5 h-5" />
@@ -97,3 +104,4 @@ export default function VideoScriptViewer({ scripts }: VideoScriptViewerProps) {
         </div>
     );
 }
+
