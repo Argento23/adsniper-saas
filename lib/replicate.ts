@@ -8,7 +8,7 @@ export async function generateReplicateImage(
     width: number = 1024,
     height: number = 1024
 ): Promise<ReplicateImageResponse> {
-    const apiKey = process.env.REPLICATE_API_KEY;
+    const apiKey = process.env.REPLICATE_API_KEY || process.env.REPLICATE_API_TOKEN;
     console.log(`🔑 Replicate API Key detected: ${apiKey ? apiKey.substring(0, 5) + '...' : 'MISSING'}`);
 
     if (!apiKey) {
@@ -110,7 +110,7 @@ export async function generateReplicateImage(
 export async function generateReplicateVideo(
     imageUrl: string
 ): Promise<string> {
-    const apiKey = process.env.REPLICATE_API_KEY;
+    const apiKey = process.env.REPLICATE_API_KEY || process.env.REPLICATE_API_TOKEN;
 
     if (!apiKey) {
         throw new Error('REPLICATE_API_KEY not configured');
