@@ -1,4 +1,3 @@
-
 import { clerkClient } from '@clerk/nextjs/server';
 
 export interface UsageResult {
@@ -58,13 +57,14 @@ export async function checkAndTrackUsage(
 }
 
 function getPlanLimit(plan: string): number {
-    const limits = {
-        free: parseInt(process.env.PLAN_FREE_LIMIT || '5'),
+    const limits: Record<string, number> = {
+        free: parseInt(process.env.PLAN_FREE_LIMIT || '15'),
         basic: parseInt(process.env.PLAN_BASIC_LIMIT || '50'),
-        pro: parseInt(process.env.PLAN_PRO_LIMIT || '150'),
-        enterprise: parseInt(process.env.PLAN_ENTERPRISE_LIMIT || '400')
+        pro: parseInt(process.env.PLAN_PRO_LIMIT || '200'),
+        enterprise: parseInt(process.env.PLAN_ENTERPRISE_LIMIT || '500'),
+        lifetime: 999
     };
-    return limits[plan as keyof typeof limits] || limits.free;
+    return limits[plan] || limits.free;
 }
 
 function getNextMonthStart(): Date {
