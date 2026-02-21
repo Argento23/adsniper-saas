@@ -88,4 +88,3 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message || 'Error interno al generar video' }, { status: 500 });
     }
 }
-
