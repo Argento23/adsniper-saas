@@ -303,9 +303,55 @@ const AdCard = ({ ad, index, brand, productImage }: { ad: any, index: number, br
                     )}
                 </div>
                 {videoUrl && (
-                    <span className="text-[10px] text-slate-500 font-bold flex items-center gap-1">
-                        <FaBolt className="text-yellow-500" /> VIDEO GENERADO CON AI
-                    </span>
+                    <div className="flex flex-col items-center gap-2">
+                        <span className="text-[10px] text-slate-500 font-bold flex items-center gap-1">
+                            <FaBolt className="text-yellow-500" /> VIDEO GENERADO CON AI
+                        </span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        const resp = await fetch(videoUrl);
+                                        const blob = await resp.blob();
+                                        const url = URL.createObjectURL(blob);
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = `adsniper-video-${Date.now()}.mp4`;
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        document.body.removeChild(a);
+                                        URL.revokeObjectURL(url);
+                                    } catch {
+                                        window.open(videoUrl, '_blank');
+                                    }
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/20"
+                            >
+                                <FaCloudUploadAlt className="w-3 h-3 rotate-180" /> Descargar Video
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    if (navigator.share) {
+                                        try {
+                                            const resp = await fetch(videoUrl);
+                                            const blob = await resp.blob();
+                                            const file = new File([blob], 'adsniper-video.mp4', { type: 'video/mp4' });
+                                            await navigator.share({ files: [file], title: 'Ad Video - AdSniper' });
+                                        } catch {
+                                            navigator.clipboard.writeText(videoUrl);
+                                            alert('Link del video copiado!');
+                                        }
+                                    } else {
+                                        navigator.clipboard.writeText(videoUrl);
+                                        alert('Link del video copiado al portapapeles!');
+                                    }
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-500 transition-all shadow-lg shadow-blue-900/20"
+                            >
+                                <FaPaperPlane className="w-3 h-3" /> Compartir
+                            </button>
+                        </div>
+                    </div>
                 )}
             </div>
         </div>
@@ -773,5 +819,6 @@ export default function Dashboard() {
         </div>
     );
 }
+
 
 
