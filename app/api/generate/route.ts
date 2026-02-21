@@ -666,7 +666,6 @@ export async function POST(request: Request) {
             product_image: scrapedImage,
             product_title: scrapedTitle || data.product_title,
             _mode: data._mode || "hybrid_ai",
-            credits: remainingCredits,
             VERSION_MARKER: "PROXY_V2" // For browser verification
         });
 
