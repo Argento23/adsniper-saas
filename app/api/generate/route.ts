@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { generateReplicateImage } from '@/lib/replicate';
@@ -683,6 +682,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
 
 
 
