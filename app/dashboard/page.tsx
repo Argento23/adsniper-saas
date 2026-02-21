@@ -78,7 +78,7 @@ const MOCK_ADS = [
 const FALLBACK_IMAGE = "https://placehold.co/800x800/101827/ffffff.png?text=Ad+Image"; // Simple, reliable placeholder
 
 // --- AD CARD COMPONENT (Fixes Shared State Bug) ---
-const AdCard = ({ ad, index, brand, productImage }: { ad: any, index: number, brand: any, productImage: string }) => {
+const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenerated }: { ad: any, index: number, brand: any, productImage: string, videosRemaining: number, onVideoGenerated?: (remaining: number) => void }) => {
     const [imgSrc, setImgSrc] = useState(ad.generated_image_url || productImage || FALLBACK_IMAGE);
     const [videoUrl, setVideoUrl] = useState<string | null>(null);
     const [generatingVideo, setGeneratingVideo] = useState(false);
@@ -94,8 +94,13 @@ const AdCard = ({ ad, index, brand, productImage }: { ad: any, index: number, br
     }, [ad, productImage]);
 
     const handleGenerateVideo = async () => {
-        if (!imgSrc || imgSrc.includes('api/proxy-image') || imgSrc.includes('placehold.co')) {
-            alert("Necesitas una imagen real de alta calidad (Replicate) para generar video.");
+        if (videosRemaining <= 0) {
+            alert("Has alcanzado tu límite de videos. Mejorá tu plan para generar más videos.");
+            return;
+        }
+
+        if (!imgSrc || imgSrc.includes('placehold.co')) {
+            alert("Se necesita una imagen válida para generar video.");
             return;
         }
 
@@ -107,10 +112,19 @@ const AdCard = ({ ad, index, brand, productImage }: { ad: any, index: number, br
                 body: JSON.stringify({ imageUrl: imgSrc })
             });
             const data = await resp.json();
+
+            if (resp.status === 403) {
+                alert(data.message || "Se requiere un plan Pro o superior para generar videos.");
+                return;
+            }
+
             if (data.videoUrl) {
                 setVideoUrl(data.videoUrl);
+                if (data.videosRemaining !== undefined && onVideoGenerated) {
+                    onVideoGenerated(data.videosRemaining);
+                }
             } else {
-                alert(data.message || "Error al generar video");
+                alert(data.message || data.error || "Error al generar video");
             }
         } catch (err) {
             console.error(err);
@@ -294,11 +308,20 @@ const AdCard = ({ ad, index, brand, productImage }: { ad: any, index: number, br
                     {!videoUrl && (
                         <button
                             onClick={handleGenerateVideo}
-                            disabled={generatingVideo || hasError || imgSrc.includes('placehold.co')}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:brightness-110 shadow-lg shadow-purple-500/20 disabled:opacity-50 transition-all"
+                            disabled={generatingVideo || hasError || imgSrc.includes('placehold.co') || videosRemaining <= 0}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-white shadow-lg transition-all disabled:opacity-50 ${videosRemaining <= 0
+                                ? 'bg-slate-600 cursor-not-allowed'
+                                : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:brightness-110 shadow-purple-500/20'
+                                }`}
+                            title={videosRemaining <= 0 ? 'Mejorá tu plan para generar videos' : `${videosRemaining} videos restantes este mes`}
                         >
                             {generatingVideo ? <FaSpinner className="animate-spin" /> : <FaVideo />}
-                            Animar Ad
+                            {videosRemaining <= 0
+                                ? '🔒 Video Pro'
+                                : generatingVideo
+                                    ? 'Generando...'
+                                    : `Animar Ad (${videosRemaining})`
+                            }
                         </button>
                     )}
                 </div>
@@ -364,6 +387,8 @@ export default function Dashboard() {
     const [brand, setBrand] = useState<any>(null);
     const [credits, setCredits] = useState<number | null>(null);
     const [plan, setPlan] = useState<string>('free');
+    const [videosRemaining, setVideosRemaining] = useState<number>(0);
+    const [videoLimit, setVideoLimit] = useState<number>(0);
     const [view, setView] = useState<'setup' | 'generator'>('setup');
     const [showUpgrade, setShowUpgrade] = useState(false);
 
@@ -420,6 +445,10 @@ export default function Dashboard() {
             if (data.credits !== undefined) {
                 setCredits(data.credits);
                 setPlan(data.plan);
+            }
+            if (data.videosRemaining !== undefined) {
+                setVideosRemaining(data.videosRemaining);
+                setVideoLimit(data.videoLimit || 0);
             }
         } catch (err) {
             console.error("Error fetching credits:", err);
@@ -792,6 +821,8 @@ export default function Dashboard() {
                                         index={i}
                                         brand={brand}
                                         productImage={productImage}
+                                        videosRemaining={videosRemaining}
+                                        onVideoGenerated={(remaining: number) => setVideosRemaining(remaining)}
                                     />
                                 ))}
                             </div>
@@ -819,6 +850,5 @@ export default function Dashboard() {
         </div>
     );
 }
-
 
 
