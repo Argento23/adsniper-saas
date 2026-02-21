@@ -40,7 +40,7 @@ export default function UpgradeModal({ isOpen, onClose, mpLink, mpSubscriptionLi
                         <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2">Todos los planes incluyen:</p>
                         <div className="flex items-center gap-3 text-sm text-slate-300">
                             <FaImage className="text-emerald-500 shrink-0" />
-                            <span>Imágenes AI ilimitadas (Pollinations)</span>
+                            <span>Imágenes AI de alta calidad (FLUX by Replicate)</span>
                         </div>
                         <div className="flex items-center gap-3 text-sm text-slate-300">
                             <FaRobot className="text-emerald-500 shrink-0" />
@@ -62,7 +62,7 @@ export default function UpgradeModal({ isOpen, onClose, mpLink, mpSubscriptionLi
                             <FaStar className="text-yellow-500 shrink-0" />
                             <span><strong className="text-white">5 Videos AI</strong> por mes (animación del producto)</span>
                         </div>
-                        <p className="text-[10px] text-slate-500 mt-2">Powered by Wan 2.5 — videos profesionales de 3-5 segundos</p>
+                        <p className="text-[10px] text-slate-500 mt-2">Powered by Stable Video Diffusion — videos profesionales de alta fidelidad</p>
                     </div>
 
                     {/* Pricing Actions */}
@@ -140,4 +140,5 @@ export default function UpgradeModal({ isOpen, onClose, mpLink, mpSubscriptionLi
         </div>
     );
 }
+
 
