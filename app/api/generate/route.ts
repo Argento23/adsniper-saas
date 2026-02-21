@@ -488,29 +488,21 @@ export async function POST(request: Request) {
         }
 
         const user = await (await clerkClient()).users.getUser(userId);
-        const credits = typeof user.publicMetadata.credits === 'number' ? user.publicMetadata.credits : 3; // Default 3 credits
 
-        // ADMIN OVERRIDE (Optional: your email)
-        const isAdmin = user.emailAddresses.some(e => e.emailAddress === 'gustavodornhofer@gmail.com'); // Admin account with unlimited credits
+        // ADMIN OVERRIDE
+        const isAdmin = user.emailAddresses.some(e => e.emailAddress === 'gustavodornhofer@gmail.com');
 
-        if (credits <= 0 && !isAdmin) {
-            return NextResponse.json({ error: 'NO_CREDITS', message: 'You have run out of free credits.' }, { status: 403 });
-        }
-
-        // Validation: Need EITHER URL OR Manual Data
-        if (!productUrl && !manual_title) {
-            return NextResponse.json({ error: 'URL or Product Name required' }, { status: 400 });
-        }
-
-        // DEDUCT CREDIT (Optimistic - we deduct before generation to prevent spam, can refund on error if strict)
-        let remainingCredits = credits;
+        // Monthly Usage Tracking (generous because images are FREE now via Pollinations)
         if (!isAdmin) {
-            remainingCredits = credits - 1;
-            await (await clerkClient()).users.updateUserMetadata(userId, {
-                publicMetadata: {
-                    credits: remainingCredits
-                }
-            });
+            const usageResult = await checkAndTrackUsage(userId, 1);
+            if (!usageResult.canProceed) {
+                return NextResponse.json({
+                    error: 'NO_CREDITS',
+                    message: `Has alcanzado tu límite mensual de ${usageResult.limit} generaciones. Se reinicia el ${usageResult.resetDate.toLocaleDateString('es-AR')}.`,
+                    remaining: usageResult.remaining,
+                    limit: usageResult.limit
+                }, { status: 403 });
+            }
         }
 
         console.log(`🎯 Generating ${count} ads for: ${productUrl || manual_title} (Lang: ${language})`);
