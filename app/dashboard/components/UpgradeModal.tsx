@@ -1,5 +1,4 @@
-
-import { FaLock, FaBolt, FaCheckCircle, FaStar, FaVideo, FaImage, FaRobot } from "react-icons/fa";
+import { FaBolt, FaCheckCircle, FaStar, FaVideo, FaImage, FaRobot, FaTimes, FaCrown, FaRocket } from "react-icons/fa";
 
 interface UpgradeModalProps {
     isOpen: boolean;
@@ -18,121 +17,158 @@ export default function UpgradeModal({ isOpen, onClose, mpLink, mpSubscriptionLi
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
 
             {/* Modal Content */}
-            <div className="relative bg-slate-900 border border-emerald-500/30 rounded-3xl p-8 max-w-lg w-full shadow-2xl animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
+            <div className="relative bg-slate-900 border border-slate-700/50 rounded-3xl p-6 md:p-8 max-w-4xl w-full shadow-2xl animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
 
-                {/* Header Icon */}
-                <div className="absolute -top-10 left-1/2 -translate-x-1/2">
-                    <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-2xl rotate-3 flex items-center justify-center shadow-lg shadow-emerald-500/40 p-4">
+                {/* Close Button */}
+                <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors z-10">
+                    <FaTimes className="w-5 h-5" />
+                </button>
+
+                {/* Header */}
+                <div className="text-center mb-8">
+                    <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/30 mx-auto mb-4 p-3">
                         <img src="/adsniper_logo.svg" alt="AdSniper Logo" className="w-full h-full object-contain" />
                     </div>
+                    <h2 className="text-3xl font-bold text-white tracking-tight">
+                        Elige tu <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">Plan</span>
+                    </h2>
+                    <p className="text-slate-400 mt-2 text-sm">
+                        Desbloquea el poder completo de AdSniper AI
+                    </p>
                 </div>
 
-                <div className="mt-8 text-center space-y-4">
-                    <h2 className="text-3xl font-bold text-white tracking-tight">
-                        Desbloquea <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">Poder Ilimitado</span>
-                    </h2>
-                    <p className="text-slate-400">
-                        Has usado tus créditos gratuitos. Elige tu plan para seguir dominando el mercado.
-                    </p>
+                {/* Pricing Grid */}
+                <div className="grid md:grid-cols-3 gap-4 md:gap-5">
 
-                    {/* What's Included */}
-                    <div className="bg-slate-950/50 rounded-xl p-4 text-left space-y-3 border border-slate-800 my-6">
-                        <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2">Todos los planes incluyen:</p>
-                        <div className="flex items-center gap-3 text-sm text-slate-300">
-                            <FaImage className="text-emerald-500 shrink-0" />
-                            <span>Imágenes AI de alta calidad (FLUX by Replicate)</span>
+                    {/* STARTER - Free */}
+                    <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-5 flex flex-col">
+                        <div className="mb-4">
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Starter</p>
+                            <p className="text-3xl font-bold text-white mt-1">$0</p>
                         </div>
-                        <div className="flex items-center gap-3 text-sm text-slate-300">
-                            <FaRobot className="text-emerald-500 shrink-0" />
-                            <span>Copy & Guiones de Video con AI (Groq)</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-sm text-slate-300">
-                            <FaCheckCircle className="text-emerald-500 shrink-0" />
-                            <span>Generación ilimitada de Ads</span>
-                        </div>
+                        <ul className="space-y-3 text-sm text-slate-400 flex-1">
+                            <li className="flex items-center gap-2">
+                                <FaCheckCircle className="text-slate-600 shrink-0 w-3 h-3" />
+                                3 Free AI Credits
+                            </li>
+                            <li className="flex items-center gap-2">
+                                <FaCheckCircle className="text-slate-600 shrink-0 w-3 h-3" />
+                                Basic Ad Copy
+                            </li>
+                            <li className="flex items-center gap-2">
+                                <FaCheckCircle className="text-slate-600 shrink-0 w-3 h-3" />
+                                Standard Images
+                            </li>
+                        </ul>
+                        <button
+                            onClick={onClose}
+                            className="mt-5 w-full py-3 rounded-xl bg-slate-800 text-slate-400 text-sm font-bold hover:bg-slate-700 hover:text-white transition-all"
+                        >
+                            Try for Free
+                        </button>
                     </div>
 
-                    {/* Pro Plan Highlight */}
-                    <div className="bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-xl p-4 text-left border border-purple-500/20 my-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <FaVideo className="text-purple-400" />
-                            <p className="text-xs font-bold text-purple-400 uppercase tracking-wider">Exclusivo Plan Pro</p>
+                    {/* PRO MONTHLY - Recommended */}
+                    <div className="relative bg-gradient-to-b from-emerald-950/40 to-slate-950/60 border border-emerald-500/30 rounded-2xl p-5 flex flex-col shadow-lg shadow-emerald-500/5">
+                        {/* Badge */}
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                            <span className="bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-[10px] font-bold uppercase tracking-wider px-4 py-1 rounded-full shadow-lg">
+                                Most Popular
+                            </span>
                         </div>
-                        <div className="flex items-center gap-3 text-sm text-slate-300">
-                            <FaStar className="text-yellow-500 shrink-0" />
-                            <span><strong className="text-white">5 Videos AI</strong> por mes (animación del producto)</span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 mt-2">Powered by Stable Video Diffusion — videos profesionales de alta fidelidad</p>
-                    </div>
-
-                    {/* Pricing Actions */}
-                    <div className="space-y-4">
-
-                        {/* Option 1: Subscription (Recommended) */}
-                        {mpSubscriptionLink && (
-                            <div className="relative group">
-                                <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-xl blur opacity-30 group-hover:opacity-60 transition duration-200"></div>
-                                <a
-                                    href={mpSubscriptionLink}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="relative block w-full py-4 rounded-xl bg-slate-900 border border-emerald-500/50 hover:bg-slate-800 text-white transition-all flex items-center justify-between px-6"
-                                >
-                                    <div className="text-left">
-                                        <p className="text-xs text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1">
-                                            <FaStar className="text-yellow-400" /> Recomendado
-                                        </p>
-                                        <p className="font-bold text-lg">Plan Pro Mensual</p>
-                                        <p className="text-[10px] text-slate-400">Ads ilimitados + 5 Videos AI/mes</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-xl font-bold">$29.900 <span className="text-xs font-normal text-slate-400">/mes</span></p>
-                                    </div>
-                                    <FaBolt className="text-emerald-400 ml-2" />
-                                </a>
+                        <div className="mb-4 mt-2">
+                            <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                                <FaRocket className="w-3 h-3" /> Pro Monthly
+                            </p>
+                            <div className="flex items-baseline gap-2 mt-1">
+                                <p className="text-3xl font-bold text-white">$29</p>
+                                <span className="text-sm text-slate-400">/mo</span>
                             </div>
-                        )}
-
-                        {/* Divider */}
-                        <div className="relative flex items-center py-2">
-                            <div className="flex-grow border-t border-slate-800"></div>
-                            <span className="flex-shrink-0 mx-4 text-slate-600 text-xs uppercase">O Paga Una Sola Vez</span>
-                            <div className="flex-grow border-t border-slate-800"></div>
+                            <p className="text-[11px] text-slate-500 mt-0.5">Or $29.900 ARS</p>
                         </div>
+                        <ul className="space-y-3 text-sm text-slate-300 flex-1">
+                            <li className="flex items-center gap-2">
+                                <FaCheckCircle className="text-emerald-500 shrink-0 w-3 h-3" />
+                                <strong className="text-white">Unlimited</strong>&nbsp;Credits
+                            </li>
+                            <li className="flex items-center gap-2">
+                                <FaImage className="text-emerald-500 shrink-0 w-3 h-3" />
+                                Premium Flux.1 Images
+                            </li>
+                            <li className="flex items-center gap-2">
+                                <FaVideo className="text-emerald-500 shrink-0 w-3 h-3" />
+                                Viral TikTok Scripts
+                            </li>
+                            <li className="flex items-center gap-2">
+                                <FaStar className="text-emerald-500 shrink-0 w-3 h-3" />
+                                Priority Support
+                            </li>
+                        </ul>
+                        {mpSubscriptionLink && (
+                            <a
+                                href={mpSubscriptionLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-5 block w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 text-white text-sm font-bold text-center hover:brightness-110 transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
+                            >
+                                Subscribe Now
+                            </a>
+                        )}
+                    </div>
 
-                        {/* Option 2: Lifetime (One Time) */}
-                        <div className="grid grid-cols-2 gap-3">
-                            {/* MercadoPago Lifetime */}
-                            {mpLink ? (
+                    {/* LIFETIME DEAL */}
+                    <div className="bg-gradient-to-b from-purple-950/30 to-slate-950/60 border border-purple-500/20 rounded-2xl p-5 flex flex-col">
+                        <div className="mb-4">
+                            <p className="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1">
+                                <FaCrown className="w-3 h-3" /> Lifetime Deal
+                            </p>
+                            <div className="flex items-baseline gap-2 mt-1">
+                                <p className="text-3xl font-bold text-white">$49</p>
+                                <span className="text-sm text-slate-400">one-time</span>
+                            </div>
+                        </div>
+                        <ul className="space-y-3 text-sm text-slate-300 flex-1">
+                            <li className="flex items-center gap-2">
+                                <FaCheckCircle className="text-purple-400 shrink-0 w-3 h-3" />
+                                All Pro Features
+                            </li>
+                            <li className="flex items-center gap-2">
+                                <FaCheckCircle className="text-purple-400 shrink-0 w-3 h-3" />
+                                One-time payment
+                            </li>
+                            <li className="flex items-center gap-2">
+                                <FaCheckCircle className="text-purple-400 shrink-0 w-3 h-3" />
+                                Future updates included
+                            </li>
+                        </ul>
+                        <div className="mt-5 space-y-2">
+                            {mpLink && (
                                 <a
                                     href={mpLink}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex flex-col items-center justify-center p-3 rounded-xl bg-[#009EE3]/10 border border-[#009EE3]/30 hover:bg-[#009EE3]/20 transition-colors text-[#009EE3]"
+                                    className="block w-full py-2.5 rounded-xl bg-[#009EE3]/15 border border-[#009EE3]/30 text-[#009EE3] text-sm font-bold text-center hover:bg-[#009EE3]/25 transition-all"
                                 >
-                                    <span className="font-bold text-sm">MercadoPago</span>
-                                    <span className="font-bold text-lg">$49.900</span>
-                                    <span className="text-[10px] opacity-80">Lifetime + 10 Videos/mes</span>
+                                    Pay with MercadoPago
                                 </a>
-                            ) : null}
-
-                            {/* PayPal Lifetime */}
-                            {ppLink ? (
+                            )}
+                            {ppLink && (
                                 <a
                                     href={ppLink}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex flex-col items-center justify-center p-3 rounded-xl bg-[#0070BA]/10 border border-[#0070BA]/30 hover:bg-[#0070BA]/20 transition-colors text-[#0070BA]"
+                                    className="block w-full py-2.5 rounded-xl bg-[#0070BA]/15 border border-[#0070BA]/30 text-[#0070BA] text-sm font-bold text-center hover:bg-[#0070BA]/25 transition-all"
                                 >
-                                    <span className="font-bold text-sm">PayPal</span>
-                                    <span className="font-bold text-lg">USD $39</span>
-                                    <span className="text-[10px] opacity-80">Lifetime + 10 Videos/mes</span>
+                                    Pay with PayPal
                                 </a>
-                            ) : null}
+                            )}
                         </div>
                     </div>
+                </div>
 
-                    <button onClick={onClose} className="text-slate-500 text-sm hover:text-white transition-colors mt-4">
+                {/* Footer */}
+                <div className="text-center mt-6">
+                    <button onClick={onClose} className="text-slate-600 text-xs hover:text-slate-400 transition-colors">
                         No gracias, prefiero el plan gratuito
                     </button>
                 </div>
@@ -140,5 +176,4 @@ export default function UpgradeModal({ isOpen, onClose, mpLink, mpSubscriptionLi
         </div>
     );
 }
-
 
