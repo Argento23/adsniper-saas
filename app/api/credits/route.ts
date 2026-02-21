@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 
+// Video limits per plan (monthly)
+const VIDEO_LIMITS: Record<string, number> = {
+    free: 0,
+    basic: 2,
+    pro: 5,
+    enterprise: 10,
+    lifetime: 10
+};
+
 export async function GET() {
     try {
         const { userId } = await auth();
@@ -10,11 +19,34 @@ export async function GET() {
 
         const client = await clerkClient();
         const user = await client.users.getUser(userId);
+        const metadata = user.publicMetadata as any;
 
-        const credits = typeof user.publicMetadata.credits === 'number' ? user.publicMetadata.credits : 3;
-        const plan = (user.publicMetadata as any).plan || 'free';
+        const credits = typeof metadata.credits === 'number' ? metadata.credits : 3;
+        const plan = metadata.plan || 'free';
 
-        return NextResponse.json({ credits, plan });
+        // Video tracking
+        const now = new Date();
+        const lastVideoReset = metadata.lastVideoResetDate
+            ? new Date(metadata.lastVideoResetDate)
+            : new Date(0);
+        const shouldReset = now.getMonth() !== lastVideoReset.getMonth() ||
+            now.getFullYear() !== lastVideoReset.getFullYear();
+
+        const videoLimit = VIDEO_LIMITS[plan] || 0;
+        const videosUsed = shouldReset ? 0 : (metadata.videosUsedThisMonth || 0);
+        const videosRemaining = Math.max(0, videoLimit - videosUsed);
+
+        // Admin check
+        const isAdmin = user.emailAddresses.some(e => e.emailAddress === 'gustavodornhofer@gmail.com');
+
+        return NextResponse.json({
+            credits,
+            plan,
+            videoLimit,
+            videosUsed,
+            videosRemaining: isAdmin ? 999 : videosRemaining,
+            isAdmin
+        });
 
     } catch (error: any) {
         console.error('Credits API Error:', error);
