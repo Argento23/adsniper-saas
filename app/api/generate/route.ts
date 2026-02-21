@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
-// Note: Replicate is now only used for VIDEO generation (see generate-video/route.ts)
-// Images use Pollinations (free) — no Replicate cost
+import { generateReplicateImage } from '@/lib/replicate';
 import { checkAndTrackUsage } from '@/lib/usageTracker';
 
 async function scrapeProductMetadata(url: string) {
@@ -488,21 +487,30 @@ export async function POST(request: Request) {
         }
 
         const user = await (await clerkClient()).users.getUser(userId);
+        const credits = typeof user.publicMetadata.credits === 'number' ? user.publicMetadata.credits : 3;
 
         // ADMIN OVERRIDE
         const isAdmin = user.emailAddresses.some(e => e.emailAddress === 'gustavodornhofer@gmail.com');
 
-        // Monthly Usage Tracking (generous because images are FREE now via Pollinations)
+        if (credits <= 0 && !isAdmin) {
+            return NextResponse.json({ error: 'NO_CREDITS', message: 'Has usado tus 3 créditos gratuitos. Mejorá tu plan para seguir generando.' }, { status: 403 });
+        }
+
+        // Validation
+        if (!productUrl && !manual_title) {
+            return NextResponse.json({ error: 'URL or Product Name required' }, { status: 400 });
+        }
+
+        // DEDUCT CREDIT
+        let remainingCredits = credits;
         if (!isAdmin) {
-            const usageResult = await checkAndTrackUsage(userId, 1);
-            if (!usageResult.canProceed) {
-                return NextResponse.json({
-                    error: 'NO_CREDITS',
-                    message: `Has alcanzado tu límite mensual de ${usageResult.limit} generaciones. Se reinicia el ${usageResult.resetDate.toLocaleDateString('es-AR')}.`,
-                    remaining: usageResult.remaining,
-                    limit: usageResult.limit
-                }, { status: 403 });
-            }
+            remainingCredits = credits - 1;
+            await (await clerkClient()).users.updateUserMetadata(userId, {
+                publicMetadata: {
+                    ...user.publicMetadata,
+                    credits: remainingCredits
+                }
+            });
         }
 
         console.log(`🎯 Generating ${count} ads for: ${productUrl || manual_title} (Lang: ${language})`);
@@ -597,9 +605,9 @@ export async function POST(request: Request) {
         }
 
 
-        // Process Ads — POLLINATIONS FIRST (FREE) — No Replicate cost for images
+        // Process Ads — REPLICATE FIRST (Real Images)
         if (data.ads && Array.isArray(data.ads)) {
-            console.log(`🎨 Generating ${data.ads.length} images with Pollinations (FREE)...`);
+            console.log(`💎 Generating ${data.ads.length} REAL images with Replicate Flux.1...`);
 
             const processedAds = [];
             for (const ad of data.ads) {
@@ -615,29 +623,28 @@ export async function POST(request: Request) {
                 const fullPrompt = `${basePrompt}, clean background, no text, no words, no letters, no logos, professional product photography, 8k, cinematic lighting, high quality, studio setup`;
 
                 try {
-                    // 1. Pollinations (FREE - Primary)
-                    const cleanPrompt = fullPrompt
-                        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
-                        .replace(/[^\w\s]/gi, '') // Remove non-alphanumeric
-                        .substring(0, 100).trim().replace(/\s+/g, '_');
+                    // 1. Try Replicate First (Real AI images)
+                    const replicateResult = await generateReplicateImage(fullPrompt);
+                    if (replicateResult && replicateResult.imageUrl) {
+                        imageUrl = replicateResult.imageUrl;
+                        console.log(`✅ Replicate image generated for ad: ${ad.type || 'unknown'}`);
+                    } else {
+                        throw new Error("Replicate returned no URL");
+                    }
+                } catch (replicateError: any) {
+                    console.error(`❌ Replicate failed: ${replicateError.message}`);
 
-                    const seed = Math.floor(Math.random() * 1000000);
-                    const rawPollUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
-                    imageUrl = `/api/proxy-image?url=${encodeURIComponent(rawPollUrl)}&fallback=${encodeURIComponent(scrapedImage || '')}`;
-                    console.log(`✅ Pollinations image generated (FREE) for ad: ${ad.type || 'unknown'}`);
-
-                } catch (pollinationsError: any) {
-                    console.error(`❌ Pollinations failed: ${pollinationsError.message}`);
-
-                    // 2. HuggingFace fallback (also free)
+                    // 2. Pollinations fallback (free)
                     try {
-                        if (process.env.HF_TOKEN && process.env.HF_TOKEN.length > 10) {
-                            const hfImage = await generateHFImage(fullPrompt);
-                            if (hfImage) {
-                                imageUrl = hfImage;
-                                console.log(`✅ HF fallback image generated`);
-                            }
-                        }
+                        const cleanPrompt = fullPrompt
+                            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                            .replace(/[^\w\s]/gi, '')
+                            .substring(0, 100).trim().replace(/\s+/g, '_');
+
+                        const seed = Math.floor(Math.random() * 1000000);
+                        const rawPollUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
+                        imageUrl = `/api/proxy-image?url=${encodeURIComponent(rawPollUrl)}&fallback=${encodeURIComponent(scrapedImage || '')}`;
+                        console.log(`✅ Pollinations fallback image generated`);
                     } catch (fallbackErr) {
                         console.error("⚠️ All AI fallbacks failed, using product image.");
                     }
@@ -649,8 +656,8 @@ export async function POST(request: Request) {
                     product_image_fallback: scrapedImage
                 });
 
-                // Small delay between requests
-                if (data.ads.length > 1) await new Promise(r => setTimeout(r, 300));
+                // Delay between requests to avoid rate limits
+                if (data.ads.length > 1) await new Promise(r => setTimeout(r, 500));
             }
             data.ads = processedAds;
         }
@@ -666,6 +673,7 @@ export async function POST(request: Request) {
             product_image: scrapedImage,
             product_title: scrapedTitle || data.product_title,
             _mode: data._mode || "hybrid_ai",
+            credits: remainingCredits,
             VERSION_MARKER: "PROXY_V2" // For browser verification
         });
 
@@ -674,7 +682,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
-
 
 
 
