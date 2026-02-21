@@ -10,6 +10,15 @@ const VIDEO_LIMITS: Record<string, number> = {
     lifetime: 10
 };
 
+// Ad generation limits per plan (monthly) — matches usageTracker.ts
+const AD_LIMITS: Record<string, number> = {
+    free: 15,
+    basic: 50,
+    pro: 200,
+    enterprise: 500,
+    lifetime: 999
+};
+
 export async function GET() {
     try {
         const { userId } = await auth();
@@ -21,27 +30,30 @@ export async function GET() {
         const user = await client.users.getUser(userId);
         const metadata = user.publicMetadata as any;
 
-        const credits = typeof metadata.credits === 'number' ? metadata.credits : 3;
         const plan = metadata.plan || 'free';
 
-        // Video tracking
+        // Monthly ad usage tracking
         const now = new Date();
-        const lastVideoReset = metadata.lastVideoResetDate
-            ? new Date(metadata.lastVideoResetDate)
-            : new Date(0);
-        const shouldReset = now.getMonth() !== lastVideoReset.getMonth() ||
-            now.getFullYear() !== lastVideoReset.getFullYear();
+        const lastReset = metadata.lastResetDate ? new Date(metadata.lastResetDate) : new Date(0);
+        const shouldResetAds = now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear();
+        const adLimit = AD_LIMITS[plan] || 15;
+        const adsUsed = shouldResetAds ? 0 : (metadata.currentMonthUsage || 0);
+        const credits = Math.max(0, adLimit - adsUsed);
 
+        // Video tracking
+        const lastVideoReset = metadata.lastVideoResetDate ? new Date(metadata.lastVideoResetDate) : new Date(0);
+        const shouldResetVideos = now.getMonth() !== lastVideoReset.getMonth() || now.getFullYear() !== lastVideoReset.getFullYear();
         const videoLimit = VIDEO_LIMITS[plan] || 0;
-        const videosUsed = shouldReset ? 0 : (metadata.videosUsedThisMonth || 0);
+        const videosUsed = shouldResetVideos ? 0 : (metadata.videosUsedThisMonth || 0);
         const videosRemaining = Math.max(0, videoLimit - videosUsed);
 
         // Admin check
         const isAdmin = user.emailAddresses.some(e => e.emailAddress === 'gustavodornhofer@gmail.com');
 
         return NextResponse.json({
-            credits,
+            credits: isAdmin ? 999 : credits,
             plan,
+            adLimit,
             videoLimit,
             videosUsed,
             videosRemaining: isAdmin ? 999 : videosRemaining,
@@ -53,4 +65,5 @@ export async function GET() {
         return NextResponse.json({ error: 'Error fetching credits' }, { status: 500 });
     }
 }
+
 
