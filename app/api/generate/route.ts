@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
-import { generateReplicateImage } from '@/lib/replicate';
+// Note: Replicate is now only used for VIDEO generation (see generate-video/route.ts)
+// Images use Pollinations (free) — no Replicate cost
 import { checkAndTrackUsage } from '@/lib/usageTracker';
 
 async function scrapeProductMetadata(url: string) {
@@ -604,9 +605,9 @@ export async function POST(request: Request) {
         }
 
 
-        // Process Ads (REPLICATE FIRST STRATEGY - Sequential to avoid Rate Limits)
+        // Process Ads — POLLINATIONS FIRST (FREE) — No Replicate cost for images
         if (data.ads && Array.isArray(data.ads)) {
-            console.log(`💎 Generating ${data.ads.length} images sequences with Replicate Flux.1 Schnell...`);
+            console.log(`🎨 Generating ${data.ads.length} images with Pollinations (FREE)...`);
 
             const processedAds = [];
             for (const ad of data.ads) {
@@ -622,43 +623,28 @@ export async function POST(request: Request) {
                 const fullPrompt = `${basePrompt}, clean background, no text, no words, no letters, no logos, professional product photography, 8k, cinematic lighting, high quality, studio setup`;
 
                 try {
-                    // 1. Try Replicate First
-                    const replicateResult = await generateReplicateImage(fullPrompt);
-                    if (replicateResult && replicateResult.imageUrl) {
-                        imageUrl = replicateResult.imageUrl;
-                        console.log(`✅ Replicate image generated for ad: ${ad.type || 'unknown'}`);
-                    } else {
-                        throw new Error("Replicate returned no URL");
-                    }
-                } catch (replicateError: any) {
-                    console.error(`❌ Replicate failed for ad: ${replicateError.message}`);
-                    ad._replicate_error = replicateError.message;
+                    // 1. Pollinations (FREE - Primary)
+                    const cleanPrompt = fullPrompt
+                        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
+                        .replace(/[^\w\s]/gi, '') // Remove non-alphanumeric
+                        .substring(0, 100).trim().replace(/\s+/g, '_');
 
-                    // 2. Try Fallbacks
+                    const seed = Math.floor(Math.random() * 1000000);
+                    const rawPollUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
+                    imageUrl = `/api/proxy-image?url=${encodeURIComponent(rawPollUrl)}&fallback=${encodeURIComponent(scrapedImage || '')}`;
+                    console.log(`✅ Pollinations image generated (FREE) for ad: ${ad.type || 'unknown'}`);
+
+                } catch (pollinationsError: any) {
+                    console.error(`❌ Pollinations failed: ${pollinationsError.message}`);
+
+                    // 2. HuggingFace fallback (also free)
                     try {
-                        let hfSuccess = false;
                         if (process.env.HF_TOKEN && process.env.HF_TOKEN.length > 10) {
                             const hfImage = await generateHFImage(fullPrompt);
                             if (hfImage) {
                                 imageUrl = hfImage;
                                 console.log(`✅ HF fallback image generated`);
-                                hfSuccess = true;
                             }
-                        }
-
-                        if (!hfSuccess) {
-                            console.log("🔍 Using Pollinations flux as AI fallback...");
-                            // ULTRA-CLEAN: No accents, no special chars, underscores only
-                            const cleanPrompt = fullPrompt
-                                .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
-                                .replace(/[^\w\s]/gi, '') // Remove non-alphanumeric
-                                .substring(0, 100).trim().replace(/\s+/g, '_');
-
-                            const seed = Math.floor(Math.random() * 1000000);
-                            const rawPollUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
-                            // WRAP IN PROXY
-                            imageUrl = `/api/proxy-image?url=${encodeURIComponent(rawPollUrl)}&fallback=${encodeURIComponent(scrapedImage || '')}`;
-                            console.log(`✅ Proxy-wrapped Fallback URL Generated`);
                         }
                     } catch (fallbackErr) {
                         console.error("⚠️ All AI fallbacks failed, using product image.");
@@ -671,8 +657,8 @@ export async function POST(request: Request) {
                     product_image_fallback: scrapedImage
                 });
 
-                // Optional: small delay if multiple to be safe
-                if (data.ads.length > 1) await new Promise(r => setTimeout(r, 500));
+                // Small delay between requests
+                if (data.ads.length > 1) await new Promise(r => setTimeout(r, 300));
             }
             data.ads = processedAds;
         }
