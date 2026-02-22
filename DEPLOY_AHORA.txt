@@ -1,0 +1,93 @@
+Como no puedes usar Git desde terminal, aquí está el método MÁS SIMPLE:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPCIÓN ULTRA-SIMPLE: DRAG & DROP EN GITHUB
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────┐
+│ ARCHIVO 1: route.ts                                  │
+└─────────────────────────────────────────────────────┘
+
+1. Abre: https://github.com/Argento23/adsniper-saas/tree/main/app/api/generate
+
+2. Click en "Add file" (arriba a la derecha) → "Upload files"
+
+3. ARRASTRA este archivo:
+   c:\Users\Gustavo\Downloads\neurova\adsniper-saas\app\api\generate\route.ts
+   
+   (O click "choose your files" y selecciónalo)
+
+4. GitHub preguntará: "route.ts already exists. Replace it?"
+   → Click "Replace"
+
+5. Commit message: fix: rehabilitar n8n + mejorar AI copy
+
+6. Click "Commit changes" (botón verde)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────┐
+│ ARCHIVO 2: page.tsx                                  │
+└─────────────────────────────────────────────────────┘
+
+7. Abre: https://github.com/Argento23/adsniper-saas/tree/main/app/dashboard
+
+8. Click "Add file" → "Upload files"
+
+9. ARRASTRA:
+   c:\Users\Gustavo\Downloads\neurova\adsniper-saas\app\dashboard\page.tsx
+
+10. Replace → Yes
+
+11. Commit message: fix: modal de preview imágenes
+
+12. Click "Commit changes"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────┐
+│ VERIFICAR DEPLOYMENT EN VERCEL                       │
+└─────────────────────────────────────────────────────┘
+
+13. Abre: https://vercel.com/argento23/adsniper-saas/deployments
+
+14. Verás 2 nuevos deployments "Building..." ⏳
+
+15. Espera ~2-3 minutos hasta que ambos digan "Ready" ✅
+
+16. El último deployment será "Production - Current"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────┐
+│ PROBAR QUE FUNCIONÓ                                  │
+└─────────────────────────────────────────────────────┘
+
+17. Abre https://studio.generarise.space/dashboard
+
+18. IMPORTANTE: Presiona Ctrl + Shift + R (hard reload)
+
+19. Genera ads y verifica:
+    ✅ Copy con emojis y persuasivo
+    ✅ Imágenes se muestran
+    ✅ Modal funciona (botón 🔍)
+    ✅ Video scripts usan descripción real
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SI SIGUE SIN FUNCIONAR:
+
+20. Abre https://github.com/Argento23/adsniper-saas/blob/main/app/api/generate/route.ts
+
+21. Busca (Ctrl + F): "n8n ENABLED"
+
+22. ¿Lo encuentras?
+    → SÍ: El archivo está actualizado ✅
+    → NO: No se subió correctamente, repite pasos 1-6
+
+23. Si GitHub está actualizado pero sigue sin funcionar:
+    → Problema de caché
+    → Abre en modo INCÓGNITO
+    → O limpia caché completo del navegador
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
