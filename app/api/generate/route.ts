@@ -601,29 +601,38 @@ export async function POST(request: Request) {
             console.log(`💎 Generating ${data.ads.length} images PARALLEL with Replicate/Fallbacks...`);
 
             const generationPromises = data.ads.map(async (ad) => {
-                let imageUrl = scrapedImage;
                 let basePrompt = ad.image_prompt || manual_image_prompt || manual_title || scrapedTitle;
                 if (manual_image_prompt && !ad.image_prompt) {
                     basePrompt = `${basePrompt}, ${manual_image_prompt}`;
                 }
                 const fullPrompt = `${basePrompt}, clean background, no text, no words, no letters, no logos, professional product photography, 8k, cinematic lighting, high quality, studio setup`;
 
+                // 1. TRY REPLICATE
                 try {
-                    // Try Replicate
                     const replicateResult = await generateReplicateImage(fullPrompt);
                     if (replicateResult && replicateResult.imageUrl) {
                         return { ...ad, generated_image_url: replicateResult.imageUrl, product_image_fallback: scrapedImage };
                     }
-                    throw new Error("No URL from Replicate");
                 } catch (e) {
-                    console.error(`❌ Replicate failed for an ad, falling back to Pollinations...`);
-                    // Pollinations fallback
-                    const cleanPrompt = fullPrompt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s]/gi, '').substring(0, 100).trim().replace(/\s+/g, '_');
-                    const seed = Math.floor(Math.random() * 1000000);
-                    const rawPollUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
-                    const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(rawPollUrl)}&fallback=${encodeURIComponent(scrapedImage || '')}`;
-                    return { ...ad, generated_image_url: proxyUrl, product_image_fallback: scrapedImage };
+                    console.error(`⚠️ Replicate failed, trying Hugging Face...`);
                 }
+
+                // 2. TRY HUGGING FACE
+                try {
+                    const hfImage = await generateHFImage(fullPrompt);
+                    if (hfImage) {
+                        return { ...ad, generated_image_url: hfImage, product_image_fallback: scrapedImage };
+                    }
+                } catch (e) {
+                    console.error(`⚠️ Hugging Face failed, trying Pollinations...`);
+                }
+
+                // 3. FINAL FALLBACK: POLLINATIONS
+                const cleanPrompt = fullPrompt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s]/gi, '').substring(0, 100).trim().replace(/\s+/g, '_');
+                const seed = Math.floor(Math.random() * 1000000);
+                const rawPollUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
+                const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(rawPollUrl)}&fallback=${encodeURIComponent(scrapedImage || '')}`;
+                return { ...ad, generated_image_url: proxyUrl, product_image_fallback: scrapedImage };
             });
 
             data.ads = await Promise.all(generationPromises);

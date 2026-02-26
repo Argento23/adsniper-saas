@@ -1,4 +1,4 @@
-// Trigger Rebuild - Update Groq and Parallel Generation
+// Trigger Rebuild - Image Fallback Logic V3
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     output: 'standalone', // Optimizes for Docker/VPS
