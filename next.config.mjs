@@ -1,3 +1,4 @@
+// Trigger Rebuild - Update Groq and Parallel Generation
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     output: 'standalone', // Optimizes for Docker/VPS
