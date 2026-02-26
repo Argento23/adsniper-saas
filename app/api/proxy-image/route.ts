@@ -53,7 +53,7 @@ export async function GET(request: Request) {
 
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 20000); // Increased to 20s for slow AI generation
 
         const response = await fetch(targetUrl, {
             signal: controller.signal,
