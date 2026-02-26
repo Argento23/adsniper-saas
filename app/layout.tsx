@@ -36,7 +36,7 @@ export default function RootLayout({
   }
 
   return (
-    <ClerkProvider signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/dashboard">
+    <ClerkProvider fallbackRedirectUrl="/dashboard">
       <html lang="en" suppressHydrationWarning>
         <body
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
