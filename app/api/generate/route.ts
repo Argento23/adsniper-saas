@@ -501,17 +501,8 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'URL or Product Name required' }, { status: 400 });
         }
 
-        // DEDUCT CREDIT
+        // DEDUCT CREDIT - MOVED TO END (ONLY ON SUCCESS)
         let remainingCredits = credits;
-        if (!isAdmin) {
-            remainingCredits = credits - 1;
-            await (await clerkClient()).users.updateUserMetadata(userId, {
-                publicMetadata: {
-                    ...user.publicMetadata,
-                    credits: remainingCredits
-                }
-            });
-        }
 
         console.log(`🎯 Generating ${count} ads for: ${productUrl || manual_title} (Lang: ${language})`);
 
@@ -605,61 +596,48 @@ export async function POST(request: Request) {
         }
 
 
-        // Process Ads — REPLICATE FIRST (Real Images)
+        // Process Ads — PARALLEL REPLICATE (Faster)
         if (data.ads && Array.isArray(data.ads)) {
-            console.log(`💎 Generating ${data.ads.length} REAL images with Replicate Flux.1...`);
+            console.log(`💎 Generating ${data.ads.length} images PARALLEL with Replicate/Fallbacks...`);
 
-            const processedAds = [];
-            for (const ad of data.ads) {
-                let imageUrl = scrapedImage; // Default fallback
-
-                // Build prompt priority: AI-generated > User input > Product title
+            const generationPromises = data.ads.map(async (ad) => {
+                let imageUrl = scrapedImage;
                 let basePrompt = ad.image_prompt || manual_image_prompt || manual_title || scrapedTitle;
-
                 if (manual_image_prompt && !ad.image_prompt) {
                     basePrompt = `${basePrompt}, ${manual_image_prompt}`;
                 }
-
                 const fullPrompt = `${basePrompt}, clean background, no text, no words, no letters, no logos, professional product photography, 8k, cinematic lighting, high quality, studio setup`;
 
                 try {
-                    // 1. Try Replicate First (Real AI images)
+                    // Try Replicate
                     const replicateResult = await generateReplicateImage(fullPrompt);
                     if (replicateResult && replicateResult.imageUrl) {
-                        imageUrl = replicateResult.imageUrl;
-                        console.log(`✅ Replicate image generated for ad: ${ad.type || 'unknown'}`);
-                    } else {
-                        throw new Error("Replicate returned no URL");
+                        return { ...ad, generated_image_url: replicateResult.imageUrl, product_image_fallback: scrapedImage };
                     }
-                } catch (replicateError: any) {
-                    console.error(`❌ Replicate failed: ${replicateError.message}`);
-
-                    // 2. Pollinations fallback (free)
-                    try {
-                        const cleanPrompt = fullPrompt
-                            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-                            .replace(/[^\w\s]/gi, '')
-                            .substring(0, 100).trim().replace(/\s+/g, '_');
-
-                        const seed = Math.floor(Math.random() * 1000000);
-                        const rawPollUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
-                        imageUrl = `/api/proxy-image?url=${encodeURIComponent(rawPollUrl)}&fallback=${encodeURIComponent(scrapedImage || '')}`;
-                        console.log(`✅ Pollinations fallback image generated`);
-                    } catch (fallbackErr) {
-                        console.error("⚠️ All AI fallbacks failed, using product image.");
-                    }
+                    throw new Error("No URL from Replicate");
+                } catch (e) {
+                    console.error(`❌ Replicate failed for an ad, falling back to Pollinations...`);
+                    // Pollinations fallback
+                    const cleanPrompt = fullPrompt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s]/gi, '').substring(0, 100).trim().replace(/\s+/g, '_');
+                    const seed = Math.floor(Math.random() * 1000000);
+                    const rawPollUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
+                    const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(rawPollUrl)}&fallback=${encodeURIComponent(scrapedImage || '')}`;
+                    return { ...ad, generated_image_url: proxyUrl, product_image_fallback: scrapedImage };
                 }
+            });
 
-                processedAds.push({
-                    ...ad,
-                    generated_image_url: imageUrl,
-                    product_image_fallback: scrapedImage
+            data.ads = await Promise.all(generationPromises);
+
+            // DEDUCT CREDIT ONLY AFTER SUCCESSFUL GENERATION
+            if (!isAdmin) {
+                remainingCredits = credits - 1;
+                await (await clerkClient()).users.updateUserMetadata(userId, {
+                    publicMetadata: {
+                        ...user.publicMetadata,
+                        credits: remainingCredits
+                    }
                 });
-
-                // Delay between requests to avoid rate limits
-                if (data.ads.length > 1) await new Promise(r => setTimeout(r, 500));
             }
-            data.ads = processedAds;
         }
 
         // Ensure scripts are not undefined if n8n failed to return them
