@@ -26,6 +26,15 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Client-side debug for Clerk configuration
+  if (typeof window !== 'undefined') {
+    if (!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {
+      console.error("🚨 CLERK ERROR: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is missing from client bundle!");
+    } else {
+      console.log("🌐 Clerk initialized with key type:", process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY.startsWith('pk_live') ? 'LIVE' : 'TEST');
+    }
+  }
+
   return (
     <ClerkProvider signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/dashboard">
       <html lang="en" suppressHydrationWarning>
