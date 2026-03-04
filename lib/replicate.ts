@@ -6,7 +6,8 @@ interface ReplicateImageResponse {
 export async function generateReplicateImage(
     prompt: string,
     width: number = 1024,
-    height: number = 1024
+    height: number = 1024,
+    isRetry: boolean = false
 ): Promise<ReplicateImageResponse> {
     const apiKey = process.env.REPLICATE_API_KEY || process.env.REPLICATE_API_TOKEN;
     console.log(`🔑 Replicate API Key detected: ${apiKey ? apiKey.substring(0, 5) + '...' : 'MISSING'}`);
@@ -40,6 +41,11 @@ export async function generateReplicateImage(
         });
 
         if (!response.ok) {
+            if (response.status === 429 && !isRetry) {
+                console.warn(`⏳ Replicate Limit (429) hit for Flux. Waiting 10s...`);
+                await new Promise(r => setTimeout(r, 10500));
+                return generateReplicateImage(prompt, width, height, true);
+            }
             const errorText = await response.text();
             throw new Error(`Replicate API error (${response.status}): ${errorText}`);
         }
@@ -108,7 +114,8 @@ export async function generateReplicateImage(
 
 // Video generation using Wan 2.5 image-to-video (modern, reliable)
 export async function generateReplicateVideo(
-    imageUrl: string
+    imageUrl: string,
+    isRetry: boolean = false
 ): Promise<string> {
     const apiKey = process.env.REPLICATE_API_KEY || process.env.REPLICATE_API_TOKEN;
 
@@ -137,6 +144,11 @@ export async function generateReplicateVideo(
         });
 
         if (!response.ok) {
+            if (response.status === 429 && !isRetry) {
+                console.warn(`⏳ Replicate Limit (429) hit for Video. Waiting 10s...`);
+                await new Promise(r => setTimeout(r, 10500));
+                return generateReplicateVideo(imageUrl, true);
+            }
             const errorText = await response.text();
             throw new Error(`Replicate Video API error (${response.status}): ${errorText}`);
         }
@@ -189,3 +201,4 @@ export async function generateReplicateVideo(
         throw error;
     }
 }
+
