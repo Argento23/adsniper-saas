@@ -78,7 +78,7 @@ const MOCK_ADS = [
 const FALLBACK_IMAGE = "https://placehold.co/800x800/101827/ffffff.png?text=Ad+Image"; // Simple, reliable placeholder
 
 // --- AD CARD COMPONENT (Fixes Shared State Bug) ---
-const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenerated }: { ad: any, index: number, brand: any, productImage: string, videosRemaining: number, onVideoGenerated?: (remaining: number) => void }) => {
+const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenerated, applyLogo }: { ad: any, index: number, brand: any, productImage: string, videosRemaining: number, onVideoGenerated?: (remaining: number) => void, applyLogo: boolean }) => {
     const [imgSrc, setImgSrc] = useState(ad.generated_image_url || productImage || FALLBACK_IMAGE);
     const [videoUrl, setVideoUrl] = useState<string | null>(null);
     const [generatingVideo, setGeneratingVideo] = useState(false);
@@ -209,20 +209,15 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
                                 loading="eager"
                                 onError={handleImageError}
                             />
-                            {/* OVERLAY DE PRODUCTO: Integración visual avanzada con sombras para anclaje */}
-                            {productImage && !productImage.includes('placehold.co') && imgSrc !== productImage && (
-                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                                    {/* Luz trasera tenue (Back-glow) para que el neón parezca iluminar el objeto por detrás */}
-                                    <div className="absolute w-3/4 h-3/4 bg-white/5 blur-3xl rounded-full mix-blend-overlay"></div>
-
-                                    <div className="relative w-2/3 h-2/3 max-w-[280px] max-h-[280px] transition-transform duration-700 ease-out group-hover:scale-110 group-hover:-translate-y-2 flex flex-col items-center justify-end">
+                            {/* OVERLAY DE PRODUCTO: Marca de agua elegante (Glassmorphism) en la esquina inferior derecha */}
+                            {applyLogo && productImage && !productImage.includes('placehold.co') && imgSrc !== productImage && (
+                                <div className="absolute bottom-[44px] right-4 z-30 pointer-events-none transition-transform duration-500 group-hover:scale-110 group-hover:-translate-y-1">
+                                    <div className="w-16 h-16 md:w-20 md:h-20 bg-white/10 backdrop-blur-md rounded-xl p-2 border border-white/20 shadow-[-5px_5px_15px_rgba(0,0,0,0.5)] flex items-center justify-center">
                                         <img
                                             src={productImage}
                                             alt="Overlay de Producto"
-                                            className="w-full h-full object-contain filter drop-shadow-[0_20px_20px_rgba(0,0,0,0.8)] z-20"
+                                            className="w-full h-full object-contain filter drop-shadow-md"
                                         />
-                                        {/* Sombra de contaco/suelo simulada en la base del objeto */}
-                                        <div className="absolute bottom-[-10%] w-3/4 h-[20%] bg-black/60 blur-[15px] rounded-[100%] z-10"></div>
                                     </div>
                                 </div>
                             )}
@@ -292,18 +287,15 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
                                         className="w-full h-full object-contain"
                                     />
 
-                                    {/* MISMO OVERLAY DE PRODUCTO PARA EL MODAL */}
-                                    {productImage && !productImage.includes('placehold.co') && imgSrc !== productImage && (
-                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                                            <div className="absolute w-3/4 h-3/4 bg-white/5 blur-3xl rounded-full mix-blend-overlay"></div>
-
-                                            <div className="relative w-2/3 h-2/3 transition-transform duration-700 ease-out flex flex-col items-center justify-end">
+                                    {/* MISMO OVERLAY DE PRODUCTO PARA EL MODAL (ESQUINA INFERIOR DERECHA) */}
+                                    {applyLogo && productImage && !productImage.includes('placehold.co') && imgSrc !== productImage && (
+                                        <div className="absolute bottom-10 right-10 z-30 pointer-events-none">
+                                            <div className="w-24 h-24 md:w-32 md:h-32 bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/20 shadow-[-10px_10px_30px_rgba(0,0,0,0.8)] flex items-center justify-center">
                                                 <img
                                                     src={productImage}
                                                     alt="Overlay de Producto Fullscreen"
-                                                    className="w-full h-full object-contain filter drop-shadow-[0_20px_20px_rgba(0,0,0,0.8)] z-20"
+                                                    className="w-full h-full object-contain filter drop-shadow-md"
                                                 />
-                                                <div className="absolute bottom-[-10%] w-3/4 h-[20%] bg-black/60 blur-[15px] rounded-[100%] z-10"></div>
                                             </div>
                                         </div>
                                     )}
@@ -435,6 +427,7 @@ export default function Dashboard() {
 
     const [language, setLanguage] = useState('es');
     const [count, setCount] = useState(3);
+    const [applyLogo, setApplyLogo] = useState(true);
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<'ads' | 'scripts'>('ads');
 
@@ -766,21 +759,43 @@ export default function Dashboard() {
                                         </div>
                                     )}
 
-                                    {/* QUANTITY SELECTOR */}
-                                    <div className="flex items-center justify-between bg-slate-900 rounded-xl px-4 py-3 border border-slate-800">
-                                        <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                                            <FaLayerGroup /> Cantidad de Variaciones
-                                        </span>
-                                        <div className="flex gap-2">
-                                            {[1, 3, 5, 10].map(num => (
-                                                <button
-                                                    key={num}
-                                                    onClick={() => setCount(num)}
-                                                    className={`w-10 h-10 rounded-lg text-sm font-bold transition-all ${count === num ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'}`}
-                                                >
-                                                    {num}
-                                                </button>
-                                            ))}
+                                    {/* OPCIONES AVANZADAS: LOGO Y CANTIDAD */}
+                                    <div className="flex flex-col md:flex-row gap-4 mt-2">
+
+                                        {/* Logo Toggle */}
+                                        <div className="flex-1 flex items-center justify-between bg-slate-900 rounded-xl px-4 py-3 border border-slate-800 focus-within:border-emerald-500/50 transition-colors">
+                                            <div className="flex flex-col">
+                                                <span className="text-xs font-bold text-slate-300 uppercase flex items-center gap-2">
+                                                    <FaStar className={applyLogo ? "text-emerald-400" : "text-slate-600"} />
+                                                    Aplicar Marca de Agua (Logo)
+                                                </span>
+                                                <span className="text-[10px] text-slate-500 mt-0.5">Muestra u oculta la firma de tu marca</span>
+                                            </div>
+
+                                            <button
+                                                onClick={() => setApplyLogo(!applyLogo)}
+                                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${applyLogo ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                                            >
+                                                <span className={`${applyLogo ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`} />
+                                            </button>
+                                        </div>
+
+                                        {/* QUANTITY SELECTOR */}
+                                        <div className="flex-1 flex items-center justify-between bg-slate-900 rounded-xl px-4 py-3 border border-slate-800">
+                                            <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                                                <FaLayerGroup /> Cantidad de Generaciones
+                                            </span>
+                                            <div className="flex gap-1.5 md:gap-2">
+                                                {[1, 3, 5, 10].map(num => (
+                                                    <button
+                                                        key={num}
+                                                        onClick={() => setCount(num)}
+                                                        className={`w-8 h-8 md:w-10 md:h-10 rounded-lg text-sm font-bold transition-all ${count === num ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'}`}
+                                                    >
+                                                        {num}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
 
@@ -856,6 +871,7 @@ export default function Dashboard() {
                                         productImage={productImage}
                                         videosRemaining={videosRemaining}
                                         onVideoGenerated={(remaining: number) => setVideosRemaining(remaining)}
+                                        applyLogo={applyLogo}
                                     />
                                 ))}
                             </div>
