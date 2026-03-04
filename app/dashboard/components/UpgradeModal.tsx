@@ -28,18 +28,18 @@ export default function UpgradeModal({ isOpen, onClose, mpLink, mpSubscriptionLi
                 {/* Header */}
                 <div className="text-center mb-8">
                     <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/30 mx-auto mb-4 p-3">
-                        <img src="/adsniper_logo.svg" alt="AdSniper Logo" className="w-full h-full object-contain" />
+                        <img src="/AdSíntesis_logo.svg" alt="AdSíntesis Logo" className="w-full h-full object-contain" />
                     </div>
                     <h2 className="text-3xl font-bold text-white tracking-tight">
                         Elige tu <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">Plan</span>
                     </h2>
                     <p className="text-slate-400 mt-2 text-sm">
-                        Desbloquea el poder completo de AdSniper AI
+                        Desbloquea el poder completo de AdSíntesis AI
                     </p>
                 </div>
 
                 {/* Pricing Grid */}
-                <div className="grid md:grid-cols-3 gap-4 md:gap-5">
+                <div className="grid md:grid-cols-2 gap-4 md:gap-5 max-w-3xl mx-auto">
 
                     {/* STARTER - Free */}
                     <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-5 flex flex-col">
@@ -105,52 +105,15 @@ export default function UpgradeModal({ isOpen, onClose, mpLink, mpSubscriptionLi
                                 Priority Support
                             </li>
                         </ul>
-                        {mpSubscriptionLink && (
-                            <a
-                                href={mpSubscriptionLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="mt-5 block w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 text-white text-sm font-bold text-center hover:brightness-110 transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
-                            >
-                                Subscribe Now
-                            </a>
-                        )}
-                    </div>
-
-                    {/* LIFETIME DEAL */}
-                    <div className="bg-gradient-to-b from-purple-950/30 to-slate-950/60 border border-purple-500/20 rounded-2xl p-5 flex flex-col">
-                        <div className="mb-4">
-                            <p className="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1">
-                                <FaCrown className="w-3 h-3" /> Lifetime Deal
-                            </p>
-                            <div className="flex items-baseline gap-2 mt-1">
-                                <p className="text-3xl font-bold text-white">$49</p>
-                                <span className="text-sm text-slate-400">one-time</span>
-                            </div>
-                        </div>
-                        <ul className="space-y-3 text-sm text-slate-300 flex-1">
-                            <li className="flex items-center gap-2">
-                                <FaCheckCircle className="text-purple-400 shrink-0 w-3 h-3" />
-                                All Pro Features
-                            </li>
-                            <li className="flex items-center gap-2">
-                                <FaCheckCircle className="text-purple-400 shrink-0 w-3 h-3" />
-                                One-time payment
-                            </li>
-                            <li className="flex items-center gap-2">
-                                <FaCheckCircle className="text-purple-400 shrink-0 w-3 h-3" />
-                                Future updates included
-                            </li>
-                        </ul>
                         <div className="mt-5 space-y-2">
-                            {mpLink && (
+                            {mpSubscriptionLink && (
                                 <a
-                                    href={mpLink}
+                                    href={mpSubscriptionLink}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="block w-full py-2.5 rounded-xl bg-[#009EE3]/15 border border-[#009EE3]/30 text-[#009EE3] text-sm font-bold text-center hover:bg-[#009EE3]/25 transition-all"
+                                    className="block w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 text-white text-sm font-bold text-center hover:brightness-110 transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
                                 >
-                                    Pay with MercadoPago
+                                    Suscribirse con MercadoPago
                                 </a>
                             )}
                             {ppLink && (
@@ -160,7 +123,7 @@ export default function UpgradeModal({ isOpen, onClose, mpLink, mpSubscriptionLi
                                     rel="noopener noreferrer"
                                     className="block w-full py-2.5 rounded-xl bg-[#0070BA]/15 border border-[#0070BA]/30 text-[#0070BA] text-sm font-bold text-center hover:bg-[#0070BA]/25 transition-all"
                                 >
-                                    Pay with PayPal
+                                    Pay with PayPal ($29/mo)
                                 </a>
                             )}
                         </div>
@@ -177,3 +140,4 @@ export default function UpgradeModal({ isOpen, onClose, mpLink, mpSubscriptionLi
         </div>
     );
 }
+
