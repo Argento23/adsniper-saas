@@ -512,15 +512,16 @@ export async function POST(request: Request) {
 
         let credits = 3;
         let isAdmin = false;
+        let clerkUser: any = null;
 
         try {
             // FIX DEFINITIVO PARA VERCEL Y CLERK BETA 46: 
             // Intentar usar clerkClient si existe, pero si crashea por undefined object, no frenar la app.
             if (typeof clerkClient !== 'undefined' && clerkClient.users) {
-                const user = await clerkClient.users.getUser(userId);
-                if (user) {
-                    credits = typeof user.publicMetadata?.credits === 'number' ? user.publicMetadata.credits : 3;
-                    isAdmin = user.emailAddresses?.some(e => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com');
+                clerkUser = await clerkClient.users.getUser(userId);
+                if (clerkUser) {
+                    credits = typeof clerkUser.publicMetadata?.credits === 'number' ? clerkUser.publicMetadata.credits : 3;
+                    isAdmin = clerkUser.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com');
                 }
             } else {
                 console.warn("⚠️ Clerk Client users object is undefined in this Beta. Falling back to default limits.");
@@ -690,12 +691,18 @@ export async function POST(request: Request) {
             // DEDUCT CREDIT ONLY AFTER SUCCESSFUL GENERATION
             if (!isAdmin) {
                 remainingCredits = credits - 1;
-                await clerkClient.users.updateUserMetadata(userId, {
-                    publicMetadata: {
-                        ...user.publicMetadata,
-                        credits: remainingCredits
+                try {
+                    if (typeof clerkClient !== 'undefined' && clerkClient.users && clerkUser) {
+                        await clerkClient.users.updateUserMetadata(userId, {
+                            publicMetadata: {
+                                ...clerkUser.publicMetadata,
+                                credits: remainingCredits
+                            }
+                        });
                     }
-                });
+                } catch (updateError) {
+                    console.error("⚠️ Fallo al actualizar créditos en Clerk, ignorando para no romper la generación:", updateError);
+                }
             }
         }
 
@@ -719,7 +726,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
-
 
 
 
