@@ -9,13 +9,13 @@ import UpgradeModal from './components/UpgradeModal';
 
 const MOCK_SCRIPTS = [
     {
-        title: "POV: Descubrí esto",
+        title: "POV: DescubrÃ­ esto",
         angle: "Storytelling",
         audio_suggestion: "Trending 'Oh No' remix",
         platform: "TikTok",
         sections: [
-            { type: "Gancho", content: "POV: Estás por descubrir algo que cambia todo.", duration: "3s" },
-            { type: "Cuerpo", content: "(Cámara en mano) Miren lo que acabo de encontrar. La diferencia se nota desde el primer uso.", duration: "12s" },
+            { type: "Gancho", content: "POV: EstÃ¡s por descubrir algo que cambia todo.", duration: "3s" },
+            { type: "Cuerpo", content: "(CÃ¡mara en mano) Miren lo que acabo de encontrar. La diferencia se nota desde el primer uso.", duration: "12s" },
             { type: "CTA", content: "Link en bio. Quedan pocas unidades.", duration: "4s" }
         ]
     },
@@ -25,31 +25,31 @@ const MOCK_SCRIPTS = [
         audio_suggestion: "Lo-fi study beats",
         platform: "Reels",
         sections: [
-            { type: "Gancho", content: "3 formas de usarlo que no conocías 👇", duration: "3s" },
+            { type: "Gancho", content: "3 formas de usarlo que no conocÃ­as ðŸ‘‡", duration: "3s" },
             { type: "Cuerpo", content: "Tip 1: Uso principal. Tip 2: Hack creativo. Tip 3: El secreto que nadie te cuenta.", duration: "15s" },
-            { type: "CTA", content: "Guardá este video y comprá en el link de la bio.", duration: "3s" }
+            { type: "CTA", content: "GuardÃ¡ este video y comprÃ¡ en el link de la bio.", duration: "3s" }
         ]
     },
     {
-        title: "Antes vs Después",
-        angle: "Transformación",
+        title: "Antes vs DespuÃ©s",
+        angle: "TransformaciÃ³n",
         audio_suggestion: "Dramatic reveal sound",
         platform: "TikTok",
         sections: [
-            { type: "Gancho", content: "ANTES vs DESPUÉS 😱", duration: "3s" },
-            { type: "Cuerpo", content: "(Split screen) El cambio es increíble. La transformación habla sola.", duration: "10s" },
-            { type: "CTA", content: "Comentá '🔥' y te mando el link.", duration: "3s" }
+            { type: "Gancho", content: "ANTES vs DESPUÃ‰S ðŸ˜±", duration: "3s" },
+            { type: "Cuerpo", content: "(Split screen) El cambio es increÃ­ble. La transformaciÃ³n habla sola.", duration: "10s" },
+            { type: "CTA", content: "ComentÃ¡ 'ðŸ”¥' y te mando el link.", duration: "3s" }
         ]
     },
     {
-        title: "Cosas que no sabías",
+        title: "Cosas que no sabÃ­as",
         angle: "Educativo Viral",
-        audio_suggestion: "Audio 'Cosas que no sabías'",
+        audio_suggestion: "Audio 'Cosas que no sabÃ­as'",
         platform: "Shorts",
         sections: [
-            { type: "Gancho", content: "Cosas que no sabías sobre este producto:", duration: "2s" },
+            { type: "Gancho", content: "Cosas que no sabÃ­as sobre este producto:", duration: "2s" },
             { type: "Cuerpo", content: "1. Beneficio clave. 2. Lo usan profesionales. 3. Dato sorprendente. *Green screen*", duration: "12s" },
-            { type: "CTA", content: "Seguime para más y link en bio.", duration: "3s" }
+            { type: "CTA", content: "Seguime para mÃ¡s y link en bio.", duration: "3s" }
         ]
     }
 ];
@@ -58,19 +58,19 @@ const MOCK_ADS = [
     {
         type: "Viral Hook",
         headline: "Stop Wasting Money on Bad Ads",
-        primary_text: "This simple tool saved me hours of work. The results are insane! 🚀 #GrowthHacking #Marketing",
+        primary_text: "This simple tool saved me hours of work. The results are insane! ðŸš€ #GrowthHacking #Marketing",
         generated_image_url: "https://images.unsplash.com/photo-1533750516457-a7f992034fec?auto=format&fit=crop&w=800&q=80"
     },
     {
         type: "Problem/Solution",
         headline: "Finally, a Solution That Works",
-        primary_text: "Tired of complicated workflows? AdSniper makes it easy. Try it today and see the difference.",
+        primary_text: "Tired of complicated workflows? AdSíntesis makes it easy. Try it today and see the difference.",
         generated_image_url: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=800&q=80"
     },
     {
         type: "Social Proof",
         headline: "Everyone is Talking About This",
-        primary_text: "Join thousands of satisfied users who have transformed their business. Don't miss out! ⭐⭐⭐⭐⭐",
+        primary_text: "Join thousands of satisfied users who have transformed their business. Don't miss out! â­â­â­â­â­",
         generated_image_url: "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=800&q=80"
     }
 ];
@@ -261,7 +261,7 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
                                     onClick={() => setShowImageModal(false)}
                                     className="bg-white/10 hover:bg-white/20 text-white rounded-full p-3 backdrop-blur-md border border-white/20 transition-all"
                                 >
-                                    ✕
+                                    âœ•
                                 </button>
                             </div>
                             <div className="flex-1 flex items-center justify-center overflow-hidden">
@@ -309,15 +309,11 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
                         <button
                             onClick={handleGenerateVideo}
                             disabled={generatingVideo || hasError || imgSrc.includes('placehold.co') || videosRemaining <= 0}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-white shadow-lg transition-all disabled:opacity-50 ${videosRemaining <= 0
-                                ? 'bg-slate-600 cursor-not-allowed'
-                                : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:brightness-110 shadow-purple-500/20'
-                                }`}
                             title={videosRemaining <= 0 ? 'Mejorá tu plan para generar videos' : `${videosRemaining} videos restantes este mes`}
                         >
                             {generatingVideo ? <FaSpinner className="animate-spin" /> : <FaVideo />}
                             {videosRemaining <= 0
-                                ? '🔒 Video Pro'
+                                ? 'ðŸ”’ Video Pro'
                                 : generatingVideo
                                     ? 'Generando...'
                                     : `Animar Ad (${videosRemaining})`
@@ -339,7 +335,7 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
                                         const url = URL.createObjectURL(blob);
                                         const a = document.createElement('a');
                                         a.href = url;
-                                        a.download = `adsniper-video-${Date.now()}.mp4`;
+                                        a.download = `AdSíntesis-video-${Date.now()}.mp4`;
                                         document.body.appendChild(a);
                                         a.click();
                                         document.body.removeChild(a);
@@ -358,8 +354,8 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
                                         try {
                                             const resp = await fetch(videoUrl);
                                             const blob = await resp.blob();
-                                            const file = new File([blob], 'adsniper-video.mp4', { type: 'video/mp4' });
-                                            await navigator.share({ files: [file], title: 'Ad Video - AdSniper' });
+                                            const file = new File([blob], 'AdSíntesis-video.mp4', { type: 'video/mp4' });
+                                            await navigator.share({ files: [file], title: 'Ad Video - AdSíntesis' });
                                         } catch {
                                             navigator.clipboard.writeText(videoUrl);
                                             alert('Link del video copiado!');
@@ -417,20 +413,20 @@ export default function Dashboard() {
 
     // Initial Load - Brand & Credits
     useEffect(() => {
-        console.log('🚀 Dashboard: Initializing...');
+        console.log('ðŸš€ Dashboard: Initializing...');
 
         // Load Brand
         try {
-            const savedBrand = localStorage.getItem('adSniperBrand');
+            const savedBrand = localStorage.getItem('AdSíntesisBrand');
             if (savedBrand) {
-                console.log('📦 Dashboard: Brand found in storage');
+                console.log('ðŸ“¦ Dashboard: Brand found in storage');
                 setBrand(JSON.parse(savedBrand));
                 setView('generator');
             } else {
-                console.log('❓ Dashboard: No brand found, showing setup');
+                console.log('â“ Dashboard: No brand found, showing setup');
             }
         } catch (err) {
-            console.error('❌ Dashboard: Error loading brand from storage:', err);
+            console.error('âŒ Dashboard: Error loading brand from storage:', err);
             setView('setup');
         }
 
@@ -456,7 +452,7 @@ export default function Dashboard() {
     };
 
     const handleBrandSave = (data: any) => {
-        console.log('✅ Dashboard: Brand saved');
+        console.log('âœ… Dashboard: Brand saved');
         setBrand(data);
         setView('generator');
     };
@@ -492,7 +488,7 @@ export default function Dashboard() {
 
             const data = await res.json();
             if (data.VERSION_MARKER) {
-                console.log(`🚀 Backend Version: ${data.VERSION_MARKER}`);
+                console.log(`ðŸš€ Backend Version: ${data.VERSION_MARKER}`);
             }
 
 
@@ -554,11 +550,11 @@ export default function Dashboard() {
                 <header className="flex justify-between items-center py-4">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20 p-2">
-                            <img src="/adsniper_logo.svg" alt="AdSniper Logo" className="w-full h-full object-contain" />
+                            <img src="/adsniper_logo.svg" alt="AdSíntesis Logo" className="w-full h-full object-contain" />
                         </div>
                         <div className="flex flex-col">
                             <h1 className="text-2xl font-bold tracking-tight">
-                                AdSniper <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">AI</span>
+                                AdSíntesis <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">AI</span>
                             </h1>
                             <div className="flex items-center gap-2 mt-0.5">
                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${plan === 'free' ? 'bg-slate-800 text-slate-400' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
@@ -760,8 +756,8 @@ export default function Dashboard() {
                                                 onChange={(e) => setLanguage(e.target.value)}
                                                 className="bg-transparent text-sm font-bold text-slate-200 outline-none cursor-pointer w-full"
                                             >
-                                                <option value="es">ES 🇪🇸</option>
-                                                <option value="en">EN 🇺🇸</option>
+                                                <option value="es">ES ðŸ‡ªðŸ‡¸</option>
+                                                <option value="en">EN ðŸ‡ºðŸ‡¸</option>
                                             </select>
                                         </div>
 
@@ -850,3 +846,4 @@ export default function Dashboard() {
         </div>
     );
 }
+
