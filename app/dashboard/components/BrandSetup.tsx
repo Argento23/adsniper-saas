@@ -35,7 +35,7 @@ export default function BrandSetup({ onSave, existingData }: BrandSetupProps) {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const data = { name, website, logo_url: logoUrl, primary_color: primaryColor, tone, avatar };
-        localStorage.setItem('adSniperBrand', JSON.stringify(data));
+        localStorage.setItem('AdSíntesisBrand', JSON.stringify(data));
         onSave(data);
     };
 
@@ -182,3 +182,5 @@ export default function BrandSetup({ onSave, existingData }: BrandSetupProps) {
         </div>
     );
 }
+
+
