@@ -209,15 +209,20 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
                                 loading="eager"
                                 onError={handleImageError}
                             />
-                            {/* OVERLAY DE PRODUCTO: Asegura que el logo/producto no sufra distorsión de la IA */}
+                            {/* OVERLAY DE PRODUCTO: Integración visual avanzada con sombras para anclaje */}
                             {productImage && !productImage.includes('placehold.co') && imgSrc !== productImage && (
-                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none p-6 z-10 transition-all duration-500 ease-out group-hover:bg-slate-900/10">
-                                    <div className="relative w-2/3 h-2/3 max-w-[280px] max-h-[280px] transition-transform duration-700 ease-out group-hover:scale-110 group-hover:-translate-y-2">
+                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                                    {/* Luz trasera tenue (Back-glow) para que el neón parezca iluminar el objeto por detrás */}
+                                    <div className="absolute w-3/4 h-3/4 bg-white/5 blur-3xl rounded-full mix-blend-overlay"></div>
+
+                                    <div className="relative w-2/3 h-2/3 max-w-[280px] max-h-[280px] transition-transform duration-700 ease-out group-hover:scale-110 group-hover:-translate-y-2 flex flex-col items-center justify-end">
                                         <img
                                             src={productImage}
                                             alt="Overlay de Producto"
-                                            className="w-full h-full object-contain filter drop-shadow-2xl"
+                                            className="w-full h-full object-contain filter drop-shadow-[0_20px_20px_rgba(0,0,0,0.8)] z-20"
                                         />
+                                        {/* Sombra de contaco/suelo simulada en la base del objeto */}
+                                        <div className="absolute bottom-[-10%] w-3/4 h-[20%] bg-black/60 blur-[15px] rounded-[100%] z-10"></div>
                                     </div>
                                 </div>
                             )}
@@ -278,13 +283,31 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
                                     âœ•
                                 </button>
                             </div>
-                            <div className="flex-1 flex items-center justify-center overflow-hidden">
-                                <img
-                                    src={ad.generated_image_url || imgSrc}
-                                    alt="Vista previa de imagen"
-                                    className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-                                    onClick={(e) => e.stopPropagation()}
-                                />
+                            <div className="flex-1 flex items-center justify-center overflow-hidden relative" onClick={(e) => e.stopPropagation()}>
+                                {/* Contenedor cuadrado para mantener la proporción de superposición idéntica a la tarjeta */}
+                                <div className="relative max-w-full max-h-full aspect-square flex items-center justify-center bg-black rounded-lg shadow-2xl overflow-hidden">
+                                    <img
+                                        src={ad.generated_image_url || imgSrc}
+                                        alt="Fondo Generado"
+                                        className="w-full h-full object-contain"
+                                    />
+
+                                    {/* MISMO OVERLAY DE PRODUCTO PARA EL MODAL */}
+                                    {productImage && !productImage.includes('placehold.co') && imgSrc !== productImage && (
+                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                                            <div className="absolute w-3/4 h-3/4 bg-white/5 blur-3xl rounded-full mix-blend-overlay"></div>
+
+                                            <div className="relative w-2/3 h-2/3 transition-transform duration-700 ease-out flex flex-col items-center justify-end">
+                                                <img
+                                                    src={productImage}
+                                                    alt="Overlay de Producto Fullscreen"
+                                                    className="w-full h-full object-contain filter drop-shadow-[0_20px_20px_rgba(0,0,0,0.8)] z-20"
+                                                />
+                                                <div className="absolute bottom-[-10%] w-3/4 h-[20%] bg-black/60 blur-[15px] rounded-[100%] z-10"></div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -860,5 +883,6 @@ export default function Dashboard() {
         </div>
     );
 }
+
 
 
