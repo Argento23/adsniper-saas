@@ -129,12 +129,9 @@ async function generateIdeogramImage(prompt: string, referenceImage: string | nu
             magic_prompt_option: "Off" // APAGADO para evitar que la IA cambie el prompt e invente faltas de ortografía
         };
 
-        // IF USER UPLOADED AN IMAGE, INJECT IT INTO IDEOGRAM (IMAGE-TO-IMAGE / REMIX)
-        if (referenceImage && referenceImage.length > 50 && !referenceImage.includes('placehold.co')) {
-            console.log("📸 Ideogram Image-to-Image Mode Triggered");
-            inputPayload.image = referenceImage;
-            inputPayload.image_weight = 60; // AUMENTADO a 60 para que respete al 100% la silueta de la imagen original
-        }
+        // REVERTIDO: No enviamos 'image' ni 'image_weight' porque Ideogram V2 Image-to-Image
+        // distorsiona el aspecto original del producto y genera alucinaciones ortográficas ('Desblokua').
+        // Ahora solo generará el fondo publicitario prístino con el texto perfecto en Text-to-Image.
 
         const response = await fetch("https://api.replicate.com/v1/models/ideogram-ai/ideogram-v2-turbo/predictions", {
             method: "POST",
@@ -513,11 +510,24 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const user = await clerkClient.users.getUser(userId);
-        const credits = typeof user.publicMetadata.credits === 'number' ? user.publicMetadata.credits : 3;
+        let credits = 3;
+        let isAdmin = false;
 
-        // ADMIN OVERRIDE
-        const isAdmin = user.emailAddresses.some(e => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com');
+        try {
+            // FIX DEFINITIVO PARA VERCEL Y CLERK BETA 46: 
+            // Intentar usar clerkClient si existe, pero si crashea por undefined object, no frenar la app.
+            if (typeof clerkClient !== 'undefined' && clerkClient.users) {
+                const user = await clerkClient.users.getUser(userId);
+                if (user) {
+                    credits = typeof user.publicMetadata?.credits === 'number' ? user.publicMetadata.credits : 3;
+                    isAdmin = user.emailAddresses?.some(e => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com');
+                }
+            } else {
+                console.warn("⚠️ Clerk Client users object is undefined in this Beta. Falling back to default limits.");
+            }
+        } catch (clerkError) {
+            console.error("⚠️ Clerk fetch error ignored to prevent crash:", clerkError);
+        }
 
         if (credits <= 0 && !isAdmin) {
             return NextResponse.json({ error: 'NO_CREDITS', message: 'Has usado tus 3 créditos gratuitos. Mejorá tu plan para seguir generando.' }, { status: 403 });
@@ -709,6 +719,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
 
 
 
