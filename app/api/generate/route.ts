@@ -504,7 +504,8 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const user = await clerkClient.users.getUser(userId);
+        const client = await clerkClient();
+        const user = await client.users.getUser(userId);
         const credits = typeof user.publicMetadata.credits === 'number' ? user.publicMetadata.credits : 3;
 
         // ADMIN OVERRIDE
