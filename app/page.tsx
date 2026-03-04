@@ -11,7 +11,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20 p-2">
-              <img src="/AdSíntesis_logo.svg" alt="AdSíntesis Logo" className="w-full h-full object-contain" />
+              <img src="/adsniper_logo.svg" alt="AdSíntesis Logo" className="w-full h-full object-contain" />
             </div>
             <span className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">AdSíntesis</span>
           </div>
@@ -45,7 +45,7 @@ export default function Home() {
           </h1>
 
           <p className="text-xl text-slate-400 max-w-2xl mx-auto mb-12 leading-relaxed animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
-            Genera anuncios virales, guiones de TikTok y anÃ¡lisis de competencia en segundos.
+            Genera anuncios virales, guiones de TikTok y análisis de competencia en segundos.
             El "Cerebro Creativo" que tu marca necesita para escalar en 2026.
           </p>
 
@@ -82,7 +82,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-20">
             <h2 className="text-3xl md:text-5xl font-bold mb-6">Built for Growth Hackers</h2>
-            <p className="text-slate-400 text-lg">Todo lo que necesitas para lanzar campaÃ±as ganadoras.</p>
+            <p className="text-slate-400 text-lg">Todo lo que necesitas para lanzar campañas ganadoras.</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
@@ -92,7 +92,7 @@ export default function Home() {
                 <FaShieldAlt className="w-8 h-8" />
               </div>
               <h3 className="text-xl font-bold mb-4">Ad Intelligence</h3>
-              <p className="text-slate-400 leading-relaxed">EspÃ­a legalmente a tu competencia. Descubre quÃ© creativos estÃ¡n escalando y por quÃ©.</p>
+              <p className="text-slate-400 leading-relaxed">Espía legalmente a tu competencia. Descubre qué creativos están escalando y por qué.</p>
             </div>
 
             {/* Feature 2 */}
@@ -101,7 +101,7 @@ export default function Home() {
                 <FaRobot className="w-8 h-8" />
               </div>
               <h3 className="text-xl font-bold mb-4">AI Copywriter</h3>
-              <p className="text-slate-400 leading-relaxed">Genera guiones de video y textos persuasivos basados en tu identidad de marca Ãºnica.</p>
+              <p className="text-slate-400 leading-relaxed">Genera guiones de video y textos persuasivos basados en tu identidad de marca única.</p>
             </div>
 
             {/* Feature 3 */}
