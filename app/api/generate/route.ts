@@ -116,12 +116,26 @@ function generateLocalAds(productName: string, desc: string, image: string, visu
     return ads;
 }
 
-// IDEOGRAM V2 GENERATOR (Premium Typography) via Replicate
-async function generateIdeogramImage(prompt: string, isRetry: boolean = false): Promise<string | null> {
+// IDEOGRAM V2 GENERATOR (Premium Typography & Image-to-Image) via Replicate
+async function generateIdeogramImage(prompt: string, referenceImage: string | null = null, isRetry: boolean = false): Promise<string | null> {
     const token = process.env.REPLICATE_API_TOKEN;
     if (!token || token.length < 10) return null;
 
     try {
+        const inputPayload: any = {
+            prompt: prompt,
+            resolution: "1024x1024",
+            style_type: "Design", // Forces better typography
+            magic_prompt_option: "Auto"
+        };
+
+        // IF USER UPLOADED AN IMAGE, INJECT IT INTO IDEOGRAM (IMAGE-TO-IMAGE / REMIX)
+        if (referenceImage && referenceImage.length > 50 && !referenceImage.includes('placehold.co')) {
+            console.log("📸 Ideogram Image-to-Image Mode Triggered");
+            inputPayload.image = referenceImage;
+            inputPayload.image_weight = 40; // 40 means 40% influence from the image, 60% from the text prompt
+        }
+
         const response = await fetch("https://api.replicate.com/v1/models/ideogram-ai/ideogram-v2-turbo/predictions", {
             method: "POST",
             headers: {
@@ -129,12 +143,7 @@ async function generateIdeogramImage(prompt: string, isRetry: boolean = false): 
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                input: {
-                    prompt: prompt,
-                    resolution: "1024x1024",
-                    style_type: "Design", // Forces better typography
-                    magic_prompt_option: "Auto"
-                }
+                input: inputPayload
             })
         });
 
@@ -504,8 +513,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const client = await clerkClient();
-        const user = await client.users.getUser(userId);
+        const user = await clerkClient.users.getUser(userId);
         const credits = typeof user.publicMetadata.credits === 'number' ? user.publicMetadata.credits : 3;
 
         // ADMIN OVERRIDE
@@ -640,9 +648,9 @@ export async function POST(request: Request) {
                 }
 
                 let finalImageUrl = await (async () => {
-                    // 1. TRY IDEOGRAM V2 (Prioritized for Typography)
+                    // 1. TRY IDEOGRAM V2 TEXT-TO-IMAGE or IMAGE-TO-IMAGE
                     try {
-                        const ideogramImage = await generateIdeogramImage(fullPrompt);
+                        const ideogramImage = await generateIdeogramImage(fullPrompt, scrapedImage);
                         if (ideogramImage) return ideogramImage;
                     } catch (e) {
                         console.error(`⚠️ Ideogram failed, trying Replicate Flux...`);
@@ -701,6 +709,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
+
 
 
 
