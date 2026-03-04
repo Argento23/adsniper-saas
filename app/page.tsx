@@ -11,9 +11,9 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20 p-2">
-              <img src="/adsniper_logo.svg" alt="AdSniper Logo" className="w-full h-full object-contain" />
+              <img src="/AdSíntesis_logo.svg" alt="AdSíntesis Logo" className="w-full h-full object-contain" />
             </div>
-            <span className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">AdSniper</span>
+            <span className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">AdSíntesis</span>
           </div>
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-400">
             <a href="#features" className="hover:text-white transition-colors">Features</a>
@@ -45,14 +45,14 @@ export default function Home() {
           </h1>
 
           <p className="text-xl text-slate-400 max-w-2xl mx-auto mb-12 leading-relaxed animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
-            Genera anuncios virales, guiones de TikTok y análisis de competencia en segundos.
+            Genera anuncios virales, guiones de TikTok y anÃ¡lisis de competencia en segundos.
             El "Cerebro Creativo" que tu marca necesita para escalar en 2026.
           </p>
 
           <div className="flex flex-col md:flex-row items-center justify-center gap-6 animate-in fade-in slide-in-from-bottom-10 duration-700 delay-300">
             <Link href="/sign-in" className="w-full md:w-auto px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-black text-lg font-bold rounded-full transition-all hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/40 flex items-center justify-center gap-2">
               <FaRobot className="w-5 h-5" />
-              Try AdSniper Free
+              Try AdSíntesis Free
             </Link>
             <button className="w-full md:w-auto px-8 py-4 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-lg font-bold rounded-full transition-all flex items-center justify-center gap-2 backdrop-blur-sm">
               <FaPlay className="w-5 h-5" />
@@ -82,7 +82,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-20">
             <h2 className="text-3xl md:text-5xl font-bold mb-6">Built for Growth Hackers</h2>
-            <p className="text-slate-400 text-lg">Todo lo que necesitas para lanzar campañas ganadoras.</p>
+            <p className="text-slate-400 text-lg">Todo lo que necesitas para lanzar campaÃ±as ganadoras.</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
@@ -92,7 +92,7 @@ export default function Home() {
                 <FaShieldAlt className="w-8 h-8" />
               </div>
               <h3 className="text-xl font-bold mb-4">Ad Intelligence</h3>
-              <p className="text-slate-400 leading-relaxed">Espía legalmente a tu competencia. Descubre qué creativos están escalando y por qué.</p>
+              <p className="text-slate-400 leading-relaxed">EspÃ­a legalmente a tu competencia. Descubre quÃ© creativos estÃ¡n escalando y por quÃ©.</p>
             </div>
 
             {/* Feature 2 */}
@@ -101,7 +101,7 @@ export default function Home() {
                 <FaRobot className="w-8 h-8" />
               </div>
               <h3 className="text-xl font-bold mb-4">AI Copywriter</h3>
-              <p className="text-slate-400 leading-relaxed">Genera guiones de video y textos persuasivos basados en tu identidad de marca única.</p>
+              <p className="text-slate-400 leading-relaxed">Genera guiones de video y textos persuasivos basados en tu identidad de marca Ãºnica.</p>
             </div>
 
             {/* Feature 3 */}
@@ -153,7 +153,7 @@ export default function Home() {
             <p className="text-slate-400 text-lg">Choose the plan that fits your growth stage.</p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
 
             {/* Free Tier */}
             <div className="p-8 rounded-3xl bg-slate-900/30 border border-white/5 flex flex-col">
@@ -182,26 +182,12 @@ export default function Home() {
                 <li className="flex items-center gap-2"><FaCheckCircle className="text-emerald-500" /> Viral TikTok Scripts</li>
                 <li className="flex items-center gap-2"><FaCheckCircle className="text-emerald-500" /> Priority Support</li>
               </ul>
-              <a href="https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=068cba02015840e3b78121a6a1c6559f" target="_blank" rel="noopener noreferrer" className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-center font-bold transition-all shadow-lg shadow-emerald-500/20">
-                Subscribe Now
-              </a>
-            </div>
-
-            {/* Lifetime */}
-            <div className="p-8 rounded-3xl bg-slate-900/30 border border-white/5 flex flex-col">
-              <h3 className="text-xl font-bold text-white mb-2">Lifetime Deal</h3>
-              <div className="text-4xl font-bold mb-6">$49<span className="text-lg text-slate-500 font-normal"> one-time</span></div>
-              <ul className="space-y-4 mb-8 flex-1 text-slate-300 text-sm">
-                <li className="flex items-center gap-2"><FaCheckCircle className="text-white" /> All Pro Features</li>
-                <li className="flex items-center gap-2"><FaCheckCircle className="text-white" /> One-time payment</li>
-                <li className="flex items-center gap-2"><FaCheckCircle className="text-white" /> Future updates included</li>
-              </ul>
-              <div className="space-y-2">
-                <a href="https://mpago.la/2wZfbLt" target="_blank" rel="noopener noreferrer" className="block w-full py-3 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 text-center font-bold transition-all text-sm">
-                  Pay with MercadoPago
+              <div className="space-y-3">
+                <a href="https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=068cba02015840e3b78121a6a1c6559f" target="_blank" rel="noopener noreferrer" className="block w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:brightness-110 text-white text-center font-bold transition-all shadow-lg shadow-emerald-500/20">
+                  Suscribirse con MercadoPago
                 </a>
-                <a href="https://www.paypal.com/ncp/payment/VJZDENGAEHZJJ" target="_blank" rel="noopener noreferrer" className="block w-full py-3 rounded-xl bg-blue-600/10 border border-blue-600/30 text-blue-500 hover:bg-blue-600/20 text-center font-bold transition-all text-sm">
-                  Pay with PayPal
+                <a href="https://www.paypal.com/ncp/payment/VJZDENGAEHZJJ" target="_blank" rel="noopener noreferrer" className="block w-full py-2.5 rounded-xl bg-[#0070BA]/15 border border-[#0070BA]/30 text-[#0070BA] text-sm font-bold text-center hover:bg-[#0070BA]/25 transition-all">
+                  Pay with PayPal ($29/mo)
                 </a>
               </div>
             </div>
@@ -213,7 +199,7 @@ export default function Home() {
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950 to-emerald-950/20"></div>
         <div className="max-w-4xl mx-auto px-6 relative z-10 text-center">
           <h2 className="text-4xl md:text-6xl font-extrabold mb-8">Ready to dominate your niche?</h2>
-          <p className="text-xl text-slate-400 mb-12">Join 1,000+ marketers using AdSniper to scale their brands.</p>
+          <p className="text-xl text-slate-400 mb-12">Join 1,000+ marketers using AdSíntesis to scale their brands.</p>
           <Link href="/dashboard" className="inline-flex items-center gap-3 px-10 py-5 bg-white text-black text-xl font-bold rounded-full hover:bg-emerald-400 transition-all hover:scale-105 shadow-xl shadow-emerald-500/10">
             Start Free Trial <FaArrowRight className="w-6 h-6" />
           </Link>
@@ -229,15 +215,16 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2 opacity-50">
             <FaBullseye className="w-5 h-5" />
-            <span className="font-bold">AdSniper SaaS</span>
+            <span className="font-bold">AdSíntesis SaaS</span>
           </div>
           <div className="flex gap-6 text-sm text-slate-500">
-            <Link href="/terms" className="hover:text-white transition-colors">Términos y Condiciones</Link>
-            <Link href="/privacy" className="hover:text-white transition-colors">Política de Privacidad</Link>
+            <Link href="/terms" className="hover:text-white transition-colors">TÃ©rminos y Condiciones</Link>
+            <Link href="/privacy" className="hover:text-white transition-colors">PolÃ­tica de Privacidad</Link>
           </div>
-          <p className="text-slate-600 text-sm">© 2026 AdSniper. Powered by GenerArise.</p>
+          <p className="text-slate-600 text-sm">Â© 2026 AdSíntesis. Powered by GenerArise.</p>
         </div>
       </footer>
     </div>
   );
 }
+
