@@ -17,8 +17,7 @@ export async function GET() {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const client = await clerkClient();
-        const user = await client.users.getUser(userId);
+        const user = await clerkClient.users.getUser(userId);
         const metadata = user.publicMetadata as any;
 
         // Simple credit system: starts at 3, deducted per generation
@@ -37,14 +36,14 @@ export async function GET() {
         const videosUsed = shouldResetVideos ? 0 : (metadata.videosUsedThisMonth || 0);
         const videosRemaining = Math.max(0, videoLimit - videosUsed);
 
-        // Admin check
-        const isAdmin = user.emailAddresses.some(e => e.emailAddress === 'gustavodornhofer@gmail.com');
+        // Admin check (Robust email matching)
+        const isAdmin = user.emailAddresses.some(e => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com');
 
         return NextResponse.json({
             credits: isAdmin ? 999 : credits,
-            plan,
-            videoLimit,
-            videosUsed,
+            plan: isAdmin ? 'enterprise' : plan,
+            videoLimit: isAdmin ? 999 : videoLimit,
+            videosUsed: isAdmin ? 0 : videosUsed,
             videosRemaining: isAdmin ? 999 : videosRemaining,
             isAdmin
         });
