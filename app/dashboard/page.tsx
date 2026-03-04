@@ -756,8 +756,8 @@ export default function Dashboard() {
                                                 onChange={(e) => setLanguage(e.target.value)}
                                                 className="bg-transparent text-sm font-bold text-slate-200 outline-none cursor-pointer w-full"
                                             >
-                                                <option value="es">ES ðŸ‡ªðŸ‡¸</option>
-                                                <option value="en">EN ðŸ‡ºðŸ‡¸</option>
+                                                <option value="es">Español</option>
+                                                <option value="en">English</option>
                                             </select>
                                         </div>
 
@@ -846,4 +846,5 @@ export default function Dashboard() {
         </div>
     );
 }
+
 
