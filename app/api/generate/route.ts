@@ -126,14 +126,14 @@ async function generateIdeogramImage(prompt: string, referenceImage: string | nu
             prompt: prompt,
             resolution: "1024x1024",
             style_type: "Design", // Forces better typography
-            magic_prompt_option: "Auto"
+            magic_prompt_option: "Off" // APAGADO para evitar que la IA cambie el prompt e invente faltas de ortografía
         };
 
         // IF USER UPLOADED AN IMAGE, INJECT IT INTO IDEOGRAM (IMAGE-TO-IMAGE / REMIX)
         if (referenceImage && referenceImage.length > 50 && !referenceImage.includes('placehold.co')) {
             console.log("📸 Ideogram Image-to-Image Mode Triggered");
             inputPayload.image = referenceImage;
-            inputPayload.image_weight = 40; // 40 means 40% influence from the image, 60% from the text prompt
+            inputPayload.image_weight = 60; // AUMENTADO a 60 para que respete al 100% la silueta de la imagen original
         }
 
         const response = await fetch("https://api.replicate.com/v1/models/ideogram-ai/ideogram-v2-turbo/predictions", {
@@ -709,7 +709,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
-
 
 
 
