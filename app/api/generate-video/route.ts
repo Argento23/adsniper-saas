@@ -25,13 +25,12 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Image URL is required' }, { status: 400 });
         }
 
-        const client = await clerkClient();
-        const user = await client.users.getUser(userId);
+        const user = await clerkClient.users.getUser(userId);
         const metadata = user.publicMetadata as any;
         const plan = metadata.plan || 'free';
 
         // Admin bypass
-        const isAdmin = user.emailAddresses.some(e => e.emailAddress === 'gustavodornhofer@gmail.com');
+        const isAdmin = user.emailAddresses.some(e => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com');
 
         // Get video limit for plan
         const videoLimit = VIDEO_LIMITS[plan] || 0;
@@ -66,14 +65,16 @@ export async function POST(request: Request) {
         const videoUrl = await generateReplicateVideo(imageUrl);
 
         // Track usage (increment videos used)
-        await client.users.updateUserMetadata(userId, {
-            publicMetadata: {
-                ...metadata,
-                videosUsedThisMonth: videosUsed + 1,
-                lastVideoResetDate: shouldReset ? now.toISOString() : metadata.lastVideoResetDate || now.toISOString(),
-                totalVideosGenerated: (metadata.totalVideosGenerated || 0) + 1
-            }
-        });
+        if (!isAdmin) {
+            await clerkClient.users.updateUserMetadata(userId, {
+                publicMetadata: {
+                    ...metadata,
+                    videosUsedThisMonth: videosUsed + 1,
+                    lastVideoResetDate: shouldReset ? now.toISOString() : metadata.lastVideoResetDate || now.toISOString(),
+                    totalVideosGenerated: (metadata.totalVideosGenerated || 0) + 1
+                }
+            });
+        }
 
         const newRemaining = isAdmin ? 999 : videosRemaining - 1;
 
@@ -88,3 +89,4 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message || 'Error interno al generar video' }, { status: 500 });
     }
 }
+
