@@ -47,19 +47,19 @@ async function scrapeProductMetadata(url: string) {
 // TEMPLATE RANDOMIZER
 const TEMPLATES = {
     AIDA: [
-        (prod: string, desc: string) => ({ hd: `🔥 ${prod}: El Cambio Que Esperabas`, txt: `¿Cansado de lo mismo de siempre?\n\n${desc}\n\n✨ Resultados desde el día 1\n💎 Calidad premium garantizada\n⚡ Stock limitado\n\n👉 No dejes pasar esta oportunidad.` }),
-        (prod: string, desc: string) => ({ hd: `Esto Va a Cambiar Tu Vida 🚀`, txt: `${prod} no es solo un producto.\nEs una inversión en ti mismo.\n\n💪 ${desc}\n\n¿Listo para dar el siguiente paso?\n▶️ Click aquí antes de que se agote.` }),
-        (prod: string, desc: string) => ({ hd: `La Tendencia Que Todos Quieren`, txt: `Miles ya lo tienen. ¿Y tú?\n\n${prod} es el producto del momento:\n✓ ${desc}\n✓ Envío express\n✓ Garantía 100%\n\n🎁 Oferta exclusiva HOY.` })
+        (prod: string, desc: string) => ({ hd: `ðŸ”¥ ${prod}: El Cambio Que Esperabas`, txt: `Â¿Cansado de lo mismo de siempre?\n\n${desc}\n\nâœ¨ Resultados desde el dÃ­a 1\nðŸ’Ž Calidad premium garantizada\nâš¡ Stock limitado\n\nðŸ‘‰ No dejes pasar esta oportunidad.` }),
+        (prod: string, desc: string) => ({ hd: `Esto Va a Cambiar Tu Vida ðŸš€`, txt: `${prod} no es solo un producto.\nEs una inversiÃ³n en ti mismo.\n\nðŸ’ª ${desc}\n\nÂ¿Listo para dar el siguiente paso?\nâ–¶ï¸ Click aquÃ­ antes de que se agote.` }),
+        (prod: string, desc: string) => ({ hd: `La Tendencia Que Todos Quieren`, txt: `Miles ya lo tienen. Â¿Y tÃº?\n\n${prod} es el producto del momento:\nâœ“ ${desc}\nâœ“ EnvÃ­o express\nâœ“ GarantÃ­a 100%\n\nðŸŽ Oferta exclusiva HOY.` })
     ],
     PAS: [
-        (prod: string, desc: string) => ({ hd: `¿Seguirás Esperando? ⏰`, txt: `El problema: Sigues buscando la solución perfecta.\n\nLa realidad: Cada día que pasa pierdes oportunidades.\n\nLa solución: ${prod}\n\n✅ ${desc}\n✅ Sin complicaciones\n✅ Resultados comprobados\n\n🔗 Haz click ahora.` }),
-        (prod: string, desc: string) => ({ hd: `El Error Que Te Cuesta Caro 💸`, txt: `Problema: Gastas dinero en cosas que no funcionan.\n\n${prod} es diferente.\n\nPorque realmente:\n• ${desc}\n• Diseño pensado en ti\n• Precio justo, calidad superior\n\n⚡ Última chance de conseguirlo.` }),
-        (prod: string, desc: string) => ({ hd: `Ya Basta de Conformarte`, txt: `Te mereces algo mejor.\n\n${prod} llega para cambiar las reglas:\n\n🎯 ${desc}\n🎯 Fácil de usar\n🎯 Recomendado por expertos\n\n👉 Mejora tu vida HOY.` })
+        (prod: string, desc: string) => ({ hd: `Â¿SeguirÃ¡s Esperando? â°`, txt: `El problema: Sigues buscando la soluciÃ³n perfecta.\n\nLa realidad: Cada dÃ­a que pasa pierdes oportunidades.\n\nLa soluciÃ³n: ${prod}\n\nâœ… ${desc}\nâœ… Sin complicaciones\nâœ… Resultados comprobados\n\nðŸ”— Haz click ahora.` }),
+        (prod: string, desc: string) => ({ hd: `El Error Que Te Cuesta Caro ðŸ’¸`, txt: `Problema: Gastas dinero en cosas que no funcionan.\n\n${prod} es diferente.\n\nPorque realmente:\nâ€¢ ${desc}\nâ€¢ DiseÃ±o pensado en ti\nâ€¢ Precio justo, calidad superior\n\nâš¡ Ãšltima chance de conseguirlo.` }),
+        (prod: string, desc: string) => ({ hd: `Ya Basta de Conformarte`, txt: `Te mereces algo mejor.\n\n${prod} llega para cambiar las reglas:\n\nðŸŽ¯ ${desc}\nðŸŽ¯ FÃ¡cil de usar\nðŸŽ¯ Recomendado por expertos\n\nðŸ‘‰ Mejora tu vida HOY.` })
     ],
     PROOF: [
-        (prod: string, desc: string) => ({ hd: `⭐⭐⭐⭐⭐ +10,000 Clientes Felices`, txt: `"Nunca había visto algo así"\n"Cambió completamente mi rutina"\n"Lo recomiendo 100%"\n\n${prod}: ${desc}\n\n🏆 Producto más vendido del mes\n✅ Garantía de satisfacción\n\n¿Serás el próximo en probarlo?` }),
-        (prod: string, desc: string) => ({ hd: `Esto Es Lo Que Dicen Nuestros Clientes 💬`, txt: `⭐⭐⭐⭐⭐ "Superó mis expectativas"\n⭐⭐⭐⭐⭐ "Lo uso todos los días"\n⭐⭐⭐⭐⭐ "Relación calidad-precio perfecta"\n\n${prod} - ${desc}\n\n🎁 Aprovecha la oferta de lanzamiento.` }),
-        (prod: string, desc: string) => ({ hd: `🔥 Viral en Redes: ${prod}`, txt: `Todos hablan de esto.\n\n📸 +50K publicaciones\n❤️ Miles de reseñas positivas\n⚡ Se está agotando\n\nPor qué lo aman:\n• ${desc}\n• Envío rápido\n• Atención 24/7\n\n🛒 Consigue el tuyo antes de que sea tarde.` })
+        (prod: string, desc: string) => ({ hd: `â­â­â­â­â­ +10,000 Clientes Felices`, txt: `"Nunca habÃ­a visto algo asÃ­"\n"CambiÃ³ completamente mi rutina"\n"Lo recomiendo 100%"\n\n${prod}: ${desc}\n\nðŸ† Producto mÃ¡s vendido del mes\nâœ… GarantÃ­a de satisfacciÃ³n\n\nÂ¿SerÃ¡s el prÃ³ximo en probarlo?` }),
+        (prod: string, desc: string) => ({ hd: `Esto Es Lo Que Dicen Nuestros Clientes ðŸ’¬`, txt: `â­â­â­â­â­ "SuperÃ³ mis expectativas"\nâ­â­â­â­â­ "Lo uso todos los dÃ­as"\nâ­â­â­â­â­ "RelaciÃ³n calidad-precio perfecta"\n\n${prod} - ${desc}\n\nðŸŽ Aprovecha la oferta de lanzamiento.` }),
+        (prod: string, desc: string) => ({ hd: `ðŸ”¥ Viral en Redes: ${prod}`, txt: `Todos hablan de esto.\n\nðŸ“¸ +50K publicaciones\nâ¤ï¸ Miles de reseÃ±as positivas\nâš¡ Se estÃ¡ agotando\n\nPor quÃ© lo aman:\nâ€¢ ${desc}\nâ€¢ EnvÃ­o rÃ¡pido\nâ€¢ AtenciÃ³n 24/7\n\nðŸ›’ Consigue el tuyo antes de que sea tarde.` })
     ]
 };
 
@@ -116,46 +116,63 @@ function generateLocalAds(productName: string, desc: string, image: string, visu
     return ads;
 }
 
-// HUGGING FACE GENERATOR (Premium)
-async function generateHFImage(prompt: string) {
-    const token = process.env.HF_TOKEN;
+// IDEOGRAM V2 GENERATOR (Premium Typography) via Replicate
+async function generateIdeogramImage(prompt: string, isRetry: boolean = false): Promise<string | null> {
+    const token = process.env.REPLICATE_API_TOKEN;
     if (!token || token.length < 10) return null;
 
     try {
-        // Try common endpoints if one fails
-        const endpoints = [
-            `https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell`,
-            `https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell`
-        ];
-
-        for (const url of endpoints) {
-            try {
-                const response = await fetch(url, {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        "Content-Type": "application/json",
-                        "x-use-cache": "false",
-                        "Cache-Control": "no-cache"
-                    },
-                    method: "POST",
-                    body: JSON.stringify({ inputs: prompt }),
-                });
-
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const arrayBuffer = await blob.arrayBuffer();
-                    const base64 = Buffer.from(arrayBuffer).toString('base64');
-                    return `data:image/jpeg;base64,${base64}`;
+        const response = await fetch("https://api.replicate.com/v1/models/ideogram-ai/ideogram-v2-turbo/predictions", {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                input: {
+                    prompt: prompt,
+                    resolution: "1024x1024",
+                    style_type: "Design", // Forces better typography
+                    magic_prompt_option: "Auto"
                 }
-                console.warn(`HF Endpoint ${url} failed: ${response.status}`);
-            } catch (e) {
-                console.error(`HF internal error for ${url}:`, e);
+            })
+        });
+
+        if (!response.ok) {
+            if (response.status === 429 && !isRetry) {
+                console.warn(`⏳ Replicate Limit (429) hit for Ideogram. Waiting 10s...`);
+                await new Promise(r => setTimeout(r, 10500));
+                return generateIdeogramImage(prompt, true);
             }
+            console.warn(`Ideogram V2 Prediction failed: ${response.status}`);
+            return null;
         }
+
+        let prediction = await response.json();
+        const getUrl = prediction.urls.get;
+
+        // Poll for completion
+        let attempts = 0;
+        while (prediction.status !== "succeeded" && prediction.status !== "failed" && attempts < 20) {
+            await new Promise((r) => setTimeout(r, 2000));
+            attempts++;
+            const pollResponse = await fetch(getUrl, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            prediction = await pollResponse.json();
+        }
+
+        if (prediction.status === "succeeded" && prediction.output) {
+            // Replicate usually returns an array of strings (URLs)
+            const imageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+            return imageUrl;
+        }
+
+        console.error("Ideogram Generation Failed/Timed Out:", prediction);
         return null;
 
     } catch (error) {
-        console.error("HF Generation Failed:", error);
+        console.error("Ideogram API Failed:", error);
         return null;
     }
 }
@@ -163,14 +180,14 @@ async function generateHFImage(prompt: string) {
 // GROQ API GENERATOR (Llama 3 70B) - Professional Copy & Prompts
 async function generateGroqAds(productName: string, desc: string, count: number, lang: string = 'es') {
     const apiKey = process.env.GROQ_API_KEY;
-    console.log(`🔑 Groq Check: Key Present? ${!!apiKey && apiKey.length > 5}`);
+    console.log(`ðŸ”‘ Groq Check: Key Present? ${!!apiKey && apiKey.length > 5}`);
 
     if (!apiKey || apiKey.length < 10) {
-        console.warn("⚠️ Groq Key missing or too short.");
+        console.warn("âš ï¸ Groq Key missing or too short.");
         return [{ type: "ERROR", headline: "GROQ KEY MISSING IN ENV", primary_text: "Check .env.local", image_prompt: "error" }];
     }
     try {
-        console.log(`🦙 Generating ${count} ads with Llama 3 (70b-8192) on Groq...`);
+        console.log(`ðŸ¦™ Generating ${count} ads with Llama 3 (70b-8192) on Groq...`);
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -191,7 +208,7 @@ RETURN ONLY VALID JSON with this EXACT structure:
       "type": "Hook Name (e.g. AIDA, PAS, Social Proof)",
       "headline": "Attention-grabbing headline (max 40 chars)",
       "primary_text": "Compelling body copy with emojis, line breaks, benefits-focused, 80-120 words. Use persuasive language, urgency, and social proof.",
-      "image_prompt": "Detailed visual description for AI image generation: style, mood, composition, lighting, colors (e.g. 'product on marble surface, soft natural lighting, minimalist aesthetic, pastel colors, 8k, professional photography')"
+      "image_prompt": "Detailed visual description for AI image generation INCLUDING explicit text rendering instructions. Example: 'product on minimal background with typography rendering: \"BUY NOW\", 3d bold font, cinematic lighting'"
     }
   ]
 }
@@ -203,7 +220,8 @@ GUIDELINES:
 - Focus on benefits, not features
 - Use power words and sensory language
 - Add line breaks (\\n) for readability
-- Image prompts must be highly detailed and visual. DO NOT include any text, words, or letters in the image_prompt.
+- CRITICAL FOR IMAGES: The \`image_prompt\` MUST contain the exact same text you wrote for the \`headline\` field. You must include the text inside double quotes, preceded by "typography rendering:".
+- Example: If the headline is "¡Vende Más!", your image_prompt MUST end with: typography rendering: "¡Vende Más!". Do not use generic words like "Success" or "Ganar", use the actual headline.
 - Each ad must feel UNIQUE and creative
 
 NO MARKDOWN. NO EXPLANATIONS. ONLY JSON.`
@@ -219,7 +237,7 @@ NO MARKDOWN. NO EXPLANATIONS. ONLY JSON.`
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error(`❌ Groq API Error: ${response.status} ${response.statusText}`, errorText);
+            console.error(`âŒ Groq API Error: ${response.status} ${response.statusText}`, errorText);
             throw new Error(`Groq API Error: ${response.status} ${response.statusText} - ${errorText}`);
         }
 
@@ -237,18 +255,18 @@ NO MARKDOWN. NO EXPLANATIONS. ONLY JSON.`
                 try {
                     parsed = JSON.parse(match[0]);
                 } catch (e2) {
-                    console.error("❌ JSON Parse Failed (Regex):", content);
+                    console.error("âŒ JSON Parse Failed (Regex):", content);
                     return null;
                 }
             } else {
-                console.error("❌ No JSON found in response:", content);
+                console.error("âŒ No JSON found in response:", content);
                 return null;
             }
         }
 
         const ads = parsed.ads || parsed;
         if (!Array.isArray(ads)) {
-            console.error("❌ Groq returned invalid structure (not array):", ads);
+            console.error("âŒ Groq returned invalid structure (not array):", ads);
             throw new Error(`Invalid JSON Structure: ${JSON.stringify(ads).substring(0, 50)}...`);
         }
         return ads;
@@ -262,14 +280,14 @@ NO MARKDOWN. NO EXPLANATIONS. ONLY JSON.`
 async function generateGroqScripts(productName: string, desc: string, lang: string = 'es') {
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-        console.warn("⚠️ No GROQ_API_KEY for scripts, using fallback.");
+        console.warn("âš ï¸ No GROQ_API_KEY for scripts, using fallback.");
         return generateFallbackScripts(productName, desc, lang);
     }
 
     const isEs = lang === 'es' || lang.includes('es');
 
     try {
-        console.log(`🎬 Generating AI video scripts with Groq for: ${productName}`);
+        console.log(`ðŸŽ¬ Generating AI video scripts with Groq for: ${productName}`);
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -309,13 +327,13 @@ RULES:
 - ${isEs ? 'Write entirely in SPANISH' : 'Write entirely in ENGLISH'}
 - Make scripts that a creator could actually film and post today
 - Include timing for each section
-- DO NOT use generic filler like "solucionar tu problema" — be SPECIFIC about what the product does
+- DO NOT use generic filler like "solucionar tu problema" â€” be SPECIFIC about what the product does
 
 SCRIPT VARIETY (use exactly these 4 angles):
-1. POV/Storytelling — first person narrative showing the problem → discovery → result
-2. Tutorial/How-To — quick demo showing the product in use with tips
-3. Before/After or Transformation — dramatic visual comparison
-4. Trend Hijack — adapt a current social media trend format to showcase the product
+1. POV/Storytelling â€” first person narrative showing the problem â†’ discovery â†’ result
+2. Tutorial/How-To â€” quick demo showing the product in use with tips
+3. Before/After or Transformation â€” dramatic visual comparison
+4. Trend Hijack â€” adapt a current social media trend format to showcase the product
 
 NO MARKDOWN. ONLY JSON.`
                     },
@@ -346,13 +364,13 @@ NO MARKDOWN. ONLY JSON.`
 
         const scripts = parsed.scripts || parsed;
         if (Array.isArray(scripts) && scripts.length > 0) {
-            console.log(`✅ Generated ${scripts.length} AI video scripts`);
+            console.log(`âœ… Generated ${scripts.length} AI video scripts`);
             return scripts;
         }
         throw new Error("Empty scripts array");
 
     } catch (error: any) {
-        console.error("⚠️ Groq Scripts Failed:", error.message);
+        console.error("âš ï¸ Groq Scripts Failed:", error.message);
         return generateFallbackScripts(productName, desc, lang);
     }
 }
@@ -382,13 +400,13 @@ function generateFallbackScripts(productName: string, desc: string, lang: string
     if (isEs) {
         return [
             {
-                title: "POV: Descubrí esto",
+                title: "POV: DescubrÃ­ esto",
                 angle: "Storytelling",
                 audio_suggestion: "Trending 'Oh No' remix",
                 platform: "TikTok",
                 sections: [
-                    { type: "Gancho", content: `POV: Estás por descubrir ${productName} y tu vida cambia.`, duration: "3s" },
-                    { type: "Cuerpo", content: `(Cámara en mano) Miren lo que acabo de encontrar. ${benefit}. No puedo creer que no lo conocía antes. La diferencia se nota desde el primer uso.`, duration: "12s" },
+                    { type: "Gancho", content: `POV: EstÃ¡s por descubrir ${productName} y tu vida cambia.`, duration: "3s" },
+                    { type: "Cuerpo", content: `(CÃ¡mara en mano) Miren lo que acabo de encontrar. ${benefit}. No puedo creer que no lo conocÃ­a antes. La diferencia se nota desde el primer uso.`, duration: "12s" },
                     { type: "CTA", content: `Link en bio. Quedan pocas unidades de ${productName}.`, duration: "4s" }
                 ]
             },
@@ -398,31 +416,31 @@ function generateFallbackScripts(productName: string, desc: string, lang: string
                 audio_suggestion: "Lo-fi study beats",
                 platform: "Reels",
                 sections: [
-                    { type: "Gancho", content: `3 formas de usar ${productName} que no conocías 👇`, duration: "3s" },
+                    { type: "Gancho", content: `3 formas de usar ${productName} que no conocÃ­as ðŸ‘‡`, duration: "3s" },
                     { type: "Cuerpo", content: `Tip 1: (mostrar uso principal). Tip 2: (uso creativo). Tip 3: ${benefit}. *Texto en pantalla con cada tip*`, duration: "15s" },
-                    { type: "CTA", content: "Guardá este video y comprá en el link de la bio.", duration: "3s" }
+                    { type: "CTA", content: "GuardÃ¡ este video y comprÃ¡ en el link de la bio.", duration: "3s" }
                 ]
             },
             {
-                title: "Antes vs Después",
-                angle: "Transformación",
+                title: "Antes vs DespuÃ©s",
+                angle: "TransformaciÃ³n",
                 audio_suggestion: "Dramatic reveal sound",
                 platform: "TikTok",
                 sections: [
-                    { type: "Gancho", content: `ANTES vs DESPUÉS de usar ${productName} 😱`, duration: "3s" },
-                    { type: "Cuerpo", content: `(Split screen) Antes: problema común. Después: ${benefit}. La transformación habla sola.`, duration: "10s" },
-                    { type: "CTA", content: "Comentá '🔥' y te mando el link.", duration: "3s" }
+                    { type: "Gancho", content: `ANTES vs DESPUÃ‰S de usar ${productName} ðŸ˜±`, duration: "3s" },
+                    { type: "Cuerpo", content: `(Split screen) Antes: problema comÃºn. DespuÃ©s: ${benefit}. La transformaciÃ³n habla sola.`, duration: "10s" },
+                    { type: "CTA", content: "ComentÃ¡ 'ðŸ”¥' y te mando el link.", duration: "3s" }
                 ]
             },
             {
-                title: "Trend: Cosas que no sabías",
+                title: "Trend: Cosas que no sabÃ­as",
                 angle: "Educativo Viral",
-                audio_suggestion: "Audio 'Cosas que no sabías'",
+                audio_suggestion: "Audio 'Cosas que no sabÃ­as'",
                 platform: "Shorts",
                 sections: [
-                    { type: "Gancho", content: `Cosas que no sabías sobre ${productName}:`, duration: "2s" },
-                    { type: "Cuerpo", content: `1. ${benefit}. 2. Lo usan más de X profesionales. 3. (dato sorprendente del rubro). *Green screen con imágenes*`, duration: "12s" },
-                    { type: "CTA", content: "Seguime para más y el link está en la bio.", duration: "3s" }
+                    { type: "Gancho", content: `Cosas que no sabÃ­as sobre ${productName}:`, duration: "2s" },
+                    { type: "Cuerpo", content: `1. ${benefit}. 2. Lo usan mÃ¡s de X profesionales. 3. (dato sorprendente del rubro). *Green screen con imÃ¡genes*`, duration: "12s" },
+                    { type: "CTA", content: "Seguime para mÃ¡s y el link estÃ¡ en la bio.", duration: "3s" }
                 ]
             }
         ];
@@ -445,7 +463,7 @@ function generateFallbackScripts(productName: string, desc: string, lang: string
                 audio_suggestion: "Lo-fi study beats",
                 platform: "Reels",
                 sections: [
-                    { type: "Hook", content: `3 ways to use ${productName} you didn't know 👇`, duration: "3s" },
+                    { type: "Hook", content: `3 ways to use ${productName} you didn't know ðŸ‘‡`, duration: "3s" },
                     { type: "Body", content: `Tip 1: (show main use). Tip 2: (creative hack). Tip 3: ${benefit}. *On-screen text for each tip*`, duration: "15s" },
                     { type: "CTA", content: "Save this and shop at the link in bio.", duration: "3s" }
                 ]
@@ -456,9 +474,9 @@ function generateFallbackScripts(productName: string, desc: string, lang: string
                 audio_suggestion: "Dramatic reveal sound",
                 platform: "TikTok",
                 sections: [
-                    { type: "Hook", content: `BEFORE vs AFTER using ${productName} 😱`, duration: "3s" },
+                    { type: "Hook", content: `BEFORE vs AFTER using ${productName} ðŸ˜±`, duration: "3s" },
                     { type: "Body", content: `(Split screen) Before: common problem. After: ${benefit}. The transformation speaks for itself.`, duration: "10s" },
-                    { type: "CTA", content: "Comment '🔥' and I'll send the link.", duration: "3s" }
+                    { type: "CTA", content: "Comment 'ðŸ”¥' and I'll send the link.", duration: "3s" }
                 ]
             },
             {
@@ -486,11 +504,11 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const user = await (await clerkClient()).users.getUser(userId);
+        const user = await clerkClient.users.getUser(userId);
         const credits = typeof user.publicMetadata.credits === 'number' ? user.publicMetadata.credits : 3;
 
         // ADMIN OVERRIDE
-        const isAdmin = user.emailAddresses.some(e => e.emailAddress === 'gustavodornhofer@gmail.com');
+        const isAdmin = user.emailAddresses.some(e => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com');
 
         if (credits <= 0 && !isAdmin) {
             return NextResponse.json({ error: 'NO_CREDITS', message: 'Has usado tus 3 créditos gratuitos. Mejorá tu plan para seguir generando.' }, { status: 403 });
@@ -504,7 +522,7 @@ export async function POST(request: Request) {
         // DEDUCT CREDIT - MOVED TO END (ONLY ON SUCCESS)
         let remainingCredits = credits;
 
-        console.log(`🎯 Generating ${count} ads for: ${productUrl || manual_title} (Lang: ${language})`);
+        console.log(`ðŸŽ¯ Generating ${count} ads for: ${productUrl || manual_title} (Lang: ${language})`);
 
         let scrapedTitle = manual_title || 'Producto';
         let scrapedDesc = manual_description || '';
@@ -521,7 +539,7 @@ export async function POST(request: Request) {
         }
 
         // Base n8n URL
-        const n8nUrl = process.env.N8N_WEBHOOK_URL || 'https://manager.generarise.space/webhook/shopify-adsniper';
+        const n8nUrl = process.env.N8N_WEBHOOK_URL || 'https://manager.generarise.space/webhook/shopify-AdSíntesis';
 
         const payload = {
             product_url: productUrl || 'https://manual-input.com',
@@ -552,7 +570,7 @@ export async function POST(request: Request) {
                 data = await response.json();
                 // PARANOID CHECK
                 if (!data || !data.ads || !Array.isArray(data.ads) || data.ads.length === 0) {
-                    console.warn("⚠️ n8n returned empty/invalid ads. Triggering LOCAL FALLBACK.");
+                    console.warn("âš ï¸ n8n returned empty/invalid ads. Triggering LOCAL FALLBACK.");
                     throw new Error("n8n returned empty ads");
                 }
             } else {
@@ -560,7 +578,7 @@ export async function POST(request: Request) {
             }
 
         } catch (n8nError) {
-            console.error('⚠️ n8n Failed/Empty, using SMART LOCAL FALLBACK:', n8nError);
+            console.error('âš ï¸ n8n Failed/Empty, using SMART LOCAL FALLBACK:', n8nError);
             // We use count here to generate ALL ads locally
             data = {
                 ads: [], // Leave empty to trigger GROQ HYBRID FILL below
@@ -579,15 +597,15 @@ export async function POST(request: Request) {
             if (groqAds && Array.isArray(groqAds) && groqAds.length > 0) {
                 // Check for ERROR object
                 if (groqAds[0].type === "ERROR") {
-                    console.log("⚠️ Groq Failed with Error, showing in UI.");
+                    console.log("âš ï¸ Groq Failed with Error, showing in UI.");
                     data.ads = [...data.ads, ...groqAds]; // SHOW ERROR IN UI
                 } else {
-                    console.log(`✅ Specific Llama 3 ads generated: ${groqAds.length}`);
+                    console.log(`âœ… Specific Llama 3 ads generated: ${groqAds.length}`);
                     data.ads = [...data.ads, ...groqAds];
                 }
             } else {
                 const needed = count - data.ads.length;
-                console.log(`⚠️ Falling back to Local Templates for ${needed} ads.`);
+                console.log(`âš ï¸ Falling back to Local Templates for ${needed} ads.`);
                 const extraAds = generateLocalAds(scrapedTitle, scrapedDesc, scrapedImage, manual_image_prompt, needed);
                 // Add DEBUG Marker
                 extraAds[0].headline = "DEBUG: LOCAL FALLBACK TRIGGERED";
@@ -596,51 +614,64 @@ export async function POST(request: Request) {
         }
 
 
-        // Process Ads — PARALLEL REPLICATE (Faster)
+        // Process Ads — SEQUENTIAL REPLICATE (To avoid concurrent rate limits on Ideogram V2)
         if (data.ads && Array.isArray(data.ads)) {
-            console.log(`💎 Generating ${data.ads.length} images PARALLEL with Replicate/Fallbacks...`);
+            console.log(`💎 Generating ${data.ads.length} images SEQUENTIALLY with Replicate/Fallbacks...`);
 
-            const generationPromises = data.ads.map(async (ad) => {
+            const processedAds = [];
+            for (const ad of data.ads) {
                 let basePrompt = ad.image_prompt || manual_image_prompt || manual_title || scrapedTitle;
                 if (manual_image_prompt && !ad.image_prompt) {
                     basePrompt = `${basePrompt}, ${manual_image_prompt}`;
                 }
-                const fullPrompt = `${basePrompt}, clean background, no text, no words, no letters, no logos, professional product photography, 8k, cinematic lighting, high quality, studio setup`;
 
-                // 1. TRY REPLICATE
-                try {
-                    const replicateResult = await generateReplicateImage(fullPrompt);
-                    if (replicateResult && replicateResult.imageUrl) {
-                        return { ...ad, generated_image_url: replicateResult.imageUrl, product_image_fallback: scrapedImage };
-                    }
-                } catch (e) {
-                    console.error(`⚠️ Replicate failed, trying Hugging Face...`);
+                // Forcefully inject the EXACT headline for Ideogram Typographic Rendering
+                // NOTE: Normalize to remove accents/tildes so Ideogram doesn't render corrupt squares (á -> a)
+                const cleanHeadline = (ad.headline || "")
+                    .replace(/["']/g, "")
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .replace(/[¿¡]/g, "");
+
+                let fullPrompt = `${basePrompt}, professional product photography, 8k, cinematic lighting, high quality, studio setup`;
+                if (cleanHeadline) {
+                    fullPrompt += `, typography rendering: "${cleanHeadline}"`;
                 }
 
-                // 2. TRY HUGGING FACE
-                try {
-                    const hfImage = await generateHFImage(fullPrompt);
-                    if (hfImage) {
-                        return { ...ad, generated_image_url: hfImage, product_image_fallback: scrapedImage };
+                let finalImageUrl = await (async () => {
+                    // 1. TRY IDEOGRAM V2 (Prioritized for Typography)
+                    try {
+                        const ideogramImage = await generateIdeogramImage(fullPrompt);
+                        if (ideogramImage) return ideogramImage;
+                    } catch (e) {
+                        console.error(`⚠️ Ideogram failed, trying Replicate Flux...`);
                     }
-                } catch (e) {
-                    console.error(`⚠️ Hugging Face failed, trying Pollinations...`);
-                }
 
-                // 3. FINAL FALLBACK: POLLINATIONS
-                const cleanPrompt = fullPrompt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s]/gi, '').substring(0, 100).trim().replace(/\s+/g, '_');
-                const seed = Math.floor(Math.random() * 1000000);
-                const rawPollUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
-                const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(rawPollUrl)}&fallback=${encodeURIComponent(scrapedImage || '')}`;
-                return { ...ad, generated_image_url: proxyUrl, product_image_fallback: scrapedImage };
-            });
+                    // 2. TRY REPLICATE (FLUX)
+                    try {
+                        const replicateResult = await generateReplicateImage(fullPrompt);
+                        if (replicateResult && replicateResult.imageUrl) return replicateResult.imageUrl;
+                    } catch (e) {
+                        console.error(`⚠️ Replicate failed, trying Pollinations...`);
+                    }
 
-            data.ads = await Promise.all(generationPromises);
+                    // 3. FINAL FALLBACK: POLLINATIONS
+                    const cleanPrompt = fullPrompt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s]/gi, '').substring(0, 100).trim().replace(/\s+/g, '_');
+                    const seed = Math.floor(Math.random() * 1000000);
+                    const rawPollUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
+                    // Important: Use the proxy to avoid mixed content or direct timeout issues in the UI
+                    return `/api/proxy-image?url=${encodeURIComponent(rawPollUrl)}&fallback=${encodeURIComponent(scrapedImage || '')}`;
+                })();
+
+                processedAds.push({ ...ad, generated_image_url: finalImageUrl, product_image_fallback: scrapedImage });
+            }
+
+            data.ads = processedAds;
 
             // DEDUCT CREDIT ONLY AFTER SUCCESSFUL GENERATION
             if (!isAdmin) {
                 remainingCredits = credits - 1;
-                await (await clerkClient()).users.updateUserMetadata(userId, {
+                await clerkClient.users.updateUserMetadata(userId, {
                     publicMetadata: {
                         ...user.publicMetadata,
                         credits: remainingCredits
@@ -669,3 +700,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
+
+
