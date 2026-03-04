@@ -201,13 +201,27 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
                             className="w-full h-full object-cover"
                         />
                     ) : !hasError ? (
-                        <img
-                            src={imgSrc}
-                            alt="Ad Creative"
-                            className={`w-full h-full object-cover transition-all duration-1000 group-hover:scale-105 ${imgSrc.includes('pollinations') || imgSrc.includes('data:') ? 'animate-in fade-in fill-mode-both' : ''}`}
-                            loading="eager"
-                            onError={handleImageError}
-                        />
+                        <>
+                            <img
+                                src={imgSrc}
+                                alt="Ad Creative"
+                                className={`w-full h-full object-cover transition-all duration-1000 group-hover:scale-105 ${imgSrc.includes('pollinations') || imgSrc.includes('data:') ? 'animate-in fade-in fill-mode-both' : ''}`}
+                                loading="eager"
+                                onError={handleImageError}
+                            />
+                            {/* OVERLAY DE PRODUCTO: Asegura que el logo/producto no sufra distorsión de la IA */}
+                            {productImage && !productImage.includes('placehold.co') && imgSrc !== productImage && (
+                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none p-6 z-10 transition-all duration-500 ease-out group-hover:bg-slate-900/10">
+                                    <div className="relative w-2/3 h-2/3 max-w-[280px] max-h-[280px] transition-transform duration-700 ease-out group-hover:scale-110 group-hover:-translate-y-2">
+                                        <img
+                                            src={productImage}
+                                            alt="Overlay de Producto"
+                                            className="w-full h-full object-contain filter drop-shadow-2xl"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     ) : (
                         <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 bg-slate-900">
                             <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 shadow-lg border border-slate-700">
