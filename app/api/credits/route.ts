@@ -38,6 +38,7 @@ export async function GET() {
 
         // Admin check (Robust email matching)
         const isAdmin = user.emailAddresses.some(e => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com');
+        const premiumStudioCredits = typeof metadata.premiumStudioCredits === 'number' ? metadata.premiumStudioCredits : 0;
 
         return NextResponse.json({
             credits: isAdmin ? 999 : credits,
@@ -45,6 +46,7 @@ export async function GET() {
             videoLimit: isAdmin ? 999 : videoLimit,
             videosUsed: isAdmin ? 0 : videosUsed,
             videosRemaining: isAdmin ? 999 : videosRemaining,
+            premiumStudioCredits: isAdmin ? 999 : premiumStudioCredits,
             isAdmin
         });
 
