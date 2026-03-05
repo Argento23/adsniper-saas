@@ -45,28 +45,58 @@ async function scrapeProductMetadata(url: string) {
 }
 
 // TEMPLATE RANDOMIZER
-const TEMPLATES = {
-    AIDA: [
-        (prod: string, desc: string) => ({ hd: `ðŸ”¥ ${prod}: El Cambio Que Esperabas`, txt: `Â¿Cansado de lo mismo de siempre?\n\n${desc}\n\nâœ¨ Resultados desde el dÃ­a 1\nðŸ’Ž Calidad premium garantizada\nâš¡ Stock limitado\n\nðŸ‘‰ No dejes pasar esta oportunidad.` }),
-        (prod: string, desc: string) => ({ hd: `Esto Va a Cambiar Tu Vida ðŸš€`, txt: `${prod} no es solo un producto.\nEs una inversiÃ³n en ti mismo.\n\nðŸ’ª ${desc}\n\nÂ¿Listo para dar el siguiente paso?\nâ–¶ï¸ Click aquÃ­ antes de que se agote.` }),
-        (prod: string, desc: string) => ({ hd: `La Tendencia Que Todos Quieren`, txt: `Miles ya lo tienen. Â¿Y tÃº?\n\n${prod} es el producto del momento:\nâœ“ ${desc}\nâœ“ EnvÃ­o express\nâœ“ GarantÃ­a 100%\n\nðŸŽ Oferta exclusiva HOY.` })
-    ],
-    PAS: [
-        (prod: string, desc: string) => ({ hd: `Â¿SeguirÃ¡s Esperando? â°`, txt: `El problema: Sigues buscando la soluciÃ³n perfecta.\n\nLa realidad: Cada dÃ­a que pasa pierdes oportunidades.\n\nLa soluciÃ³n: ${prod}\n\nâœ… ${desc}\nâœ… Sin complicaciones\nâœ… Resultados comprobados\n\nðŸ”— Haz click ahora.` }),
-        (prod: string, desc: string) => ({ hd: `El Error Que Te Cuesta Caro ðŸ’¸`, txt: `Problema: Gastas dinero en cosas que no funcionan.\n\n${prod} es diferente.\n\nPorque realmente:\nâ€¢ ${desc}\nâ€¢ DiseÃ±o pensado en ti\nâ€¢ Precio justo, calidad superior\n\nâš¡ Ãšltima chance de conseguirlo.` }),
-        (prod: string, desc: string) => ({ hd: `Ya Basta de Conformarte`, txt: `Te mereces algo mejor.\n\n${prod} llega para cambiar las reglas:\n\nðŸŽ¯ ${desc}\nðŸŽ¯ FÃ¡cil de usar\nðŸŽ¯ Recomendado por expertos\n\nðŸ‘‰ Mejora tu vida HOY.` })
-    ],
-    PROOF: [
-        (prod: string, desc: string) => ({ hd: `â­â­â­â­â­ +10,000 Clientes Felices`, txt: `"Nunca habÃ­a visto algo asÃ­"\n"CambiÃ³ completamente mi rutina"\n"Lo recomiendo 100%"\n\n${prod}: ${desc}\n\nðŸ† Producto mÃ¡s vendido del mes\nâœ… GarantÃ­a de satisfacciÃ³n\n\nÂ¿SerÃ¡s el prÃ³ximo en probarlo?` }),
-        (prod: string, desc: string) => ({ hd: `Esto Es Lo Que Dicen Nuestros Clientes ðŸ’¬`, txt: `â­â­â­â­â­ "SuperÃ³ mis expectativas"\nâ­â­â­â­â­ "Lo uso todos los dÃ­as"\nâ­â­â­â­â­ "RelaciÃ³n calidad-precio perfecta"\n\n${prod} - ${desc}\n\nðŸŽ Aprovecha la oferta de lanzamiento.` }),
-        (prod: string, desc: string) => ({ hd: `ðŸ”¥ Viral en Redes: ${prod}`, txt: `Todos hablan de esto.\n\nðŸ“¸ +50K publicaciones\nâ¤ï¸ Miles de reseÃ±as positivas\nâš¡ Se estÃ¡ agotando\n\nPor quÃ© lo aman:\nâ€¢ ${desc}\nâ€¢ EnvÃ­o rÃ¡pido\nâ€¢ AtenciÃ³n 24/7\n\nðŸ›’ Consigue el tuyo antes de que sea tarde.` })
-    ]
+const TEMPLATES: Record<string, any> = {
+    es: {
+        AIDA: [
+            (prod: string, desc: string) => ({ hd: `🔥 ${prod}: El Cambio Que Esperabas`, txt: `¿Cansado de lo mismo de siempre?\n\n${desc}\n\n✨ Resultados desde el día 1\n💎 Calidad premium garantizada\n⚡ Stock limitado\n\n👉 No dejes pasar esta oportunidad.` }),
+            (prod: string, desc: string) => ({ hd: `Esto Va a Cambiar Tu Vida 🚀`, txt: `${prod} no es solo un producto.\nEs una inversión en ti mismo.\n\n💪 ${desc}\n\n¿Listo para dar el siguiente paso?\n▶️ Click aquí antes de que se agote.` }),
+            (prod: string, desc: string) => ({ hd: `La Tendencia Que Todos Quieren`, txt: `Miles ya lo tienen. ¿Y tú?\n\n${prod} es el producto del momento:\n✓ ${desc}\n✓ Envío express\n✓ Garantía 100%\n\n🎁 Oferta exclusiva HOY.` })
+        ],
+        PAS: [
+            (prod: string, desc: string) => ({ hd: `¿Seguirás Esperando? ⏳`, txt: `El problema: Sigues buscando la solución perfecta.\n\nLa realidad: Cada día que pasa pierdes oportunidades.\n\nLa solución: ${prod}\n\n✅ ${desc}\n✅ Sin complicaciones\n✅ Resultados comprobados\n\n🔗 Haz click ahora.` }),
+            (prod: string, desc: string) => ({ hd: `El Error Que Te Cuesta Caro 💸`, txt: `Problema: Gastas dinero en cosas que no funcionan.\n\n${prod} es diferente.\n\nPorque realmente:\n• ${desc}\n• Diseño pensado en ti\n• Precio justo, calidad superior\n\n⚡ Última chance de conseguirlo.` }),
+            (prod: string, desc: string) => ({ hd: `Ya Basta de Conformarte`, txt: `Te mereces algo mejor.\n\n${prod} llega para cambiar las reglas:\n\n🎯 ${desc}\n🎯 Fácil de usar\n🎯 Recomendado por expertos\n\n👉 Mejora tu vida HOY.` })
+        ],
+        PROOF: [
+            (prod: string, desc: string) => ({ hd: `⭐⭐⭐⭐⭐ +10,000 Clientes Felices`, txt: `"Nunca había visto algo así"\n"Cambió completamente mi rutina"\n"Lo recomiendo 100%"\n\n${prod}: ${desc}\n\n🏆 Producto más vendido del mes\n✅ Garantía de satisfacción\n\n¿Serás el próximo en probarlo?` }),
+            (prod: string, desc: string) => ({ hd: `Esto Es Lo Que Dicen Nuestros Clientes 💬`, txt: `⭐⭐⭐⭐⭐ "Superó mis expectativas"\n⭐⭐⭐⭐⭐ "Lo uso todos los días"\n⭐⭐⭐⭐⭐ "Relación calidad-precio perfecta"\n\n${prod} - ${desc}\n\n🎁 Aprovecha la oferta de lanzamiento.` }),
+            (prod: string, desc: string) => ({ hd: `🔥 Viral en Redes: ${prod}`, txt: `Todos hablan de esto.\n\n📸 +50K publicaciones\n❤️ Miles de reseñas positivas\n⚡ Se está agotando\n\nPor qué lo aman:\n• ${desc}\n• Envío rápido\n• Atención 24/7\n\n🛒 Consigue el tuyo antes de que sea tarde.` })
+        ]
+    },
+    en: {
+        AIDA: [
+            (prod: string, desc: string) => ({ hd: `🔥 ${prod}: Time for a Change`, txt: `Tired of the same old things?\n\n${desc}\n\n✨ Results from day 1\n💎 Premium quality\n⚡ Limited stock\n\n👉 Don't miss out.` }),
+            (prod: string, desc: string) => ({ hd: `This Will Change Everything 🚀`, txt: `${prod} isn't just a product.\nIt's an investment in yourself.\n\n💪 ${desc}\n\nReady for the next step?\n▶️ Click here before it's gone.` })
+        ],
+        PAS: [
+            (prod: string, desc: string) => ({ hd: `Still Waiting? ⏳`, txt: `Problem: Searching for the perfect solution.\n\nReality: You're losing time.\n\nSolution: ${prod}\n\n✅ ${desc}\n✅ Hassle-free\n✅ Proven results\n\n🔗 Shop now.` }),
+            (prod: string, desc: string) => ({ hd: `Stop Settling for Less`, txt: `You deserve better.\n\n${prod} changes the rules:\n\n🎯 ${desc}\n🎯 Easy to use\n🎯 Expert recommended\n\n👉 Upgrade your life TODAY.` })
+        ],
+        PROOF: [
+            (prod: string, desc: string) => ({ hd: `⭐⭐⭐⭐⭐ 10K+ Happy Customers`, txt: `"Never seen anything like it"\n"Completely changed my routine"\n"100% recommended"\n\n${prod}: ${desc}\n\n🏆 Best seller of the month\n✅ Satisfaction guaranteed` }),
+            (prod: string, desc: string) => ({ hd: `🔥 Viral Sensation: ${prod}`, txt: `Everyone is talking about this.\n\n📸 50K+ posts\n❤️ Thousands of 5-star reviews\n⚡ Selling out fast\n\n🛒 Get yours before it's too late.` })
+        ]
+    },
+    de: {
+        AIDA: [
+            (prod: string, desc: string) => ({ hd: `🔥 ${prod}: Die Veränderung, die du brauchst`, txt: `Müde vom immer Gleichen?\n\n${desc}\n\n✨ Ergebnisse ab Tag 1\n💎 Premium-Qualität\n⚡ Begrenzter Vorrat\n\n👉 Verpasse diese Chance nicht.` }),
+            (prod: string, desc: string) => ({ hd: `Das wird alles verändern 🚀`, txt: `${prod} ist nicht nur ein Produkt.\nEs ist eine Investition in dich selbst.\n\n💪 ${desc}\n\nBereit für den nächsten Schritt?\n▶️ Klicke hier, bevor es weg ist.` })
+        ],
+        PAS: [
+            (prod: string, desc: string) => ({ hd: `Wartest du immer noch? ⏳`, txt: `Problem: Du suchst nach der perfekten Lösung.\n\nRealität: Du verlierst Zeit.\n\nLösung: ${prod}\n\n✅ ${desc}\n✅ Stressfrei\n✅ Nachgewiesene Ergebnisse\n\n🔗 Jetzt einkaufen.` }),
+            (prod: string, desc: string) => ({ hd: `Schluss mit Kompromissen`, txt: `Du verdienst etwas Besseres.\n\n${prod} ändert die Regeln:\n\n🎯 ${desc}\n🎯 Einfach zu bedienen\n🎯 Von Experten empfohlen\n\n👉 Verbessere dein Leben HEUTE.` })
+        ],
+        PROOF: [
+            (prod: string, desc: string) => ({ hd: `⭐⭐⭐⭐⭐ 10K+ Glückliche Kunden`, txt: `"Noch nie sowas gesehen"\n"Hat meine Routine komplett verändert"\n"100% empfehlenswert"\n\n${prod}: ${desc}\n\n🏆 Bestseller des Monats\n✅ Zufriedenheitsgarantie` }),
+            (prod: string, desc: string) => ({ hd: `🔥 Viral Sensation: ${prod}`, txt: `Jeder spricht darüber.\n\n📸 50K+ Beiträge\n❤️ Tausende 5-Sterne-Bewertungen\n⚡ Schnell ausverkauft\n\n🛒 Hol dir deins, bevor es zu spät ist.` })
+        ]
+    }
 };
 
 const getRandom = (arr: any[]) => arr[Math.floor(Math.random() * arr.length)];
 
 // LOCAL FALLBACK GENERATOR (Ad Copy) - Supports COUNT
-function generateLocalAds(productName: string, desc: string, image: string, visualTheme?: string, count: number = 3) {
+function generateLocalAds(productName: string, desc: string, image: string, visualTheme?: string, count: number = 3, lang: string = 'es') {
     const basePrompt = productName.substring(0, 40).replace(/[^a-zA-Z0-9 ]/g, " ").trim();
     const styleSuffix = visualTheme ? `, ${visualTheme},` : ', professional product photography,';
 
@@ -88,6 +118,8 @@ function generateLocalAds(productName: string, desc: string, image: string, visu
     const cleanDesc = desc.replace(/\n/g, ' ').substring(0, 150).trim();
 
     const ads = [];
+    const langTemplates = TEMPLATES[lang] || TEMPLATES['es'];
+
     for (let i = 0; i < count; i++) {
         let type = "";
         let template;
@@ -95,13 +127,13 @@ function generateLocalAds(productName: string, desc: string, image: string, visu
         const mode = i % 3;
         if (mode === 0) {
             type = "AIDA";
-            template = getRandom(TEMPLATES.AIDA)(productName, cleanDesc);
+            template = getRandom(langTemplates.AIDA)(productName, cleanDesc);
         } else if (mode === 1) {
             type = "PAS";
-            template = getRandom(TEMPLATES.PAS)(productName, cleanDesc);
+            template = getRandom(langTemplates.PAS)(productName, cleanDesc);
         } else {
             type = "Social Proof";
-            template = getRandom(TEMPLATES.PROOF)(productName, cleanDesc);
+            template = getRandom(langTemplates.PROOF)(productName, cleanDesc);
         }
 
         ads.push({
@@ -626,7 +658,7 @@ export async function POST(request: Request) {
             } else {
                 const needed = count - data.ads.length;
                 console.log(`âš ï¸ Falling back to Local Templates for ${needed} ads.`);
-                const extraAds = generateLocalAds(scrapedTitle, scrapedDesc, scrapedImage, manual_image_prompt, needed);
+                const extraAds = generateLocalAds(scrapedTitle, scrapedDesc, scrapedImage, manual_image_prompt, needed, language);
                 // Add DEBUG Marker
                 extraAds[0].headline = "DEBUG: LOCAL FALLBACK TRIGGERED";
                 data.ads = [...data.ads, ...extraAds];
@@ -727,9 +759,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
-
-
-
 
 
 
