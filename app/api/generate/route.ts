@@ -148,7 +148,7 @@ async function generateIdeogramImage(prompt: string, referenceImage: string | nu
             if (response.status === 429 && !isRetry) {
                 console.warn(`⏳ Replicate Limit (429) hit for Ideogram. Waiting 10s...`);
                 await new Promise(r => setTimeout(r, 10500));
-                return generateIdeogramImage(prompt, true);
+                return generateIdeogramImage(prompt, null, true);
             }
             console.warn(`Ideogram V2 Prediction failed: ${response.status}`);
             return null;
@@ -210,27 +210,27 @@ async function generateGroqAds(productName: string, desc: string, count: number,
 RETURN ONLY VALID JSON with this EXACT structure:
 {
   "ads": [
-    {
-      "type": "Hook Name (e.g. AIDA, PAS, Social Proof)",
-      "headline": "Attention-grabbing headline (max 40 chars)",
-      "primary_text": "Compelling body copy with emojis, line breaks, benefits-focused, 80-120 words. Use persuasive language, urgency, and social proof.",
-      "image_prompt": "Detailed visual description for AI image generation INCLUDING explicit text rendering instructions. Example: 'product on minimal background with typography rendering: \"BUY NOW\", 3d bold font, cinematic lighting'"
-    }
-  ]
-}
+                            {
+                                "type": "Hook Name (e.g. AIDA, PAS, Social Proof)",
+                                "headline": "Attention-grabbing headline (max 40 chars)",
+                                "primary_text": "Compelling body copy with emojis, line breaks, benefits-focused, 80-120 words. Use persuasive language, urgency, and social proof.",
+                                "image_prompt": "CRITICAL: A LITERAL, PHYSICAL description of the actual product. NEVER use metaphors. Example: 'A physical [Product Name] resting on a minimal background, 8k, product photography... typography rendering: \"HEADLINE\"'."
+                            }
+                        ]
+                    }
 
-GUIDELINES:
-- Use varied persuasion frameworks (AIDA, PAS, Social Proof, Storytelling)
-- Include emojis strategically (2-4 per ad)
-- Create urgency and FOMO
-- Focus on benefits, not features
-- Use power words and sensory language
-- Add line breaks (\\n) for readability
-- CRITICAL FOR IMAGES: The \`image_prompt\` MUST contain the exact same text you wrote for the \`headline\` field. You must include the text inside double quotes, preceded by "typography rendering:".
-- Example: If the headline is "¡Vende Más!", your image_prompt MUST end with: typography rendering: "¡Vende Más!". Do not use generic words like "Success" or "Ganar", use the actual headline.
-- Each ad must feel UNIQUE and creative
+                    GUIDELINES:
+                    - Use varied persuasion frameworks (AIDA, PAS, Social Proof, Storytelling)
+                    - Include emojis strategically (2-4 per ad)
+                    - Create urgency and FOMO
+                    - Focus on benefits, not features
+                    - Add line breaks (\\n) for readability
+                    - CRITICAL FOR IMAGES: The \`image_prompt\` MUST describe the literal PHYSICAL product (${productName}). NO METAPHORS. NO ABSTRACT CONCEPTS. If the product is a car, describe a car driving or parked. Do not draw "success" or "trophies".
+                    - The \`image_prompt\` MUST contain the exact same text you wrote for the \`headline\` field. You must include the text inside double quotes, preceded by "typography rendering:".
+                    - Example: If the headline is "¡Vende Más!", your image_prompt MUST end with: typography rendering: "¡Vende Más!". Do not use generic words like "Success" or "Ganar", use the actual headline.
+                    - Each ad must feel UNIQUE and creative
 
-NO MARKDOWN. NO EXPLANATIONS. ONLY JSON.`
+                    NO MARKDOWN. NO EXPLANATIONS. ONLY JSON.`
                     },
                     {
                         role: "user",
@@ -305,47 +305,47 @@ async function generateGroqScripts(productName: string, desc: string, lang: stri
                 messages: [
                     {
                         role: "system",
-                        content: `You are a viral video content strategist and scriptwriter for TikTok, Instagram Reels, and YouTube Shorts. Create 4 UNIQUE, CREATIVE video scripts for a specific product.
+                        content: `You are a viral video content strategist and scriptwriter for TikTok, Instagram Reels, and YouTube Shorts.Create 4 UNIQUE, CREATIVE video scripts for a specific product.
 
 RETURN ONLY VALID JSON with this EXACT structure:
-{
-  "scripts": [
-    {
-      "title": "Creative script name",
-      "angle": "Marketing angle used",
-      "audio_suggestion": "Specific trending audio or music style",
-      "platform": "TikTok / Reels / Shorts",
-      "sections": [
-        { "type": "${isEs ? 'Gancho' : 'Hook'}", "content": "Opening line that stops the scroll", "duration": "3s" },
-        { "type": "${isEs ? 'Cuerpo' : 'Body'}", "content": "Main content with specific details about the product", "duration": "10-15s" },
-        { "type": "CTA", "content": "Call to action", "duration": "3-5s" }
-      ]
-    }
-  ]
-}
+            {
+                "scripts": [
+                    {
+                        "title": "Creative script name",
+                        "angle": "Marketing angle used",
+                        "audio_suggestion": "Specific trending audio or music style",
+                        "platform": "TikTok / Reels / Shorts",
+                        "sections": [
+                            { "type": "${isEs ? 'Gancho' : 'Hook'}", "content": "Opening line that stops the scroll", "duration": "3s" },
+                            { "type": "${isEs ? 'Cuerpo' : 'Body'}", "content": "Main content with specific details about the product", "duration": "10-15s" },
+                            { "type": "CTA", "content": "Call to action", "duration": "3-5s" }
+                        ]
+                    }
+                ]
+            }
 
 RULES:
-- Each script MUST be completely different in tone, format, and approach
+                - Each script MUST be completely different in tone, format, and approach
 - Use SPECIFIC product details from the description, not generic placeholders
-- Include stage directions: camera angles, transitions, text overlays, visual effects
-- Reference real trending formats: POV, storytime, day-in-my-life, green screen, duet bait
-- Audio suggestions should reference actual trending sounds or specific music genres
-- ${isEs ? 'Write entirely in SPANISH' : 'Write entirely in ENGLISH'}
-- Make scripts that a creator could actually film and post today
-- Include timing for each section
-- DO NOT use generic filler like "solucionar tu problema" â€” be SPECIFIC about what the product does
+        - Include stage directions: camera angles, transitions, text overlays, visual effects
+        - Reference real trending formats: POV, storytime, day -in -my - life, green screen, duet bait
+        - Audio suggestions should reference actual trending sounds or specific music genres
+        - ${isEs ? 'Write entirely in SPANISH' : 'Write entirely in ENGLISH'}
+        - Make scripts that a creator could actually film and post today
+        - Include timing for each section
+            - DO NOT use generic filler like "solucionar tu problema" â€” be SPECIFIC about what the product does
 
-SCRIPT VARIETY (use exactly these 4 angles):
-1. POV/Storytelling â€” first person narrative showing the problem â†’ discovery â†’ result
-2. Tutorial/How-To â€” quick demo showing the product in use with tips
-3. Before/After or Transformation â€” dramatic visual comparison
-4. Trend Hijack â€” adapt a current social media trend format to showcase the product
+SCRIPT VARIETY(use exactly these 4 angles):
+        1. POV / Storytelling â€” first person narrative showing the problem â†’ discovery â†’ result
+        2. Tutorial / How - To â€” quick demo showing the product in use with tips
+3. Before / After or Transformation â€” dramatic visual comparison
+        4. Trend Hijack â€” adapt a current social media trend format to showcase the product
 
-NO MARKDOWN. ONLY JSON.`
+NO MARKDOWN.ONLY JSON.`
                     },
                     {
                         role: "user",
-                        content: `Product: ${productName}\n\nDescription: ${desc}\n\nCreate 4 unique, platform-specific video scripts that a content creator would actually want to film.`
+                        content: `Product: ${productName} \n\nDescription: ${desc} \n\nCreate 4 unique, platform - specific video scripts that a content creator would actually want to film.`
                     }
                 ],
                 temperature: 0.8
@@ -353,7 +353,7 @@ NO MARKDOWN. ONLY JSON.`
         });
 
         if (!response.ok) {
-            throw new Error(`Groq Scripts API Error: ${response.status}`);
+            throw new Error(`Groq Scripts API Error: ${response.status} `);
         }
 
         const json = await response.json();
@@ -399,8 +399,8 @@ function generateFallbackScripts(productName: string, desc: string, lang: string
 
     if (!benefit || benefit.length < 5) {
         benefit = isEs
-            ? `mejorar tu experiencia con ${productName}`
-            : `improve your experience with ${productName}`;
+            ? `mejorar tu experiencia con ${productName} `
+            : `improve your experience with ${productName} `;
     }
 
     if (isEs) {
@@ -412,8 +412,8 @@ function generateFallbackScripts(productName: string, desc: string, lang: string
                 platform: "TikTok",
                 sections: [
                     { type: "Gancho", content: `POV: EstÃ¡s por descubrir ${productName} y tu vida cambia.`, duration: "3s" },
-                    { type: "Cuerpo", content: `(CÃ¡mara en mano) Miren lo que acabo de encontrar. ${benefit}. No puedo creer que no lo conocÃ­a antes. La diferencia se nota desde el primer uso.`, duration: "12s" },
-                    { type: "CTA", content: `Link en bio. Quedan pocas unidades de ${productName}.`, duration: "4s" }
+                    { type: "Cuerpo", content: `(CÃ¡mara en mano) Miren lo que acabo de encontrar.${benefit}. No puedo creer que no lo conocÃ­a antes.La diferencia se nota desde el primer uso.`, duration: "12s" },
+                    { type: "CTA", content: `Link en bio.Quedan pocas unidades de ${productName}.`, duration: "4s" }
                 ]
             },
             {
@@ -423,7 +423,7 @@ function generateFallbackScripts(productName: string, desc: string, lang: string
                 platform: "Reels",
                 sections: [
                     { type: "Gancho", content: `3 formas de usar ${productName} que no conocÃ­as ðŸ‘‡`, duration: "3s" },
-                    { type: "Cuerpo", content: `Tip 1: (mostrar uso principal). Tip 2: (uso creativo). Tip 3: ${benefit}. *Texto en pantalla con cada tip*`, duration: "15s" },
+                    { type: "Cuerpo", content: `Tip 1: (mostrar uso principal). Tip 2: (uso creativo). Tip 3: ${benefit}. * Texto en pantalla con cada tip * `, duration: "15s" },
                     { type: "CTA", content: "GuardÃ¡ este video y comprÃ¡ en el link de la bio.", duration: "3s" }
                 ]
             },
@@ -434,7 +434,7 @@ function generateFallbackScripts(productName: string, desc: string, lang: string
                 platform: "TikTok",
                 sections: [
                     { type: "Gancho", content: `ANTES vs DESPUÃ‰S de usar ${productName} ðŸ˜±`, duration: "3s" },
-                    { type: "Cuerpo", content: `(Split screen) Antes: problema comÃºn. DespuÃ©s: ${benefit}. La transformaciÃ³n habla sola.`, duration: "10s" },
+                    { type: "Cuerpo", content: `(Split screen) Antes: problema comÃºn.DespuÃ©s: ${benefit}. La transformaciÃ³n habla sola.`, duration: "10s" },
                     { type: "CTA", content: "ComentÃ¡ 'ðŸ”¥' y te mando el link.", duration: "3s" }
                 ]
             },
@@ -444,8 +444,8 @@ function generateFallbackScripts(productName: string, desc: string, lang: string
                 audio_suggestion: "Audio 'Cosas que no sabÃ­as'",
                 platform: "Shorts",
                 sections: [
-                    { type: "Gancho", content: `Cosas que no sabÃ­as sobre ${productName}:`, duration: "2s" },
-                    { type: "Cuerpo", content: `1. ${benefit}. 2. Lo usan mÃ¡s de X profesionales. 3. (dato sorprendente del rubro). *Green screen con imÃ¡genes*`, duration: "12s" },
+                    { type: "Gancho", content: `Cosas que no sabÃ­as sobre ${productName}: `, duration: "2s" },
+                    { type: "Cuerpo", content: `1. ${benefit}.2. Lo usan mÃ¡s de X profesionales. 3.(dato sorprendente del rubro). * Green screen con imÃ¡genes * `, duration: "12s" },
                     { type: "CTA", content: "Seguime para mÃ¡s y el link estÃ¡ en la bio.", duration: "3s" }
                 ]
             }
@@ -459,8 +459,8 @@ function generateFallbackScripts(productName: string, desc: string, lang: string
                 platform: "TikTok",
                 sections: [
                     { type: "Hook", content: `POV: You just discovered ${productName} and everything changes.`, duration: "3s" },
-                    { type: "Body", content: `(Handheld camera) Look what I just found. ${benefit}. Can't believe I didn't know about this. The difference is real.`, duration: "12s" },
-                    { type: "CTA", content: `Link in bio. Limited stock on ${productName}.`, duration: "4s" }
+                    { type: "Body", content: `(Handheld camera) Look what I just found.${benefit}. Can't believe I didn't know about this.The difference is real.`, duration: "12s" },
+                    { type: "CTA", content: `Link in bio.Limited stock on ${productName}.`, duration: "4s" }
                 ]
             },
             {
@@ -653,7 +653,8 @@ export async function POST(request: Request) {
                     .replace(/[\u0300-\u036f]/g, "")
                     .replace(/[¿¡]/g, "");
 
-                let fullPrompt = `${basePrompt}, professional product photography, 8k, cinematic lighting, high quality, studio setup`;
+                // ANCLAJE FÍSICO: Obligamos a empezar el prompt de Ideogram con el nombre real del producto
+                let fullPrompt = `A beautiful physical ${scrapedTitle}, ${basePrompt}, professional product photography, 8k, cinematic lighting, high quality, studio setup`;
                 if (cleanHeadline) {
                     fullPrompt += `, typography rendering: "${cleanHeadline}"`;
                 }
@@ -726,6 +727,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
+
 
 
 
