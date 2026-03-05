@@ -11,8 +11,7 @@ export async function checkAndTrackUsage(
     userId: string,
     incrementBy: number = 1
 ): Promise<UsageResult> {
-    const client = await clerkClient();
-    const user = await client.users.getUser(userId);
+    const user = await clerkClient.users.getUser(userId);
 
     const metadata = user.publicMetadata as any;
     const plan = metadata.plan || 'free';
@@ -39,7 +38,7 @@ export async function checkAndTrackUsage(
     }
 
     // Update usage
-    await client.users.updateUserMetadata(userId, {
+    await clerkClient.users.updateUserMetadata(userId, {
         publicMetadata: {
             ...metadata,
             currentMonthUsage: currentUsage + incrementBy,
