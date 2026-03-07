@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { FaStar, FaLayerGroup, FaBolt, FaFire, FaSpinner, FaArrowRight, FaExternalLinkAlt, FaHeart, FaComments, FaPaperPlane, FaBookmark, FaRegCopy, FaCheck, FaGlobe, FaImage, FaCog, FaVideo, FaPen, FaMagic, FaCloudUploadAlt, FaTrash } from 'react-icons/fa';
-import { UserButton } from "@clerk/nextjs";
+import { UserButton, useUser } from "@clerk/nextjs";
 import BrandSetup from './components/BrandSetup';
 import VideoScriptViewer from './components/VideoScriptViewer';
 import UpgradeModal from './components/UpgradeModal';
@@ -408,6 +408,7 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
 // ----------------------------------------
 
 export default function Dashboard() {
+    const { user } = useUser();
     // Brand & Usage State
     const [brand, setBrand] = useState<any>(null);
     const [credits, setCredits] = useState<number | null>(null);
@@ -467,18 +468,26 @@ export default function Dashboard() {
 
     const fetchCredits = async () => {
         try {
+            console.log('📡 Dashboard: Fetching credits...');
             const res = await fetch('/api/credits');
             const data = await res.json();
+            console.log('📊 Dashboard: Credits Data Received:', data);
+            // Check if user is admin locally as well
+            const userEmails = user?.emailAddresses.map((e: any) => e.emailAddress.toLowerCase()) || [];
+            const isLocalAdmin = userEmails.includes('gustavodornhofer@gmail.com');
+
             if (data.credits !== undefined) {
-                setCredits(data.credits);
-                setPlan(data.plan);
+                setCredits(isLocalAdmin ? 9999 : data.credits);
+                setPlan(isLocalAdmin ? 'Infinity' : data.plan);
             }
             if (data.videosRemaining !== undefined) {
-                setVideosRemaining(data.videosRemaining);
-                setVideoLimit(data.videoLimit || 0);
+                setVideosRemaining(isLocalAdmin ? 9999 : data.videosRemaining);
+                setVideoLimit(isLocalAdmin ? 9999 : (data.videoLimit || 0));
             }
             if (data.premiumStudioCredits !== undefined) {
-                setPremiumCredits(data.premiumStudioCredits);
+                const userEmails = user?.emailAddresses.map((e: any) => e.emailAddress.toLowerCase()) || [];
+                const isLocalAdmin = userEmails.includes('gustavodornhofer@gmail.com');
+                setPremiumCredits(isLocalAdmin ? 9999 : data.premiumStudioCredits);
             }
         } catch (err) {
             console.error("Error fetching credits:", err);
@@ -716,7 +725,10 @@ export default function Dashboard() {
                                         </button>
                                         <button
                                             onClick={() => {
-                                                if (premiumCredits <= 0 && plan !== 'Infinity') {
+                                                const userEmails = user?.emailAddresses.map((e: any) => e.emailAddress.toLowerCase()) || [];
+                                                const isLocalAdmin = userEmails.includes('gustavodornhofer@gmail.com');
+
+                                                if (premiumCredits <= 0 && plan !== 'Infinity' && !isLocalAdmin) {
                                                     setShowUpgrade(true);
                                                 } else {
                                                     setInputMode('studio');
@@ -725,7 +737,11 @@ export default function Dashboard() {
                                             className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all relative overflow-hidden ${inputMode === 'studio' ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-900/50' : 'text-purple-300/60 hover:text-purple-300'}`}
                                         >
                                             <FaFire className="w-3 h-3 text-orange-400" /> Studio Pro
-                                            {premiumCredits > 0 ? (
+                                            {(plan === 'Infinity' || (user?.emailAddresses.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com'))) ? (
+                                                <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-bl-lg">
+                                                    Admin
+                                                </span>
+                                            ) : premiumCredits > 0 ? (
                                                 <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-bl-lg">
                                                     {premiumCredits}
                                                 </span>
@@ -844,7 +860,7 @@ export default function Dashboard() {
                                         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 border-2 border-purple-500/20 rounded-xl p-4 bg-purple-900/5 relative overflow-hidden mt-4">
                                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-600 via-pink-500 to-indigo-600 opacity-50"></div>
 
-                                            {premiumCredits <= 0 && (
+                                            {premiumCredits <= 0 && plan !== 'Infinity' && !(user?.emailAddresses.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com')) && (
                                                 <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 text-center border border-purple-500/30 rounded-xl">
                                                     <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-full flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(168,85,247,0.4)]">
                                                         <FaStar className="w-8 h-8 text-white" />
@@ -1052,5 +1068,6 @@ export default function Dashboard() {
         </div>
     );
 }
+
 
 
