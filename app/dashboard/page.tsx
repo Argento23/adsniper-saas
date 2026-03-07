@@ -710,7 +710,13 @@ export default function Dashboard() {
                                             <FaPen className="w-3 h-3" /> Modo Manual
                                         </button>
                                         <button
-                                            onClick={() => setInputMode('studio')}
+                                            onClick={() => {
+                                                if (premiumCredits <= 0 && plan !== 'Infinity') {
+                                                    setShowUpgrade(true);
+                                                } else {
+                                                    setInputMode('studio');
+                                                }
+                                            }}
                                             className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all relative overflow-hidden ${inputMode === 'studio' ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-900/50' : 'text-purple-300/60 hover:text-purple-300'}`}
                                         >
                                             <FaFire className="w-3 h-3 text-orange-400" /> Studio Pro
@@ -843,7 +849,7 @@ export default function Dashboard() {
                                                         Inpainting 8K real. La IA respetará tu producto al 100% integrándolo a un escenario hiperrealista.
                                                     </p>
                                                     <button onClick={() => setShowUpgrade(true)} className="bg-white text-slate-900 px-6 py-3 rounded-xl font-bold hover:scale-105 transition-transform shadow-lg">
-                                                        Obtener Créditos Pro
+                                                        Desbloquear Studio Pro
                                                     </button>
                                                 </div>
                                             )}
@@ -1041,5 +1047,4 @@ export default function Dashboard() {
         </div>
     );
 }
-
 
