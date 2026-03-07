@@ -672,13 +672,6 @@ export default function Dashboard() {
                                 {brand.name}
                             </button>
                         )}
-                        <a
-                            href="/dashboard/agency"
-                            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 text-xs font-medium text-purple-300 hover:bg-purple-500/20 hover:text-purple-200 transition-colors"
-                            title="Agency Dashboard"
-                        >
-                            🏢 Agencia
-                        </a>
                         <UserButton />
                     </div>
                 </header>
@@ -1039,14 +1032,14 @@ export default function Dashboard() {
                 <UpgradeModal
                     isOpen={showUpgrade}
                     onClose={() => setShowUpgrade(false)}
-                    mpLink="https://mpago.la/2wZfbLt"
                     mpSubscriptionLink="https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=068cba02015840e3b78121a6a1c6559f"
                     ppLink="https://www.paypal.com/ncp/payment/TX7KQ53SNHCHC"
+                    mpStudioLink="https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=46da776618c14cfe9c0ff45a84fb2724"
+                    ppStudioLink="https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-71899749GE094751SNGWE3XI"
                 />
             </div>
         </div>
     );
 }
-
 
 
