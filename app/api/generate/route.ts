@@ -556,7 +556,9 @@ export async function POST(request: Request) {
                 clerkUser = await clerkClient.users.getUser(userId);
                 if (clerkUser) {
                     credits = typeof clerkUser.publicMetadata?.credits === 'number' ? clerkUser.publicMetadata.credits : 3;
-                    isAdmin = clerkUser.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com');
+                    const userEmail = clerkUser.emailAddresses[0]?.emailAddress?.toLowerCase().trim();
+                    isAdmin = userEmail === 'gustavodornhofer@gmail.com';
+                    console.log(`[Generate API] User: ${userEmail}, isAdmin: ${isAdmin}`);
                 }
             } else {
                 console.warn("⚠️ Clerk Client users object is undefined in this Beta. Falling back to default limits.");
