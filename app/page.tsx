@@ -205,12 +205,15 @@ export default function Home() {
               <ul className="space-y-4 mb-8 flex-1 text-slate-200 text-sm relative z-10">
                 <li className="flex items-center gap-2"><FaCheckCircle className="text-purple-500" /> Everything in Pro</li>
                 <li className="flex items-center gap-2"><FaCheckCircle className="text-purple-500" /> <strong>100 Studio Credits/mo</strong></li>
-                <li className="flex items-center gap-2"><FaCheckCircle className="text-purple-500" /> 8K Product Inpainting</li>
-                <li className="flex items-center gap-2"><FaCheckCircle className="text-purple-500" /> Advanced Prompt Engineering</li>
+                <li className="flex items-center gap-2"><FaCheckCircle className="text-purple-500" /> 8K Product Inpainting (Fal.ai)</li>
+                <li className="flex items-center gap-2"><FaCheckCircle className="text-purple-500" /> Professional 8K Scenery</li>
               </ul>
               <div className="space-y-3 relative z-10">
-                <a href="#contact" className="block w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 text-white text-center font-bold transition-all shadow-lg shadow-purple-900/50">
-                  Upgrade to Studio
+                <a href="https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=46da776618c14cfe9c0ff45a84fb2724" target="_blank" rel="noopener noreferrer" className="block w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 text-white text-center font-bold transition-all shadow-lg shadow-purple-900/50">
+                  Suscribirse (Studio MP)
+                </a>
+                <a href="https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-71899749GE094751SNGWE3XI" target="_blank" rel="noopener noreferrer" className="block w-full py-2.5 rounded-xl bg-purple-900/20 border border-purple-500/30 text-purple-300 text-sm font-bold text-center hover:bg-purple-900/30 transition-all">
+                  Subscribe (Studio PayPal)
                 </a>
               </div>
             </div>
@@ -250,7 +253,4 @@ export default function Home() {
     </div>
   );
 }
-
-
-
 
