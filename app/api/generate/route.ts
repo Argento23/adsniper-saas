@@ -750,28 +750,30 @@ export async function POST(request: Request) {
                 console.error("⚠️ Fallo al actualizar créditos en Clerk, ignorando para no romper la generación:", updateError);
             }
         }
-    }
 
         // Ensure scripts are not undefined if n8n failed to return them
         if (!data.scripts || !Array.isArray(data.scripts) || data.scripts.length === 0) {
-        data.scripts = await generateGroqScripts(scrapedTitle, scrapedDesc, language);
+            data.scripts = await generateGroqScripts(scrapedTitle, scrapedDesc, language);
+        }
+
+
+        return NextResponse.json({
+            ...data,
+            product_image: scrapedImage,
+            product_title: scrapedTitle || data.product_title,
+            _mode: data._mode || "hybrid_ai",
+            credits: remainingCredits,
+            VERSION_MARKER: "PROXY_V2" // For browser verification
+        });
+
+    } catch (error: any) {
+        console.error('CRITICAL ERROR:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
     }
-
-
-    return NextResponse.json({
-        ...data,
-        product_image: scrapedImage,
-        product_title: scrapedTitle || data.product_title,
-        _mode: data._mode || "hybrid_ai",
-        credits: remainingCredits,
-        VERSION_MARKER: "PROXY_V2" // For browser verification
-    });
-
-} catch (error: any) {
-    console.error('CRITICAL ERROR:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
 }
-}
+
+
+
 
 
 
