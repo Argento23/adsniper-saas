@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { generateReplicateImage } from '@/lib/replicate';
+import { generateFalImage } from '@/lib/fal';
 import { checkAndTrackUsage } from '@/lib/usageTracker';
+
+export const dynamic = 'force-dynamic';
 
 async function scrapeProductMetadata(url: string) {
     try {
@@ -690,9 +693,18 @@ export async function POST(request: Request) {
                 if (cleanHeadline) {
                     fullPrompt += `, typography rendering: "${cleanHeadline}"`;
                 }
+                const finalImageUrl = await (async () => {
+                    // 1. TRY FAL.AI (FLUX PRO/DEV) - HIGHEST QUALITY
+                    try {
+                        if (process.env.FAL_API_KEY) {
+                            const falResult = await generateFalImage(fullPrompt);
+                            if (falResult && falResult.imageUrl) return falResult.imageUrl;
+                        }
+                    } catch (e) {
+                        console.error(`⚠️ Fal.ai failed, trying Ideogram...`);
+                    }
 
-                let finalImageUrl = await (async () => {
-                    // 1. TRY IDEOGRAM V2 TEXT-TO-IMAGE or IMAGE-TO-IMAGE
+                    // 2. TRY IDEOGRAM V2 TEXT-TO-IMAGE
                     try {
                         const ideogramImage = await generateIdeogramImage(fullPrompt, scrapedImage);
                         if (ideogramImage) return ideogramImage;
@@ -700,7 +712,7 @@ export async function POST(request: Request) {
                         console.error(`⚠️ Ideogram failed, trying Replicate Flux...`);
                     }
 
-                    // 2. TRY REPLICATE (FLUX)
+                    // 3. TRY REPLICATE (FLUX)
                     try {
                         const replicateResult = await generateReplicateImage(fullPrompt);
                         if (replicateResult && replicateResult.imageUrl) return replicateResult.imageUrl;
@@ -708,7 +720,7 @@ export async function POST(request: Request) {
                         console.error(`⚠️ Replicate failed, trying Pollinations...`);
                     }
 
-                    // 3. FINAL FALLBACK: POLLINATIONS
+                    // 4. FINAL FALLBACK: POLLINATIONS
                     const cleanPrompt = fullPrompt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s]/gi, '').substring(0, 100).trim().replace(/\s+/g, '_');
                     const seed = Math.floor(Math.random() * 1000000);
                     const rawPollUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
@@ -720,44 +732,45 @@ export async function POST(request: Request) {
             }
 
             data.ads = processedAds;
+        }
 
-            // DEDUCT CREDIT ONLY AFTER SUCCESSFUL GENERATION
-            if (!isAdmin) {
-                remainingCredits = credits - 1;
-                try {
-                    if (typeof clerkClient !== 'undefined' && clerkClient.users && clerkUser) {
-                        await clerkClient.users.updateUserMetadata(userId, {
-                            publicMetadata: {
-                                ...clerkUser.publicMetadata,
-                                credits: remainingCredits
-                            }
-                        });
-                    }
-                } catch (updateError) {
-                    console.error("⚠️ Fallo al actualizar créditos en Clerk, ignorando para no romper la generación:", updateError);
+        // DEDUCT CREDIT ONLY AFTER SUCCESSFUL GENERATION
+        if (!isAdmin) {
+            remainingCredits = credits - 1;
+            try {
+                if (typeof clerkClient !== 'undefined' && clerkClient.users && clerkUser) {
+                    await clerkClient.users.updateUserMetadata(userId, {
+                        publicMetadata: {
+                            ...clerkUser.publicMetadata,
+                            credits: remainingCredits
+                        }
+                    });
                 }
+            } catch (updateError) {
+                console.error("⚠️ Fallo al actualizar créditos en Clerk, ignorando para no romper la generación:", updateError);
             }
         }
+    }
 
         // Ensure scripts are not undefined if n8n failed to return them
         if (!data.scripts || !Array.isArray(data.scripts) || data.scripts.length === 0) {
-            data.scripts = await generateGroqScripts(scrapedTitle, scrapedDesc, language);
-        }
-
-
-        return NextResponse.json({
-            ...data,
-            product_image: scrapedImage,
-            product_title: scrapedTitle || data.product_title,
-            _mode: data._mode || "hybrid_ai",
-            credits: remainingCredits,
-            VERSION_MARKER: "PROXY_V2" // For browser verification
-        });
-
-    } catch (error: any) {
-        console.error('CRITICAL ERROR:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        data.scripts = await generateGroqScripts(scrapedTitle, scrapedDesc, language);
     }
+
+
+    return NextResponse.json({
+        ...data,
+        product_image: scrapedImage,
+        product_title: scrapedTitle || data.product_title,
+        _mode: data._mode || "hybrid_ai",
+        credits: remainingCredits,
+        VERSION_MARKER: "PROXY_V2" // For browser verification
+    });
+
+} catch (error: any) {
+    console.error('CRITICAL ERROR:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+}
 }
 
 
