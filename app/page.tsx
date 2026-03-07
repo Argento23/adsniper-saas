@@ -45,7 +45,7 @@ export default function Home() {
           </h1>
 
           <p className="text-xl text-slate-400 max-w-2xl mx-auto mb-12 leading-relaxed animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
-            Genera anuncios virales, guiones de TikTok y análisis de competencia en segundos.
+            Genera anuncios virales, guiones de TikTok y análisis de competencia en segundos. Disponible en <strong className="text-white">Español, English & Deutsch</strong>.
             El "Cerebro Creativo" que tu marca necesita para escalar en 2026.
           </p>
 
@@ -153,7 +153,7 @@ export default function Home() {
             <p className="text-slate-400 text-lg">Choose the plan that fits your growth stage.</p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
 
             {/* Free Tier */}
             <div className="p-8 rounded-3xl bg-slate-900/30 border border-white/5 flex flex-col">
@@ -186,8 +186,31 @@ export default function Home() {
                 <a href="https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=068cba02015840e3b78121a6a1c6559f" target="_blank" rel="noopener noreferrer" className="block w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:brightness-110 text-white text-center font-bold transition-all shadow-lg shadow-emerald-500/20">
                   Suscribirse con MercadoPago
                 </a>
-                <a href="https://www.paypal.com/ncp/payment/VJZDENGAEHZJJ" target="_blank" rel="noopener noreferrer" className="block w-full py-2.5 rounded-xl bg-[#0070BA]/15 border border-[#0070BA]/30 text-[#0070BA] text-sm font-bold text-center hover:bg-[#0070BA]/25 transition-all">
+                <a href="https://www.paypal.com/ncp/payment/TX7KQ53SNHCHC" target="_blank" rel="noopener noreferrer" className="block w-full py-2.5 rounded-xl bg-[#0070BA]/15 border border-[#0070BA]/30 text-[#0070BA] text-sm font-bold text-center hover:bg-[#0070BA]/25 transition-all">
                   Pay with PayPal ($29/mo)
+                </a>
+              </div>
+            </div>
+
+            {/* Studio Pro Tier */}
+            <div className="p-8 rounded-3xl bg-slate-900 border border-purple-500/30 relative flex flex-col group hover:border-purple-500/60 transition-colors">
+              <div className="absolute inset-0 bg-gradient-to-b from-purple-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="absolute top-0 right-8 -translate-y-1/2 bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-lg shadow-purple-900/50 flex items-center gap-1">
+                <FaRobot /> Premium AI
+              </div>
+              <h3 className="text-xl font-bold text-purple-400 mb-2">Studio Pro</h3>
+              <div className="text-4xl font-bold mb-1">$49<span className="text-lg text-slate-500 font-normal">/mo</span></div>
+              <p className="text-xs text-slate-500 mb-6">Or $49.000 ARS</p>
+
+              <ul className="space-y-4 mb-8 flex-1 text-slate-200 text-sm relative z-10">
+                <li className="flex items-center gap-2"><FaCheckCircle className="text-purple-500" /> Everything in Pro</li>
+                <li className="flex items-center gap-2"><FaCheckCircle className="text-purple-500" /> <strong>100 Studio Credits/mo</strong></li>
+                <li className="flex items-center gap-2"><FaCheckCircle className="text-purple-500" /> 8K Product Inpainting</li>
+                <li className="flex items-center gap-2"><FaCheckCircle className="text-purple-500" /> Advanced Prompt Engineering</li>
+              </ul>
+              <div className="space-y-3 relative z-10">
+                <a href="#contact" className="block w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 text-white text-center font-bold transition-all shadow-lg shadow-purple-900/50">
+                  Upgrade to Studio
                 </a>
               </div>
             </div>
@@ -218,13 +241,14 @@ export default function Home() {
             <span className="font-bold">AdSíntesis SaaS</span>
           </div>
           <div className="flex gap-6 text-sm text-slate-500">
-            <Link href="/terms" className="hover:text-white transition-colors">TÃ©rminos y Condiciones</Link>
-            <Link href="/privacy" className="hover:text-white transition-colors">PolÃ­tica de Privacidad</Link>
+            <Link href="/terms" className="hover:text-white transition-colors">Términos y Condiciones</Link>
+            <Link href="/privacy" className="hover:text-white transition-colors">Política de Privacidad</Link>
           </div>
-          <p className="text-slate-600 text-sm">Â© 2026 AdSíntesis. Powered by GenerArise.</p>
+          <p className="text-slate-600 text-sm">© 2026 AdSíntesis. Powered by GenerArise.</p>
         </div>
       </footer>
     </div>
   );
 }
+
 
