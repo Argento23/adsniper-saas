@@ -40,7 +40,7 @@ export default function UpgradeModal({ isOpen, onClose, mpSubscriptionLink, ppLi
                 </div>
 
                 {/* Pricing Grid */}
-                <div className="grid md:grid-cols-3 gap-4 md:gap-5 max-w-5xl mx-auto">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 max-w-6xl mx-auto px-2">
 
                     {/* STARTER - Free */}
                     <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-5 flex flex-col">
@@ -200,5 +200,6 @@ export default function UpgradeModal({ isOpen, onClose, mpSubscriptionLink, ppLi
         </div>
     );
 }
+
 
 
