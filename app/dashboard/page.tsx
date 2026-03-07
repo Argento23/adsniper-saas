@@ -644,10 +644,15 @@ export default function Dashboard() {
                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${plan === 'free' ? 'bg-slate-800 text-slate-400' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
                                     PLAN {plan}
                                 </span>
+                                {plan === 'Infinity' && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center gap-1 animate-pulse">
+                                        <FaCrown className="w-2 h-2" /> ADMIN ACCESS
+                                    </span>
+                                )}
                                 {credits !== null && (
                                     <span className="text-[10px] text-slate-500 font-medium">
                                         <FaBolt className="inline w-2 h-2 mr-1 text-yellow-500" />
-                                        {credits} Créditos
+                                        {plan === 'Infinity' ? 'Unlimited' : `${credits} Créditos`}
                                     </span>
                                 )}
                             </div>
@@ -1047,4 +1052,5 @@ export default function Dashboard() {
         </div>
     );
 }
+
 
