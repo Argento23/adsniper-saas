@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaStar, FaLayerGroup, FaBolt, FaFire, FaSpinner, FaArrowRight, FaExternalLinkAlt, FaHeart, FaComments, FaPaperPlane, FaBookmark, FaRegCopy, FaCheck, FaGlobe, FaImage, FaCog, FaVideo, FaPen, FaMagic, FaCloudUploadAlt, FaTrash } from 'react-icons/fa';
+import { FaStar, FaLayerGroup, FaBolt, FaFire, FaSpinner, FaArrowRight, FaExternalLinkAlt, FaHeart, FaComments, FaPaperPlane, FaBookmark, FaRegCopy, FaCheck, FaGlobe, FaImage, FaCog, FaVideo, FaPen, FaMagic, FaCloudUploadAlt, FaTrash, FaCrown } from 'react-icons/fa';
 import { UserButton, useUser } from "@clerk/nextjs";
 import BrandSetup from './components/BrandSetup';
 import VideoScriptViewer from './components/VideoScriptViewer';
@@ -346,8 +346,8 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
                                 disabled={videoDisabled}
                                 title={isAdminUser ? 'Admin: video ilimitado' : `${videosRemaining} videos restantes`}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${videoDisabled
-                                        ? 'bg-slate-700 text-slate-500 cursor-not-allowed opacity-50'
-                                        : 'bg-purple-700 text-white hover:bg-purple-600 shadow-lg shadow-purple-900/20'
+                                    ? 'bg-slate-700 text-slate-500 cursor-not-allowed opacity-50'
+                                    : 'bg-purple-700 text-white hover:bg-purple-600 shadow-lg shadow-purple-900/20'
                                     }`}
                             >
                                 {generatingVideo ? <FaSpinner className="animate-spin" /> : <FaVideo />}
@@ -1092,4 +1092,5 @@ export default function Dashboard() {
         </div>
     );
 }
+
 
