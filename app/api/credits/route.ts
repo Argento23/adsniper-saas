@@ -12,6 +12,8 @@ const VIDEO_LIMITS: Record<string, number> = {
     lifetime: 10
 };
 
+const ADMIN_EMAIL = 'gustavodornhofer@gmail.com';
+
 export async function GET() {
     try {
         const { userId } = await auth();
@@ -19,7 +21,9 @@ export async function GET() {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const user = await clerkClient.users.getUser(userId);
+        // Clerk v5 beta: clerkClient is a function, must be called first
+        const clerk = await clerkClient();
+        const user = await clerk.users.getUser(userId);
         const metadata = user.publicMetadata as any;
 
         // Simple credit system: starts at 3, deducted per generation
@@ -38,12 +42,11 @@ export async function GET() {
         const videosUsed = shouldResetVideos ? 0 : (metadata.videosUsedThisMonth || 0);
         const videosRemaining = Math.max(0, videoLimit - videosUsed);
 
-        // Admin check (Robust email matching across all linked emails)
+        // Admin check
         const emails = user.emailAddresses.map(e => e.emailAddress.toLowerCase().trim());
-        const adminEmail = 'gustavodornhofer@gmail.com';
-        const isAdmin = emails.includes(adminEmail);
+        const isAdmin = emails.includes(ADMIN_EMAIL);
 
-        console.log(`[Credits API] User Emails: ${emails.join(', ')} | Admin Target: ${adminEmail} | isAdmin: ${isAdmin}`);
+        console.log(`[Credits API] Emails: ${emails.join(', ')} | isAdmin: ${isAdmin}`);
 
         const premiumStudioCredits = typeof metadata.premiumStudioCredits === 'number' ? metadata.premiumStudioCredits : 0;
 
@@ -59,6 +62,6 @@ export async function GET() {
 
     } catch (error: any) {
         console.error('Credits API Error:', error);
-        return NextResponse.json({ error: 'Error fetching credits' }, { status: 500 });
+        return NextResponse.json({ error: 'Error fetching credits', details: error.message }, { status: 500 });
     }
 }
