@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { generateReplicateVideo } from '@/lib/replicate';
 
+export const dynamic = 'force-dynamic';
+
 // Video limits per plan (monthly)
 const VIDEO_LIMITS: Record<string, number> = {
     free: 0,
@@ -10,6 +12,8 @@ const VIDEO_LIMITS: Record<string, number> = {
     enterprise: 10,
     lifetime: 10
 };
+
+const ADMIN_EMAIL = 'gustavodornhofer@gmail.com';
 
 export async function POST(request: Request) {
     try {
@@ -25,12 +29,14 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Image URL is required' }, { status: 400 });
         }
 
-        const user = await clerkClient.users.getUser(userId);
+        // Clerk v5: clerkClient must be called as a function
+        const clerk = await clerkClient();
+        const user = await clerk.users.getUser(userId);
         const metadata = user.publicMetadata as any;
         const plan = metadata.plan || 'free';
 
         // Admin bypass
-        const isAdmin = user.emailAddresses.some(e => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com');
+        const isAdmin = user.emailAddresses.some(e => e.emailAddress.toLowerCase().trim() === ADMIN_EMAIL);
 
         // Get video limit for plan
         const videoLimit = VIDEO_LIMITS[plan] || 0;
@@ -60,13 +66,13 @@ export async function POST(request: Request) {
             }, { status: 403 });
         }
 
-        console.log(`🎬 API: Generating video for user ${userId} (${plan} plan, ${videosRemaining} remaining)`);
+        console.log(`🎬 API: Generating video for user ${userId} (${plan} plan, admin: ${isAdmin})`);
 
         const videoUrl = await generateReplicateVideo(imageUrl);
 
-        // Track usage (increment videos used)
+        // Track usage (admin skips tracking)
         if (!isAdmin) {
-            await clerkClient.users.updateUserMetadata(userId, {
+            await clerk.users.updateUserMetadata(userId, {
                 publicMetadata: {
                     ...metadata,
                     videosUsedThisMonth: videosUsed + 1,
@@ -76,7 +82,7 @@ export async function POST(request: Request) {
             });
         }
 
-        const newRemaining = isAdmin ? 999 : videosRemaining - 1;
+        const newRemaining = isAdmin ? 9999 : videosRemaining - 1;
 
         return NextResponse.json({
             videoUrl,
