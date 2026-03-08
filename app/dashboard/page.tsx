@@ -94,8 +94,11 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
     }, [ad, productImage]);
 
     const handleGenerateVideo = async () => {
-        if (videosRemaining <= 0) {
-            alert("Has alcanzado tu límite de videos. Mejorá tu plan para generar más videos.");
+        // Admin Bypass for video generation
+        const isAdmin = user?.emailAddresses.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com');
+
+        if (videosRemaining <= 0 && !isAdmin) {
+            alert("Has alcanzado tu lÃ­mite de videos. MejorÃ¡ tu plan para generar mÃ¡s videos.");
             return;
         }
 
@@ -429,9 +432,11 @@ export default function Dashboard() {
 
     const [language, setLanguage] = useState('es');
     const [count, setCount] = useState(3);
-    const [applyLogo, setApplyLogo] = useState(true);
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<'ads' | 'scripts'>('ads');
+
+    // Admin Helper
+    const isLocalAdmin = user?.emailAddresses.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com') || plan === 'Infinity';
 
     // Data State
     const [ads, setAds] = useState<any[]>([]);
@@ -669,7 +674,24 @@ export default function Dashboard() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                        {credits === 0 && plan === 'free' && (
+                        {/* Publicar Ads Button */}
+                        <button
+                            onClick={() => {
+                                setView('generator');
+                                if (scripts.length > 0) setActiveTab('scripts');
+                                // Scroll to results if they exist
+                                if (ads.length > 0) {
+                                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                                } else {
+                                    alert("Genera una campaña primero para ver tus guiones de publicación.");
+                                }
+                            }}
+                            className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-lg hover:brightness-110 transition-all border border-purple-400/30"
+                        >
+                            <FaVideo className="w-3 h-3" /> 🚀 PUBLICAR ADS
+                        </button>
+
+                        {credits === 0 && plan === 'free' && !isLocalAdmin && (
                             <button
                                 onClick={() => setShowUpgrade(true)}
                                 className="hidden md:flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-lg hover:brightness-110 transition-all"
@@ -725,10 +747,7 @@ export default function Dashboard() {
                                         </button>
                                         <button
                                             onClick={() => {
-                                                const userEmails = user?.emailAddresses.map((e: any) => e.emailAddress.toLowerCase()) || [];
-                                                const isLocalAdmin = userEmails.includes('gustavodornhofer@gmail.com');
-
-                                                if (premiumCredits <= 0 && plan !== 'Infinity' && !isLocalAdmin) {
+                                                if (premiumCredits <= 0 && !isLocalAdmin) {
                                                     setShowUpgrade(true);
                                                 } else {
                                                     setInputMode('studio');
@@ -860,7 +879,7 @@ export default function Dashboard() {
                                         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 border-2 border-purple-500/20 rounded-xl p-4 bg-purple-900/5 relative overflow-hidden mt-4">
                                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-600 via-pink-500 to-indigo-600 opacity-50"></div>
 
-                                            {premiumCredits <= 0 && plan !== 'Infinity' && !(user?.emailAddresses.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com')) && (
+                                            {premiumCredits <= 0 && !isLocalAdmin && (
                                                 <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 text-center border border-purple-500/30 rounded-xl">
                                                     <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-full flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(168,85,247,0.4)]">
                                                         <FaStar className="w-8 h-8 text-white" />
@@ -1068,6 +1087,5 @@ export default function Dashboard() {
         </div>
     );
 }
-
 
 
