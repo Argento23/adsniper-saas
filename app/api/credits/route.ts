@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 
+export const dynamic = 'force-dynamic';
+
 // Video limits per plan (monthly)
 const VIDEO_LIMITS: Record<string, number> = {
     free: 0,
@@ -36,17 +38,22 @@ export async function GET() {
         const videosUsed = shouldResetVideos ? 0 : (metadata.videosUsedThisMonth || 0);
         const videosRemaining = Math.max(0, videoLimit - videosUsed);
 
-        // Admin check (Robust email matching)
-        const isAdmin = user.emailAddresses.some(e => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com');
+        // Admin check (Robust email matching across all linked emails)
+        const emails = user.emailAddresses.map(e => e.emailAddress.toLowerCase().trim());
+        const adminEmail = 'gustavodornhofer@gmail.com';
+        const isAdmin = emails.includes(adminEmail);
+
+        console.log(`[Credits API] User Emails: ${emails.join(', ')} | Admin Target: ${adminEmail} | isAdmin: ${isAdmin}`);
+
         const premiumStudioCredits = typeof metadata.premiumStudioCredits === 'number' ? metadata.premiumStudioCredits : 0;
 
         return NextResponse.json({
-            credits: isAdmin ? 999 : credits,
-            plan: isAdmin ? 'enterprise' : plan,
-            videoLimit: isAdmin ? 999 : videoLimit,
+            credits: isAdmin ? 9999 : credits,
+            plan: isAdmin ? 'Infinity' : plan,
+            videoLimit: isAdmin ? 9999 : videoLimit,
             videosUsed: isAdmin ? 0 : videosUsed,
-            videosRemaining: isAdmin ? 999 : videosRemaining,
-            premiumStudioCredits: isAdmin ? 999 : premiumStudioCredits,
+            videosRemaining: isAdmin ? 9999 : videosRemaining,
+            premiumStudioCredits: isAdmin ? 9999 : premiumStudioCredits,
             isAdmin
         });
 
