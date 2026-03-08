@@ -95,7 +95,7 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
 
     const handleGenerateVideo = async () => {
         // Admin Bypass for video generation
-        const isAdmin = user?.emailAddresses.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com');
+        const isAdmin = user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com');
 
         if (videosRemaining <= 0 && !isAdmin) {
             alert("Has alcanzado tu lÃ­mite de videos. MejorÃ¡ tu plan para generar mÃ¡s videos.");
@@ -436,7 +436,7 @@ export default function Dashboard() {
     const [activeTab, setActiveTab] = useState<'ads' | 'scripts'>('ads');
 
     // Admin Helper
-    const isLocalAdmin = user?.emailAddresses.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com') || plan === 'Infinity';
+    const isLocalAdmin = user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com') || plan === 'Infinity';
 
     // Data State
     const [ads, setAds] = useState<any[]>([]);
@@ -478,7 +478,7 @@ export default function Dashboard() {
             const data = await res.json();
             console.log('📊 Dashboard: Credits Data Received:', data);
             // Check if user is admin locally as well
-            const userEmails = user?.emailAddresses.map((e: any) => e.emailAddress.toLowerCase()) || [];
+            const userEmails = user?.emailAddresses?.map((e: any) => e.emailAddress.toLowerCase()) || [];
             const isLocalAdmin = userEmails.includes('gustavodornhofer@gmail.com');
 
             if (data.credits !== undefined) {
@@ -490,7 +490,7 @@ export default function Dashboard() {
                 setVideoLimit(isLocalAdmin ? 9999 : (data.videoLimit || 0));
             }
             if (data.premiumStudioCredits !== undefined) {
-                const userEmails = user?.emailAddresses.map((e: any) => e.emailAddress.toLowerCase()) || [];
+                const userEmails = user?.emailAddresses?.map((e: any) => e.emailAddress.toLowerCase()) || [];
                 const isLocalAdmin = userEmails.includes('gustavodornhofer@gmail.com');
                 setPremiumCredits(isLocalAdmin ? 9999 : data.premiumStudioCredits);
             }
