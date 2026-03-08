@@ -756,7 +756,7 @@ export default function Dashboard() {
                                             className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all relative overflow-hidden ${inputMode === 'studio' ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-900/50' : 'text-purple-300/60 hover:text-purple-300'}`}
                                         >
                                             <FaFire className="w-3 h-3 text-orange-400" /> Studio Pro
-                                            {(plan === 'Infinity' || (user?.emailAddresses.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com'))) ? (
+                                            {(plan === 'Infinity' || (user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com'))) ? (
                                                 <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-bl-lg">
                                                     Admin
                                                 </span>
@@ -1088,5 +1088,6 @@ export default function Dashboard() {
         </div>
     );
 }
+
 
 
