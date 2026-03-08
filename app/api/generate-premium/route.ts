@@ -1,115 +1,29 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 
-// 1. DEDUCT PREMIUM CREDIT LOGIC
-async function consumePremiumCredit(userId: string) {
-    const user = await clerkClient.users.getUser(userId);
+export const dynamic = 'force-dynamic';
+
+const ADMIN_EMAIL = 'gustavodornhofer@gmail.com';
+
+async function consumePremiumCredit(userId: string): Promise<{ canProceed: boolean; isAdmin: boolean; meta: any; clerk: any }> {
+    // Clerk v5: clerkClient must be called as a function
+    const clerk = await clerkClient();
+    const user = await clerk.users.getUser(userId);
     const meta = user.publicMetadata as any;
-
-    // Si es Lifetime (Admin), pasa gratis
-    if (meta.plan === 'lifetime') return true;
-
-    // Verificar si tiene créditos pro
-    let premiumCredits = meta.premiumStudioCredits !== undefined ? Number(meta.premiumStudioCredits) : 0;
-
-    // Si no tiene, bloquear rechazo
-    if (premiumCredits <= 0) {
-        return false;
-    }
-
-    // Descontar
-    await clerkClient.users.updateUserMetadata(userId, {
-        publicMetadata: {
-            ...meta,
-            premiumStudioCredits: premiumCredits - 1
-        }
+    const emails = user.emailAddresses.map(e => e.emailAddress.toLowerCase().trim());
+    const isAdmin = emails.includes(ADMIN_EMAIL);
+    console.log(`[Premium API] Emails: ${emails.join(', ')}, isAdmin: ${isAdmin}`);
+    if (meta.plan === 'Infinity' || isAdmin) return { canProceed: true, isAdmin, meta, clerk };
+    const credits = meta.premiumStudioCredits !== undefined ? Number(meta.premiumStudioCredits) : 0;
+    if (credits <= 0) return { canProceed: false, isAdmin, meta, clerk };
+    await clerk.users.updateUserMetadata(userId, {
+        publicMetadata: { ...meta, premiumStudioCredits: credits - 1 }
     });
-
-    return true;
+    return { canProceed: true, isAdmin, meta, clerk };
 }
 
-// 2. REPLICATE BACKGROUND REMOVAL (Step 1)
-async function removeBackground(base64Image: string): Promise<string | null> {
-    const token = process.env.REPLICATE_API_TOKEN;
-    if (!token) throw new Error("Missing Replicate Token");
-
-    try {
-        const response = await fetch("https://api.replicate.com/v1/models/cjwbw/rembg/predictions", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ input: { image: base64Image } })
-        });
-
-        let prediction = await response.json();
-        const getUrl = prediction.urls.get;
-
-        let attempts = 0;
-        while (prediction.status !== "succeeded" && prediction.status !== "failed" && attempts < 20) {
-            await new Promise(r => setTimeout(r, 2000));
-            attempts++;
-            const poll = await fetch(getUrl, { headers: { Authorization: `Bearer ${token}` } });
-            prediction = await poll.json();
-        }
-
-        if (prediction.status === "succeeded") return prediction.output;
-        return null;
-    } catch (e) {
-        console.error("BG Removal Failed", e);
-        return null;
-    }
-}
-
-// 3. REPLICATE INPAINTING (Step 2)
-async function generateProductEnvironment(transparentImageUrl: string, prompt: string): Promise<string | null> {
-    const token = process.env.REPLICATE_API_TOKEN;
-
-    try {
-        // Using an established model for outpainting/background generation
-        // Alternatively we can use 'tencent/background-replacement' which handles both steps natively
-        // Since we want standard Inpainting, let's use a specialized model for Product Backgrounds.
-
-        const response = await fetch("https://api.replicate.com/v1/models/logerzhu/ad-inpaint/predictions", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-                input: {
-                    image_path: transparentImageUrl,
-                    prompt: prompt + ", professional studio lighting, 8k resolution, photorealistic",
-                    negative_prompt: "bad quality, blurry, distorted product",
-                    image_num: 1,
-                    product_size: "0.5"
-                }
-            })
-        });
-
-        let prediction = await response.json();
-        // If the model is not public or requires a specific version, this will fail.
-        // Let's use a more robust generic model if needed, but we'll try ad-inpaint first.
-        const getUrl = prediction.urls?.get;
-        if (!getUrl) return null;
-
-        let attempts = 0;
-        while (prediction.status !== "succeeded" && prediction.status !== "failed" && attempts < 25) {
-            await new Promise(r => setTimeout(r, 2000));
-            attempts++;
-            const poll = await fetch(getUrl, { headers: { Authorization: `Bearer ${token}` } });
-            prediction = await poll.json();
-        }
-
-        if (prediction.status === "succeeded") {
-            // output is usually an array of URLs or a single URL depending on model
-            return Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
-        }
-        console.error("Inpainting Failed", prediction);
-        return null;
-    } catch (e) {
-        console.error("Inpainting API Failed", e);
-        return null;
-    }
-}
-
-// GROQ LLM FOR PROMPT ENHANCEMENT
-async function enhancePrompt(userScene: string) {
+// GROQ PROMPT ENHANCER — Preserves people + scene context
+async function enhancePrompt(userScene: string): Promise<string> {
     const apiKey = process.env.GROQ_API_KEY;
     try {
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -119,7 +33,15 @@ async function enhancePrompt(userScene: string) {
                 model: "llama-3.3-70b-versatile",
                 messages: [{
                     role: "system",
-                    content: "You are an expert AI photographer. The user will give you a basic scene for a product. You must describe a highly detailed, photorealistic 8k environment for the product to be placed in. English only. Max 30 words. No intro."
+                    content: `You are a product photography art director. Generate a short detailed English image generation prompt for AI.
+The image shows a real product being used/held in a scene.
+RULES:
+- Preserve people mentioned (smiling girl, chef, athlete, child) — they directly interact with the product
+- The product should be CLEARLY VISIBLE in the person's hands or the scene
+- Keep the setting and mood the user described
+- Add: photorealistic, 8k, professional advertising photography, sharp focus on product
+- Max 40 words, English only, no intro text
+EXAMPLE: "niña sonriente sostiene paquete galletitas en cocina" → "smiling young girl holding a cookie snack package in a bright modern kitchen, warm natural light, sharp product detail, photorealistic 8k advertising photography"`
                 }, {
                     role: "user",
                     content: userScene
@@ -127,57 +49,102 @@ async function enhancePrompt(userScene: string) {
             })
         });
         const data = await response.json();
-        return data.choices[0].message.content.trim();
-    } catch (e) {
-        return userScene + " breathtaking 8k render, professional photography";
+        return data.choices[0].message.content.trim().replace(/^\"|\"$/g, '');
+    } catch {
+        return `${userScene}, product clearly visible, photorealistic 8k professional advertising photography`;
+    }
+}
+
+// FAL.ai FLUX Redux — Image Conditioning
+async function falFluxRedux(
+    base64Image: string,
+    prompt: string
+): Promise<{ success: boolean; url?: string; error?: string }> {
+    const apiKey = process.env.FAL_KEY;
+    if (!apiKey) return { success: false, error: "Missing FAL_KEY — get $2 free at fal.ai" };
+
+    try {
+        const response = await fetch("https://fal.run/fal-ai/flux-pro/v1.1-ultra-redux", {
+            method: "POST",
+            headers: {
+                "Authorization": `Key ${apiKey}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                image_url: base64Image,
+                prompt: prompt,
+                image_prompt_strength: 0.12,
+                num_images: 1,
+                output_format: "png",
+                safety_tolerance: "5"
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("FAL FLUX ERROR:", response.status, errorText);
+            return { success: false, error: `FAL Error ${response.status}: ${errorText}` };
+        }
+
+        const data = await response.json();
+        const imageUrl = data.images?.[0]?.url;
+        if (!imageUrl) {
+            console.error("FAL no returned image URL:", JSON.stringify(data));
+            return { success: false, error: "FAL no devolvió imagen" };
+        }
+
+        const imgResponse = await fetch(imageUrl);
+        const imgBuffer = await imgResponse.arrayBuffer();
+        const base64Result = Buffer.from(imgBuffer).toString('base64');
+        const dataUri = `data:image/png;base64,${base64Result}`;
+
+        return { success: true, url: dataUri };
+    } catch (e: any) {
+        console.error("FAL Exception:", e);
+        return { success: false, error: e.message };
     }
 }
 
 export async function POST(req: Request) {
     try {
-        const { userId } = auth();
+        // Clerk v5: auth() must be awaited
+        const { userId } = await auth();
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const body = await req.json();
         const { image_base64, scene_prompt } = body;
 
-        if (!image_base64) return NextResponse.json({ error: 'Falta la imagen base' }, { status: 400 });
+        if (!image_base64) return NextResponse.json({ error: 'Falta la imagen del producto' }, { status: 400 });
 
-        // 1. Verify and Consume Credit
-        const canProceed = await consumePremiumCredit(userId);
-        if (!canProceed) {
-            return NextResponse.json({ error: 'NO_PREMIUM_CREDITS' }, { status: 403 });
-        }
+        // Credit check
+        const { canProceed, isAdmin, meta, clerk } = await consumePremiumCredit(userId);
+        if (!canProceed) return NextResponse.json({ error: 'NO_PREMIUM_CREDITS' }, { status: 403 });
 
-        // 2. Enhance the Prompt via Llama 3
-        const enhancedPrompt = await enhancePrompt(scene_prompt || "Studio white pedestal");
+        // Enhance prompt
+        const enhancedPrompt = await enhancePrompt(scene_prompt || "Product on elegant studio pedestal, professional lighting");
 
-        // 3. Remove Background
-        const noBgUrl = await removeBackground(image_base64);
-        if (!noBgUrl) {
-            // Refund credit if processing fails
-            const user = await clerkClient.users.getUser(userId);
-            const meta = user.publicMetadata as any;
-            await clerkClient.users.updateUserMetadata(userId, {
-                publicMetadata: { ...meta, premiumStudioCredits: (meta.premiumStudioCredits || 0) + 1 }
-            });
-            return NextResponse.json({ error: 'Fallo al remover fondo' }, { status: 500 });
-        }
+        // FLUX Redux — generate scene with product as image reference
+        const result = await falFluxRedux(image_base64, enhancedPrompt);
 
-        // 4. Inpaint the Product
-        const finalImage = await generateProductEnvironment(noBgUrl, enhancedPrompt);
-        if (!finalImage) {
-            return NextResponse.json({ error: 'Fallo al componer el escenario' }, { status: 500 });
+        if (!result.success) {
+            // Refund credit on failure
+            if (!isAdmin && meta.plan !== 'lifetime') {
+                await clerk.users.updateUserMetadata(userId, {
+                    publicMetadata: { ...meta, premiumStudioCredits: (meta.premiumStudioCredits || 0) + 1 }
+                });
+            }
+            return NextResponse.json({ error: `Studio AI falló: ${result.error}` }, { status: 500 });
         }
 
         return NextResponse.json({
             success: true,
-            original_extracted: noBgUrl,
-            final_composition: finalImage,
+            final_composition: result.url,
+            original_extracted: image_base64,
             prompt_used: enhancedPrompt
         });
 
     } catch (error: any) {
+        console.error("Studio API Error:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
