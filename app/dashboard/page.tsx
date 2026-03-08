@@ -78,7 +78,7 @@ const MOCK_ADS = [
 const FALLBACK_IMAGE = "https://placehold.co/800x800/101827/ffffff.png?text=Ad+Image"; // Simple, reliable placeholder
 
 // --- AD CARD COMPONENT (Fixes Shared State Bug) ---
-const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenerated, applyLogo }: { ad: any, index: number, brand: any, productImage: string, videosRemaining: number, onVideoGenerated?: (remaining: number) => void, applyLogo: boolean }) => {
+const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenerated, applyLogo, user }: { ad: any, index: number, brand: any, productImage: string, videosRemaining: number, onVideoGenerated?: (remaining: number) => void, applyLogo: boolean, user: any }) => {
     const [imgSrc, setImgSrc] = useState(ad.generated_image_url || productImage || FALLBACK_IMAGE);
     const [videoUrl, setVideoUrl] = useState<string | null>(null);
     const [generatingVideo, setGeneratingVideo] = useState(false);
@@ -1059,6 +1059,7 @@ export default function Dashboard() {
                                         videosRemaining={videosRemaining}
                                         onVideoGenerated={(remaining: number) => setVideosRemaining(remaining)}
                                         applyLogo={applyLogo}
+                                        user={user}
                                     />
                                 ))}
                             </div>
