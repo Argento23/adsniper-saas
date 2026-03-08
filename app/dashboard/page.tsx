@@ -337,21 +337,24 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
                         {copied ? <FaCheck className="w-4 h-4" /> : <FaRegCopy className="w-4 h-4" />}
                         {copied ? 'Copiado!' : 'Copiar Texto'}
                     </button>
-                    {!videoUrl && (
-                        <button
-                            onClick={handleGenerateVideo}
-                            disabled={generatingVideo || hasError || imgSrc.includes('placehold.co') || videosRemaining <= 0}
-                            title={videosRemaining <= 0 ? 'Mejorá tu plan para generar videos' : `${videosRemaining} videos restantes este mes`}
-                        >
-                            {generatingVideo ? <FaSpinner className="animate-spin" /> : <FaVideo />}
-                            {videosRemaining <= 0
-                                ? 'ðŸ”’ Video Pro'
-                                : generatingVideo
-                                    ? 'Generando...'
-                                    : `Animar Ad (${videosRemaining})`
-                            }
-                        </button>
-                    )}
+                    {!videoUrl && (() => {
+                        const isAdminUser = user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com');
+                        const videoDisabled = generatingVideo || hasError || imgSrc.includes('placehold.co') || (videosRemaining <= 0 && !isAdminUser);
+                        return (
+                            <button
+                                onClick={handleGenerateVideo}
+                                disabled={videoDisabled}
+                                title={isAdminUser ? 'Admin: video ilimitado' : `${videosRemaining} videos restantes`}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${videoDisabled
+                                        ? 'bg-slate-700 text-slate-500 cursor-not-allowed opacity-50'
+                                        : 'bg-purple-700 text-white hover:bg-purple-600 shadow-lg shadow-purple-900/20'
+                                    }`}
+                            >
+                                {generatingVideo ? <FaSpinner className="animate-spin" /> : <FaVideo />}
+                                {generatingVideo ? 'Generando...' : 'Animar Ad 🎬'}
+                            </button>
+                        );
+                    })()}
                 </div>
                 {videoUrl && (
                     <div className="flex flex-col items-center gap-2">
@@ -1089,6 +1092,4 @@ export default function Dashboard() {
         </div>
     );
 }
-
-
 
