@@ -434,6 +434,7 @@ export default function Dashboard() {
     const [count, setCount] = useState(3);
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<'ads' | 'scripts'>('ads');
+    const [applyLogo, setApplyLogo] = useState(true);
 
     // Admin Helper
     const isLocalAdmin = user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com') || plan === 'Infinity';
