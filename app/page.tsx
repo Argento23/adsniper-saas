@@ -54,10 +54,10 @@ export default function Home() {
               <FaRobot className="w-5 h-5" />
               Try AdSíntesis Free
             </Link>
-            <button className="w-full md:w-auto px-8 py-4 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-lg font-bold rounded-full transition-all flex items-center justify-center gap-2 backdrop-blur-sm">
+            <a href="https://generarise.space/assets/Ads%C3%ADntesis.mp4" target="_blank" rel="noopener noreferrer" className="w-full md:w-auto px-8 py-4 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-lg font-bold rounded-full transition-all flex items-center justify-center gap-2 backdrop-blur-sm">
               <FaPlay className="w-5 h-5" />
               Watch Demo
-            </button>
+            </a>
           </div>
 
           {/* Dashboard Preview */}
@@ -253,6 +253,4 @@ export default function Home() {
     </div>
   );
 }
-
-
 
