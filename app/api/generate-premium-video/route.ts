@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
-import { generateNativeKlingVideo } from '@/lib/kling';
+import { generateFalKlingVideo } from '@/lib/fal';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
 
         console.log(`🎬 Premium Video: Generating for ${userId} with prompt: ${enhancedPrompt}`);
 
-        // Generate Native Kling Video
+        // Generate Kling Video via Fal.ai
         let videoUrl: string;
 
         // ADMIN MOCK MODE: Bypass real API calls for testing
@@ -88,7 +88,7 @@ export async function POST(req: Request) {
             console.log(`[Premium Video API v21] MOCK MODE ACTIVE - Returning placeholder video`);
             videoUrl = "https://cdn.pixabay.com/video/2016/10/11/5826-185790892_tiny.mp4"; // Generic high-end video placeholder
         } else {
-            videoUrl = await generateNativeKlingVideo(imageUrl, enhancedPrompt, aspectRatio);
+            videoUrl = await generateFalKlingVideo(imageUrl, enhancedPrompt, aspectRatio as any);
         }
 
         return NextResponse.json({
