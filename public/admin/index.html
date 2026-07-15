@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin · GenerArise Central</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #08080f;
+            --bg2: #0d0d1a;
+            --border: rgba(255, 255, 255, 0.07);
+            --text: #f1f1f5;
+            --purple: #7c3aed;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+        }
+
+        /* Auth Screen */
+        #auth {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle, #7c3aed15, transparent);
+        }
+
+        .card {
+            background: var(--bg2);
+            padding: 40px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            text-align: center;
+            width: 320px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 20px 0;
+            background: #13132a;
+            border: 1px solid #ffffff1a;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            letter-spacing: 4px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: var(--purple);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        /* Panel */
+        #panel {
+            display: none;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .kpi {
+            background: var(--bg2);
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid var(--border);
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+            background: #10b98120;
+            color: #10b981;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th {
+            text-align: left;
+            color: #64647a;
+            font-size: 11px;
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #ffffff05;
+            font-size: 13px;
+        }
+
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: #64647a;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="auth">
+        <div class="card">
+            <div style="font-size: 40px">🏢</div>
+            <h2 style="margin: 10px 0">GenerArise</h2>
+            <input type="password" id="pass" placeholder="••••" onkeydown="if(event.key==='Enter')login()">
+            <button onclick="login()">Entrar</button>
+        </div>
+    </div>
+    <div id="panel">
+        <div class="header">
+            <div>
+                <h1 style="margin:0; font-size:20px">Control Central</h1><span
+                    style="font-size:11px; color:#64647a">Neurova Ecosystem</span>
+            </div>
+            <button onclick="location.reload()" style="width:auto; padding:8px 15px">Cerrar Sesión</button>
+        </div>
+        <div class="grid">
+            <div class="kpi">
+                <div style="font-size:11px; color:#64647a; margin-bottom:5px">Suscripciones Activas</div>
+                <div id="kpi-clients" style="font-size:24px; font-weight:bold">—</div>
+            </div>
+            <div class="kpi">
+                <div style="font-size:11px; color:#64647a; margin-bottom:5px">MRR (Facturación Mes)</div>
+                <div id="kpi-mrr" style="font-size:24px; font-weight:bold; color:#10b981">—</div>
+            </div>
+            <div class="kpi">
+                <div style="font-size:11px; color:#64647a; margin-bottom:5px">Alertas de Vencimiento</div>
+                <div id="kpi-alerts" style="font-size:24px; font-weight:bold; color:#ef4444">0</div>
+            </div>
+        </div>
+
+        <!-- TABS -->
+        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button onclick="showSection('leads')" id="btn-leads" class="btn-tab active"
+                style="width:auto; padding:8px 15px">👥 Leads</button>
+            <button onclick="showSection('tools')" id="btn-tools" class="btn-tab"
+                style="width:auto; padding:8px 15px; background:transparent; border:1px solid var(--border)">🔧
+                Herramientas</button>
+        </div>
+
+        <div id="section-leads">
+            <div style="background:var(--bg2); border-radius:15px; border:1px solid var(--border); padding:20px">
+                <h3 style="margin-top:0">Últimos Clientes / Leads</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Email</th>
+                            <th>Estado</th>
+                            <th>Desde</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody"></tbody>
+                </table>
+                <div id="empty" class="empty">Conectando con Supabase...</div>
+            </div>
+        </div>
+
+        <div id="section-tools" style="display:none">
+            <div class="grid" id="tools-grid"></div>
+        </div>
+    </div>
+
+    <style>
+        .btn-tab.active {
+            background: var(--purple) !important;
+            color: white !important;
+        }
+
+        .tool-card {
+            background: var(--bg2);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .tool-name {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .tool-info {
+            font-size: 11px;
+            color: #64647a;
+        }
+
+        .alert-urgent {
+            border-color: #ef4444 !important;
+            background: #ef444405;
+        }
+    </style>
+
+    <script>
+        const PWD = 'generarise2025';
+        const URL = 'https://gjfsylpbxxfvponhgmhz.supabase.co';
+        const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqZnN5bHBieHhmdnBvbmhnbWh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTUwNTgsImV4cCI6MjA4ODMzMTA1OH0.cXkLvik7fHeBX1ecuw0v5RAu1UdHNghQHTmSB4QW3Dw';
+        let sb = null;
+
+        function login() {
+            if (document.getElementById('pass').value === PWD) {
+                document.getElementById('auth').style.display = 'none';
+                document.getElementById('panel').style.display = 'block';
+                init();
+            } else alert('Contraseña incorrecta');
+        }
+
+        function showSection(name) {
+            document.getElementById('section-leads').style.display = name === 'leads' ? 'block' : 'none';
+            document.getElementById('section-tools').style.display = name === 'tools' ? 'block' : 'none';
+            document.getElementById('btn-leads').classList.toggle('active', name === 'leads');
+            document.getElementById('btn-tools').classList.toggle('active', name === 'tools');
+        }
+
+        async function init() {
+            sb = supabase.createClient(URL, KEY);
+
+            // FETCH DATA
+            let { data: rawClients } = await sb.from('agency_clients').select('*').order('created_at', { ascending: false });
+            let { data: services } = await sb.from('agency_services').select('*').filter('status', 'eq', 'active');
+            let { data: rawTools } = await sb.from('agency_tools').select('*').order('name');
+
+            // FRONTEND DEDUPLICATION (Safety measure)
+            const clients = Array.from(new Map((rawClients || []).map(item => [item.email || item.name, item])).values());
+            const tools = Array.from(new Map((rawTools || []).map(item => [item.name, item])).values());
+
+            // UPDATE UI
+            document.getElementById('empty').style.display = clients.length ? 'none' : 'block';
+            document.getElementById('kpi-clients').innerText = clients.length;
+
+            const mrr = (services || []).reduce((acc, s) => acc + (s.currency === 'ARS' ? s.amount / 1500 : s.amount), 0);
+            document.getElementById('kpi-mrr').innerText = "$" + mrr.toFixed(0) + " USD";
+
+            // RENDER LEADS
+            document.getElementById('tbody').innerHTML = clients.map(c => `
+                <tr>
+                    <td><b>${c.name}</b><br><small style="color:#64647a">${c.company || ''}</small></td>
+                    <td>${c.email || '—'}</td>
+                    <td><span class="badge">${c.status}</span></td>
+                    <td style="color:#64647a">${new Date(c.created_at).toLocaleDateString()}</td>
+                </tr>
+            `).join('');
+
+            // RENDER TOOLS & ALERTS
+            let alertsCount = 0;
+            const now = new Date();
+            document.getElementById('tools-grid').innerHTML = tools.map(t => {
+                let isUrgent = false;
+                if (t.end_date) {
+                    const diff = (new Date(t.end_date) - now) / (1000 * 60 * 60 * 24);
+                    if (diff <= 7) { isUrgent = true; alertsCount++; }
+                }
+                return `
+                    <div class="tool-card ${isUrgent ? 'alert-urgent' : ''}">
+                        <div class="tool-name">${t.name} ${isUrgent ? '⚠️' : ''}</div>
+                        <div class="tool-info">${t.category} · ${t.notes || ''}</div>
+                        <div style="margin-top:10px; font-size:11px">
+                            ${t.end_date ? `Vence: <b>${new Date(t.end_date).toLocaleDateString()}</b>` : 'Activo'}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('kpi-alerts').innerText = alertsCount;
+        }
+    </script>
+</body>
+
+</html>
