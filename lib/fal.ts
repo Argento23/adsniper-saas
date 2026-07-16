@@ -173,27 +173,13 @@ export async function generateBriaBackgroundRemoval(
     console.log(`[Fal] ✂️ Solicitando eliminación de fondo para silueta perfecta...`);
 
     const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
+    const dataUri = imageBase64.startsWith('data:') ? imageBase64 : `data:image/png;base64,${imageBase64}`;
 
-    const base64Data = imageBase64.split(',')[1] || imageBase64;
-    const buf = Buffer.from(base64Data, 'base64');
-
-    const uploadRes = await fetch('https://storage.fal.ai/', {
-        method: 'POST',
-        headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'image/png' },
-        body: buf,
-    });
-    if (!uploadRes.ok) {
-        const errText = await uploadRes.text();
-        throw new Error(`Fal storage upload error (${uploadRes.status}): ${errText.substring(0, 200)}`);
-    }
-    const uploadResult = await uploadRes.json();
-    const imageUrl = uploadResult.url || uploadResult;
-
-    // Call Bria background removal synchronously
+    // Bria accepts image_url as a data URI directly (FAL proxies base64 internally)
     const resultRes = await fetch('https://fal.run/fal-ai/bria/background/remove', {
         method: 'POST',
         headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_url: imageUrl }),
+        body: JSON.stringify({ image_url: dataUri }),
     });
     if (!resultRes.ok) {
         const errText = await resultRes.text();
@@ -210,30 +196,14 @@ export async function generateBriaProductShot(
     console.log(`[Fal] 🎬 Bria Product Shot con escena: "${sceneDescription.substring(0, 60)}..."`);
 
     const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
+    const dataUri = imageBase64.startsWith('data:') ? imageBase64 : `data:image/png;base64,${imageBase64}`;
 
-    // Upload image to FAL storage via direct REST API
-    const base64Data = imageBase64.split(',')[1] || imageBase64;
-    const buf = Buffer.from(base64Data, 'base64');
-
-    const uploadRes = await fetch('https://storage.fal.ai/', {
-        method: 'POST',
-        headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'image/png' },
-        body: buf,
-    });
-    if (!uploadRes.ok) {
-        const errText = await uploadRes.text();
-        throw new Error(`Fal storage upload error (${uploadRes.status}): ${errText.substring(0, 200)}`);
-    }
-    const uploadResult = await uploadRes.json();
-    const imageUrl = uploadResult.url || uploadResult;
-    console.log(`[Fal] ✅ Imagen subida a CDN: ${imageUrl}`);
-
-    // Call Bria Product Shot synchronously
+    // Bria Product Shot accepts data URI directly (FAL proxies base64 internally)
     const resultRes = await fetch('https://fal.run/fal-ai/bria/product-shot', {
         method: 'POST',
         headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            image_url: imageUrl,
+            image_url: dataUri,
             scene_description: sceneDescription,
             placement_type: "manual_padding",
             padding: [300, 300, 300, 300],
