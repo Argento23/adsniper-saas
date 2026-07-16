@@ -210,10 +210,10 @@ export async function POST(req: Request) {
                 const fullPrompt = `${scene_prompt}, professional scene photography, 8k, cinematic lighting, highly detailed environment`;
                 const sceneResult = await generateFalImage(fullPrompt, 'square');
                 const sceneUrl = sceneResult.imageUrl;
-                console.log(`[V59] ⏱️ Escena generada en: ${((Date.now() - sceneStart)/1000).toFixed(1)}s`);
+                console.log(`[V61] ⏱️ Escena generada en: ${((Date.now() - sceneStart)/1000).toFixed(1)}s`);
 
                 // Step 2: Descargar escena + compositar logo
-                console.log(`[V59] 🖼️ Compositando logo sobre la escena...`);
+                console.log(`[V61] 🖼️ Compositando logo sobre la escena...`);
                 const sceneResponse = await fetch(sceneUrl);
                 const sceneBuffer = await sceneResponse.arrayBuffer();
                 const sceneImg = Buffer.from(sceneBuffer);
@@ -237,13 +237,17 @@ export async function POST(req: Request) {
                     .png()
                     .toBuffer();
 
-                // Step 3: Suavizar bordes del composite
-                console.log(`[V59] ✨ Suavizando bordes del composite...`);
+                // Step 3: V61 — Reinterpretación del logo con img2img strength 0.55.
+                // La IA REINTERPRETA el logo en el contexto de la escena: cambia colores, reflejos,
+                // sombras y a veces proporciones para que parezca parte natural del escenario
+                // (en vez de un sticker pegado encima).
+                console.log(`[V61] ✨ Reinterpretando logo en escena (strength 0.55)...`);
                 const compositeDataUri = `data:image/png;base64,${composite.toString('base64')}`;
-                finalImage = await generateFluxImageToImage(compositeDataUri, fullPrompt, 0.15);
-                augmentedPrompt = fullPrompt;
-                version = "v59-logo-twostep";
-                console.log(`[V59] ⏱️ Total: ${((Date.now() - sceneStart)/1000).toFixed(1)}s`);
+                const integrationPrompt = `${scene_prompt}. The logo is now integrally fused into the scene — it is NOT a sticker. Its colors, lighting, and reflections match the surrounding environment. It looks like it was always part of the scene's design. Professional photography, 8k`;
+                finalImage = await generateFluxImageToImage(compositeDataUri, integrationPrompt, 0.55);
+                augmentedPrompt = integrationPrompt;
+                version = "v61-logo-fused";
+                console.log(`[V61] ⏱️ Total: ${((Date.now() - sceneStart)/1000).toFixed(1)}s`);
 
             } catch (logoErr: any) {
                 if (logoErr instanceof FalBalanceExhaustedError) {
