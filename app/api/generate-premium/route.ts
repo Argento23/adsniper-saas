@@ -168,14 +168,26 @@ export async function POST(req: Request) {
         console.log(`[V56] ⚡ INICIANDO ESTUDIO DE INTEGRACIÓN PROFUNDA (INPAINT + BAKE)...`);
         const startTime = Date.now();
         
-        // v56.1: AUTO-BACKGROUND REMOVAL FOR PERFECT PRODUCT SILHOUETTE
-        console.log(`[V56] ✂️ Cortando el fondo del producto para silueta perfecta...`);
-        const transparentPngUrl = await generateBriaBackgroundRemoval(image_base64);
-        console.log(`[V56] 📥 Descargando silueta desde: ${transparentPngUrl}`);
-        const imageFetchResponse = await fetch(transparentPngUrl);
-        const imageArrayBuffer = await imageFetchResponse.arrayBuffer();
-        const inputBuffer = Buffer.from(imageArrayBuffer);
-        
+        let inputBuffer: Buffer;
+        let briaUsed = false;
+
+        // Intentar Bria para remover fondo (si hay balance de FAL)
+        try {
+            console.log(`[V60] ✂️ Intentando eliminar fondo con Bria...`);
+            const transparentPngUrl = await generateBriaBackgroundRemoval(image_base64);
+            console.log(`[V60] 📥 Descargando silueta desde: ${transparentPngUrl}`);
+            const imageFetchResponse = await fetch(transparentPngUrl);
+            const imageArrayBuffer = await imageFetchResponse.arrayBuffer();
+            inputBuffer = Buffer.from(imageArrayBuffer);
+            briaUsed = true;
+            console.log(`[V60] ✅ Bria OK, fondo eliminado`);
+        } catch (briaErr: any) {
+            // Bria falló (balance agotado o error de red) - usar imagen original sin procesar fondo
+            console.warn(`[V60] ⚠️ Bria falló (${briaErr.message}). Usando imagen original como input.`);
+            const base64Data = image_base64.includes(',') ? image_base64.split(',')[1] : image_base64;
+            inputBuffer = Buffer.from(base64Data, 'base64');
+        }
+
         const optimizedInput = await sharp(inputBuffer).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).toBuffer();
 
         // V58: DETECTAR LOGO vs PRODUCTO para elegir pipeline
@@ -275,27 +287,60 @@ export async function POST(req: Request) {
                 }
             }
         } else {
-            // PRODUCT MODE: pipeline actual (inpaint inverso + bake)
-            console.log(`[V56] 🎨 Ensamblando Composición Base y Máscara Inversa...`);
-            const { baseImage, maskImage } = await createInverseMaskPayload(optimizedInput);
+            // PRODUCT MODE: intenta pipeline inpaint+bake, fallback a composite directo si FAL falla
+            try {
+                console.log(`[V60] 🎨 Ensamblando Composición Base y Máscara Inversa...`);
+                const { baseImage, maskImage } = await createInverseMaskPayload(optimizedInput);
 
-            console.log(`[V56] 🖐️ ESTRUCTURA (Step 1): Construyendo entorno 3D perfecto...`);
-            const inpaintStart = Date.now();
-            
-            augmentedPrompt = `${scene_prompt}, product photography, dynamic lighting, masterpiece, 8k resolution, NO TEXT, NO TYPOGRAPHY, NO LETTERS, NO WORDS ON IMAGE`;
-            
-            // Step 1: Inpainting. Generates the entire room/hands outside the product.
-            const structureImage = await generateFluxInpaint(baseImage, maskImage, augmentedPrompt, 1.0);
-            console.log(`[V56] ⏱️ Estructura Inpaint tardó: ${((Date.now() - inpaintStart)/1000).toFixed(1)}s`);
+                console.log(`[V60] 🖐️ ESTRUCTURA (Step 1): Construyendo entorno 3D perfecto...`);
+                const inpaintStart = Date.now();
+                
+                augmentedPrompt = `${scene_prompt}, product photography, dynamic lighting, masterpiece, 8k resolution, NO TEXT, NO TYPOGRAPHY, NO LETTERS, NO WORDS ON IMAGE`;
+                
+                const structureImage = await generateFluxInpaint(baseImage, maskImage, augmentedPrompt, 1.0);
+                console.log(`[V60] ⏱️ Estructura Inpaint tardó: ${((Date.now() - inpaintStart)/1000).toFixed(1)}s`);
 
-            console.log(`[V56] 💡 HORNEADO FÍSICO (Step 2): Fusionando luz de la habitación sobre el producto...`);
-            const bakeStart = Date.now();
-            
-            // Step 2: Precision Harmony Bake.
-            const strength = 0.30; 
-            finalImage = await generateFluxImageToImage(structureImage, augmentedPrompt, strength);
-            version = "v58-flux-inpaint-bake";
-            console.log(`[V58] ⏱️ Horneado Físico tardó: ${((Date.now() - bakeStart)/1000).toFixed(1)}s`);
+                console.log(`[V60] 💡 HORNEADO FÍSICO (Step 2): Fusionando luz de la habitación sobre el producto...`);
+                const bakeStart = Date.now();
+                
+                const strength = 0.30; 
+                finalImage = await generateFluxImageToImage(structureImage, augmentedPrompt, strength);
+                version = "v60-flux-inpaint-bake";
+                console.log(`[V60] ⏱️ Horneado Físico tardó: ${((Date.now() - bakeStart)/1000).toFixed(1)}s`);
+            } catch (productErr: any) {
+                // Si FAL falla (balance agotado o cualquier error), hacer fallback: composite directo en fondo elegante
+                console.warn(`[V60] ⚠️ Producto FAL falló (${productErr.message}). Fallback directo...`);
+                const fallbackStart = Date.now();
+
+                const prodMeta = await sharp(optimizedInput).metadata();
+                const pW = prodMeta.width || 512;
+                const pH = prodMeta.height || 512;
+                const targetW = Math.round(1024 * 0.32);
+                const targetH = Math.round(targetW * (pH / pW));
+                const left = Math.round((1024 - targetW) / 2);
+                const top = Math.round(1024 * 0.52);
+
+                const resized = await sharp(optimizedInput)
+                    .resize(targetW, targetH, { fit: 'inside' })
+                    .ensureAlpha()
+                    .toBuffer();
+
+                const bgBuffer = await sharp({
+                    create: { width: 1024, height: 1024, channels: 3, background: '#0f172a' }
+                })
+                    .png()
+                    .toBuffer();
+
+                const composite = await sharp(bgBuffer)
+                    .composite([{ input: resized, left, top }])
+                    .png()
+                    .toBuffer();
+
+                augmentedPrompt = scene_prompt;
+                finalImage = `data:image/png;base64,${composite.toString('base64')}`;
+                version = "v60-product-fallback-no-fal";
+                console.log(`[V60] ⏱️ Fallback completado: ${((Date.now() - fallbackStart)/1000).toFixed(1)}s`);
+            }
         }
 
         const totalTime = ((Date.now() - startTime)/1000).toFixed(1);

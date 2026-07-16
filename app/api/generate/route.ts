@@ -115,24 +115,16 @@ function isTransparentPng(base64Str: string): boolean {
 // Dos pasos para integrar imagen en escena (funciona para logos Y productos):
 // 1. Generar escena completa con Flux Dev (text-to-image, solo prompt)
 // 2. Compositar imagen del usuario sobre la escena + img2img suave (0.15)
+// Si FAL falla (balance agotado), hace fallback: imagen del usuario en fondo elegante sin IA
 async function integrateImageInScene(base64Str: string, fullPrompt: string): Promise<string> {
-    const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
-
-    // Step 1: Generar escena
-    const sceneResult = await generateFalImage(fullPrompt, 'square');
-    const sceneUrl = sceneResult.imageUrl;
-
-    // Step 2: Descargar escena y compositar imagen
-    const sceneResp = await fetch(sceneUrl);
-    const sceneBuf = await sceneResp.arrayBuffer();
-    const sceneImg = Buffer.from(sceneBuf);
-
     const base64Data = base64Str.includes(',') ? base64Str.split(',')[1] : base64Str;
     const imgBuf = Buffer.from(base64Data, 'base64');
 
     const imgMeta = await sharp(imgBuf).metadata();
     const iW = imgMeta.width || 512;
     const iH = imgMeta.height || 512;
+
+    // Tamaño proporcional de la imagen en el canvas (30% del ancho)
     const targetW = Math.round(1024 * 0.30);
     const targetH = Math.round(targetW * (iH / iW));
     const left = Math.round((1024 - targetW) / 2);
@@ -143,15 +135,65 @@ async function integrateImageInScene(base64Str: string, fullPrompt: string): Pro
         .ensureAlpha()
         .toBuffer();
 
-    const composite = await sharp(sceneImg)
-        .composite([{ input: resized, left, top }])
+    let sceneUrl: string | null = null;
+
+    // Step 1: Intentar generar escena con FAL (si hay balance)
+    try {
+        const sceneResult = await generateFalImage(fullPrompt, 'square');
+        sceneUrl = sceneResult.imageUrl;
+    } catch (falErr: any) {
+        // FAL sin balance o falló - usar fondo oscuro elegante en vez de escena IA
+        console.warn(`[IntegrateImage] FAL falló (${falErr.message}), usando fondo oscuro como fallback`);
+        sceneUrl = null;
+    }
+
+    let composite: Buffer;
+    if (sceneUrl) {
+        // Scene generada OK: compositar imagen sobre la escena
+        try {
+            const sceneResp = await fetch(sceneUrl);
+            if (!sceneResp.ok) throw new Error(`Scene fetch failed: ${sceneResp.status}`);
+            const sceneBuf = await sceneResp.arrayBuffer();
+            const sceneImg = Buffer.from(sceneBuf);
+            composite = await sharp(sceneImg)
+                .composite([{ input: resized, left, top }])
+                .png()
+                .toBuffer();
+        } catch (fetchErr) {
+            // Falla al descargar escena - usar fondo oscuro
+            console.warn(`[IntegrateImage] No se pudo descargar escena: ${fetchErr}`);
+            composite = await makeDarkBackgroundWithImage(resized, left, top);
+        }
+    } else {
+        // Sin FAL: fondo oscuro elegante con la imagen
+        composite = await makeDarkBackgroundWithImage(resized, left, top);
+    }
+
+    // Step 3: Suavizar bordes con img2img (si hay balance de FAL)
+    try {
+        const compDataUri = `data:image/png;base64,${composite.toString('base64')}`;
+        const final = await generateFluxImageToImage(compDataUri, fullPrompt, 0.15);
+        return final;
+    } catch (img2imgErr) {
+        // FAL sin balance para img2img - devolver el composite tal cual (base64 PNG)
+        console.warn(`[IntegrateImage] img2img falló, devolviendo composite sin suavizar: ${img2imgErr.message}`);
+        return `data:image/png;base64,${composite.toString('base64')}`;
+    }
+}
+
+// Helper: crea fondo degradado oscuro con la imagen compositada
+async function makeDarkBackgroundWithImage(imgBuffer: Buffer, left: number, top: number): Promise<Buffer> {
+    // Fondo degradado elegante: azul oscuro profundo
+    const bg = await sharp({
+        create: { width: 1024, height: 1024, channels: 3, background: '#0f172a' }
+    })
         .png()
         .toBuffer();
 
-    // Step 3: Suavizar bordes
-    const compDataUri = `data:image/png;base64,${composite.toString('base64')}`;
-    const final = await generateFluxImageToImage(compDataUri, fullPrompt, 0.15);
-    return final;
+    return sharp(bg)
+        .composite([{ input: imgBuffer, left, top }])
+        .png()
+        .toBuffer();
 }
 
 // LOCAL FALLBACK GENERATOR (Ad Copy) - Supports COUNT
