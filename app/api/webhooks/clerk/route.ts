@@ -5,7 +5,11 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+
+function getSupabase() {
+    if (supabaseUrl.includes('placeholder')) return null;
+    return createClient(supabaseUrl, supabaseKey);
+}
 
 export async function POST(req: Request) {
   // Configura CLERK_WEBHOOK_SECRET en tu .env.local
@@ -70,6 +74,12 @@ export async function POST(req: Request) {
     const name = [first_name, last_name].filter(Boolean).join(' ') || 'Usuario Nuevo';
 
     console.log(`Webhook Triggered: Inserting AdSíntesis user ${email} into agency_clients...`);
+
+    const supabase = getSupabase();
+    if (!supabase) {
+        console.warn('Supabase no configurado — saltando inserción en agency_clients');
+        return new Response('', { status: 200 })
+    }
 
     // Insertar en la tabla agency_clients (que se refleja en el panel de GenerArise)
     const { error } = await supabase.from('agency_clients').insert({
