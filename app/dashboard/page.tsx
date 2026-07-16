@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaStar, FaLayerGroup, FaBolt, FaFire, FaSpinner, FaArrowRight, FaExternalLinkAlt, FaHeart, FaComments, FaPaperPlane, FaBookmark, FaRegCopy, FaCheck, FaGlobe, FaImage, FaCog, FaVideo, FaPen, FaMagic, FaCloudUploadAlt, FaTrash, FaCrown, FaInfoCircle } from 'react-icons/fa';
+import { FaStar, FaLayerGroup, FaBolt, FaFire, FaSpinner, FaArrowRight, FaExternalLinkAlt, FaHeart, FaComments, FaPaperPlane, FaBookmark, FaRegCopy, FaCheck, FaGlobe, FaImage, FaCog, FaVideo, FaPen, FaMagic, FaCloudUploadAlt, FaTrash, FaCrown, FaInfoCircle, FaDownload } from 'react-icons/fa';
 import { UserButton, useUser } from "@clerk/nextjs";
 import BrandSetup from './components/BrandSetup';
 import VideoScriptViewer from './components/VideoScriptViewer';
@@ -219,6 +219,178 @@ const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, b
         setTimeout(() => setCopied(false), 2000);
     };
 
+    const [downloading, setDownloading] = useState(false);
+
+    // DOWNLOAD AD: exporta el composit (imagen + tipografía + thumbnail del producto) como PNG 1080x1080
+    const handleDownloadImage = async () => {
+        if (downloading) return;
+        setDownloading(true);
+        try {
+            const SIZE = 1080;
+            const canvas = document.createElement('canvas');
+            canvas.width = SIZE;
+            canvas.height = SIZE;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('No 2D context');
+
+            // 1. BACKGROUND IMAGE: convertir URL -> Image.
+            // Si pasa por /api/proxy-image, ya viene como data URL o URL externa.
+            const sourceUrl = ad.generated_image_url || imgSrc;
+            const bgImg = new Image();
+            bgImg.crossOrigin = 'anonymous';
+            await new Promise<void>((resolve, reject) => {
+                bgImg.onload = () => resolve();
+                bgImg.onerror = () => reject(new Error('Image load failed'));
+                bgImg.src = sourceUrl;
+            });
+
+            // "object-cover" emulation: centra y cropea al cuadrado
+            const srcRatio = bgImg.width / bgImg.height;
+            let sx = 0, sy = 0, sw = bgImg.width, sh = bgImg.height;
+            if (srcRatio > 1) {
+                sw = bgImg.height;
+                sx = (bgImg.width - sw) / 2;
+            } else if (srcRatio < 1) {
+                sh = bgImg.width;
+                sy = (bgImg.height - sh) / 2;
+            }
+            ctx.drawImage(bgImg, sx, sy, sw, sh, 0, 0, SIZE, SIZE);
+
+            // 2. GRADIENTE NEGRO DE FONDO para legibilidad del texto
+            const grad = ctx.createLinearGradient(0, SIZE * 0.55, 0, SIZE);
+            grad.addColorStop(0, 'rgba(0,0,0,0)');
+            grad.addColorStop(0.5, 'rgba(0,0,0,0.55)');
+            grad.addColorStop(1, 'rgba(0,0,0,0.92)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, SIZE, SIZE);
+
+            // 3. TIPOGRAFÍA: headline + subcopy en el 75% inferior izquierdo
+            if (ad.headline) {
+                const textMaxWidth = SIZE * 0.72;
+                const paddingX = 36;
+                let y = SIZE - 36 - 16;
+
+                // HEADLINE (font-weight 900, 2 líneas máx)
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '900 56px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                ctx.textBaseline = 'bottom';
+                ctx.shadowColor = 'rgba(0,0,0,0.85)';
+                ctx.shadowBlur = 14;
+                ctx.shadowOffsetY = 3;
+
+                const headlineLines = wrapText(ctx, ad.headline, textMaxWidth - paddingX * 2, 2);
+                for (let i = headlineLines.length - 1; i >= 0; i--) {
+                    ctx.fillText(headlineLines[i], paddingX, y);
+                    y -= 66;
+                }
+
+                // SUBCOPY (subtítulo, font-weight 500)
+                if (ad.primary_text) {
+                    y -= 8;
+                    ctx.font = '500 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                    ctx.fillStyle = 'rgba(255,255,255,0.88)';
+                    ctx.shadowBlur = 10;
+                    const subLines = ad.primary_text.split('\n').slice(0, 2).join(' · ');
+                    const subWrapped = wrapText(ctx, subLines, textMaxWidth - paddingX * 2, 2);
+                    for (let i = subWrapped.length - 1; i >= 0; i--) {
+                        ctx.fillText(subWrapped[i], paddingX, y);
+                        y -= 28;
+                    }
+                }
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetY = 0;
+            }
+
+            // 4. PRODUCT THUMBNAIL en la esquina inferior derecha (si existe)
+            const showThumb = applyLogo && ad.product_image_fallback && !ad.product_image_fallback.includes('placehold.co');
+            if (showThumb) {
+                const thumbImg = new Image();
+                thumbImg.crossOrigin = 'anonymous';
+                await new Promise<void>((resolve, reject) => {
+                    thumbImg.onload = () => resolve();
+                    thumbImg.onerror = () => reject(new Error('Thumb load failed'));
+                    thumbImg.src = ad.product_image_fallback!;
+                }).catch(() => { /* skip silently */ });
+
+                if (thumbImg.complete && thumbImg.naturalWidth > 0) {
+                    const thumbSize = 220;
+                    const pad = 36;
+                    const x = SIZE - thumbSize - pad;
+                    const y = SIZE - thumbSize - pad - 20;
+
+                    // glassmorphism: rounded white-tinted bg
+                    ctx.save();
+                    ctx.beginPath();
+                    roundRect(ctx, x, y, thumbSize, thumbSize, 24);
+                    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    // padding interno
+                    const inner = 18;
+                    ctx.drawImage(thumbImg, x + inner, y + inner, thumbSize - inner * 2, thumbSize - inner * 2);
+                    ctx.restore();
+                }
+            }
+
+            // 5. EXPORTAR a PNG y descargar
+            const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png', 0.95));
+            if (!blob) throw new Error('Canvas toBlob failed');
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `AdSintesis-anuncio-${Date.now()}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Download failed:', err);
+            // Fallback: abrir la imagen cruda como descarga
+            const link = document.createElement('a');
+            link.href = ad.generated_image_url || imgSrc;
+            link.download = `AdSintesis-anuncio-${Date.now()}.png`;
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } finally {
+            setDownloading(false);
+        }
+    };
+
+    // Helpers: word-wrap y rounded rect
+    function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number): string[] {
+        const words = text.split(' ');
+        const lines: string[] = [];
+        let current = '';
+        for (const word of words) {
+            const test = current ? `${current} ${word}` : word;
+            if (ctx.measureText(test).width <= maxWidth || !current) {
+                current = test;
+            } else {
+                lines.push(current);
+                current = word;
+                if (lines.length >= maxLines) break;
+            }
+            if (lines.length >= maxLines) break;
+        }
+        if (current && lines.length < maxLines) lines.push(current);
+        return lines.slice(0, maxLines);
+    }
+
+    function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+    }
+
     return (
         <div className="animate-in fade-in slide-in-from-bottom-8 duration-700" style={{ animationDelay: `${index * 150}ms` }}>
             {/* Phone Frame */}
@@ -422,7 +594,17 @@ const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, b
                         <FaComments className="w-6 h-6 hover:text-slate-600 transition-colors cursor-pointer" />
                         <FaPaperPlane className="w-6 h-6 hover:text-slate-600 transition-colors cursor-pointer" />
                     </div>
-                    <FaBookmark className="w-6 h-6 hover:text-slate-600 transition-colors cursor-pointer" />
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleDownloadImage}
+                            disabled={downloading || hasError || imgSrc.includes('placehold.co')}
+                            title="Descargar anuncio como PNG 1080x1080"
+                            className={`w-6 h-6 flex items-center justify-center transition-colors ${downloading || hasError ? 'text-slate-300' : 'text-slate-800 hover:text-emerald-600'} cursor-pointer disabled:cursor-not-allowed disabled:opacity-50`}
+                        >
+                            {downloading ? <FaSpinner className="w-5 h-5 animate-spin" /> : <FaDownload className="w-5 h-5" />}
+                        </button>
+                        <FaBookmark className="w-6 h-6 hover:text-slate-600 transition-colors cursor-pointer" />
+                    </div>
                 </div>
 
                 {/* Copy Area */}
