@@ -85,6 +85,37 @@ async function createInverseMaskPayload(
     };
 }
 
+// LOGO DETECTION: Check if the image is a flat logo/graphic vs a 3D physical product
+// Logos typically have large transparent areas and don't look like photographed products.
+// We sample the alpha channel: if >50% of pixels are transparent, it's likely a logo/graphic overlay.
+async function isLikelyLogo(buffer: Buffer): Promise<boolean> {
+    try {
+        const meta = await sharp(buffer).metadata();
+        // If no alpha channel, it's not a logo with transparency
+        if (!meta.hasAlpha) return false;
+
+        const pixels = await sharp(buffer)
+            .ensureAlpha()
+            .extractChannel(3) // Alpha channel only
+            .raw()
+            .toBuffer();
+
+        let transparentCount = 0;
+        const total = pixels.length;
+        for (let i = 0; i < total; i++) {
+            if (pixels[i] < 25) transparentCount++; // alpha < ~10%
+        }
+
+        const ratio = transparentCount / total;
+        console.log(`[V57 Logo Detection] Alpha transparency ratio: ${(ratio * 100).toFixed(1)}%`);
+        // If > 40% of pixels are transparent, treat as logo-style image
+        return ratio > 0.4;
+    } catch (e) {
+        console.warn('[V57 Logo Detection] Failed, assuming product:', e);
+        return false;
+    }
+}
+
 export async function POST(req: Request) {
     try {
         const { userId } = await auth();
@@ -109,29 +140,48 @@ export async function POST(req: Request) {
         const inputBuffer = Buffer.from(imageArrayBuffer);
         
         const optimizedInput = await sharp(inputBuffer).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).toBuffer();
-        
-        console.log(`[V56] 🎨 Ensamblando Composición Base y Máscara Inversa...`);
-        const { baseImage, maskImage } = await createInverseMaskPayload(optimizedInput);
 
-        console.log(`[V56] 🖐️ ESTRUCTURA (Step 1): Construyendo entorno 3D perfecto...`);
-        const inpaintStart = Date.now();
-        
-        const augmentedPrompt = `${scene_prompt}, product photography, dynamic lighting, masterpiece, 8k resolution, NO TEXT, NO TYPOGRAPHY, NO LETTERS, NO WORDS ON IMAGE`;
-        
-        // Step 1: Inpainting. Generates the entire room/hands outside the product.
-        const structureImage = await generateFluxInpaint(baseImage, maskImage, augmentedPrompt, 1.0);
-        console.log(`[V56] ⏱️ Estructura Inpaint tardó: ${((Date.now() - inpaintStart)/1000).toFixed(1)}s`);
+        // V57: DETECTAR LOGO vs PRODUCTO para elegir pipeline
+        const logoMode = await isLikelyLogo(optimizedInput);
+        console.log(`[V57] 🏷️ Modo: ${logoMode ? 'LOGO (Image-to-Image)' : 'PRODUCTO (Inpaint + Bake)'}`);
 
-        console.log(`[V56] 💡 HORNEADO FÍSICO (Step 2): Fusionando luz de la habitación sobre el producto...`);
-        const bakeStart = Date.now();
-        
-        // Step 2: Precision Harmony Bake.
-        // The 0.42 caused the product texts ("SurTidas") to mutate severely.
-        // We drop this strictly to 0.22. At this strength, the text is locked mathematically,
-        // but the engine will still project the orange/ambient light and blur the pasted sticker edge.
-        const strength = 0.22; 
-        const finalImage = await generateFluxImageToImage(structureImage, augmentedPrompt, strength);
-        console.log(`[V56] ⏱️ Horneado Físico tardó: ${((Date.now() - bakeStart)/1000).toFixed(1)}s`);
+        let finalImage: string;
+        let augmentedPrompt: string;
+        let version: string;
+
+        if (logoMode) {
+            // LOGO MODE: Image-to-Image con strength alto para integrar el logo en la escena
+            // La IA redibuja el logo dentro del contexto sin preservar píxeles exactos
+            console.log(`[V57] 🎨 Integrando logo en escena vía Image-to-Image (strength 0.75)...`);
+            const iiStart = Date.now();
+            augmentedPrompt = `${scene_prompt}, exact logo design displayed in the scene, professional photography, 8k, NO TEXT, NO TYPOGRAPHY`;
+            const dataUri = `data:image/png;base64,${optimizedInput.toString('base64')}`;
+            finalImage = await generateFluxImageToImage(dataUri, augmentedPrompt, 0.75);
+            version = "v57-logo-img2img";
+            console.log(`[V57] ⏱️ Logo Image-to-Image tardó: ${((Date.now() - iiStart)/1000).toFixed(1)}s`);
+        } else {
+            // PRODUCT MODE: pipeline actual (inpaint inverso + bake)
+            console.log(`[V56] 🎨 Ensamblando Composición Base y Máscara Inversa...`);
+            const { baseImage, maskImage } = await createInverseMaskPayload(optimizedInput);
+
+            console.log(`[V56] 🖐️ ESTRUCTURA (Step 1): Construyendo entorno 3D perfecto...`);
+            const inpaintStart = Date.now();
+            
+            augmentedPrompt = `${scene_prompt}, product photography, dynamic lighting, masterpiece, 8k resolution, NO TEXT, NO TYPOGRAPHY, NO LETTERS, NO WORDS ON IMAGE`;
+            
+            // Step 1: Inpainting. Generates the entire room/hands outside the product.
+            const structureImage = await generateFluxInpaint(baseImage, maskImage, augmentedPrompt, 1.0);
+            console.log(`[V56] ⏱️ Estructura Inpaint tardó: ${((Date.now() - inpaintStart)/1000).toFixed(1)}s`);
+
+            console.log(`[V56] 💡 HORNEADO FÍSICO (Step 2): Fusionando luz de la habitación sobre el producto...`);
+            const bakeStart = Date.now();
+            
+            // Step 2: Precision Harmony Bake.
+            const strength = 0.22; 
+            finalImage = await generateFluxImageToImage(structureImage, augmentedPrompt, strength);
+            version = "v56-flux-inpaint-bake";
+            console.log(`[V56] ⏱️ Horneado Físico tardó: ${((Date.now() - bakeStart)/1000).toFixed(1)}s`);
+        }
 
         const totalTime = ((Date.now() - startTime)/1000).toFixed(1);
         console.log(`[V56] ✅ COMPLETADO en ${totalTime}s.`);
@@ -140,7 +190,7 @@ export async function POST(req: Request) {
             success: true,
             final_composition: finalImage,
             prompt_used: augmentedPrompt,
-            version: "v56-flux-inpaint-bake"
+            version
         });
 
     } catch (error: any) {
