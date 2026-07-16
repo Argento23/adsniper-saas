@@ -289,6 +289,27 @@ const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, b
                                     </div>
                                 </div>
                             )}
+
+                            {/* TYPOGRAPHY OVERLAY (post-process): Headline + Subcopy renderizados con HTML/CSS.
+                                Funciona tanto en modo texto como en Studio Pro. El background es ahora la imagen,
+                                así que el texto se superpone con gradiente para legibilidad.
+                                Cubre hasta 75% del ancho para no chocar con el thumbnail de producto en bottom-right. */}
+                            {ad.headline && (
+                                <div className="absolute inset-x-0 bottom-0 z-30 pointer-events-none">
+                                    {/* Gradiente de fondo para legibilidad (cubre 75% del ancho) */}
+                                    <div className="absolute inset-y-0 left-0 w-3/4 bg-gradient-to-r from-black/90 via-black/65 to-transparent"></div>
+                                    <div className="relative px-4 pb-5 pt-12 w-3/4">
+                                        <h3 className="text-white font-black text-lg md:text-xl leading-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] tracking-tight line-clamp-2">
+                                            {ad.headline}
+                                        </h3>
+                                        {ad.primary_text && (
+                                            <p className="text-white/85 text-[11px] md:text-xs leading-snug mt-1.5 drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)] line-clamp-2 whitespace-pre-wrap">
+                                                {ad.primary_text.split('\n').slice(0, 2).join(' · ')}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </>
                     ) : (
                         <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 bg-slate-900">
@@ -368,6 +389,23 @@ const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, b
                                                     alt="Overlay de Producto Fullscreen"
                                                     className="w-full h-full object-contain filter drop-shadow-md"
                                                 />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* TYPOGRAPHY OVERLAY EN EL MODAL (mismo overlay HTML/CSS) */}
+                                    {ad.headline && (
+                                        <div className="absolute inset-x-0 bottom-0 z-30 pointer-events-none">
+                                            <div className="absolute inset-y-0 left-0 w-3/4 bg-gradient-to-r from-black/90 via-black/65 to-transparent"></div>
+                                            <div className="relative px-8 pb-8 pt-16 w-3/4">
+                                                <h3 className="text-white font-black text-3xl md:text-5xl leading-tight drop-shadow-[0_4px_16px_rgba(0,0,0,0.9)] tracking-tight">
+                                                    {ad.headline}
+                                                </h3>
+                                                {ad.primary_text && (
+                                                    <p className="text-white/85 text-base md:text-lg leading-snug mt-3 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] whitespace-pre-wrap">
+                                                        {ad.primary_text.split('\n').slice(0, 3).join('\n')}
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
                                     )}

@@ -116,7 +116,7 @@ export async function POST(req: Request) {
         console.log(`[V56] 🖐️ ESTRUCTURA (Step 1): Construyendo entorno 3D perfecto...`);
         const inpaintStart = Date.now();
         
-        const augmentedPrompt = `${scene_prompt}, product photography, dynamic lighting, masterpiece, 8k resolution`;
+        const augmentedPrompt = `${scene_prompt}, product photography, dynamic lighting, masterpiece, 8k resolution, NO TEXT, NO TYPOGRAPHY, NO LETTERS, NO WORDS ON IMAGE`;
         
         // Step 1: Inpainting. Generates the entire room/hands outside the product.
         const structureImage = await generateFluxInpaint(baseImage, maskImage, augmentedPrompt, 1.0);

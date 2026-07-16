@@ -698,21 +698,20 @@ export async function POST(request: Request) {
                     basePrompt = `${basePrompt}, ${manual_image_prompt}`;
                 }
 
-                // Forcefully inject the EXACT headline for Ideogram Typographic Rendering
-                // NOTE: Normalize to remove accents/tildes so Ideogram doesn't render corrupt squares (á -> a)
+                // Forcefully extract clean headline (kept for BACKEND display + future use)
+                // NOTE: Typography is NOT injected in the AI prompt anymore — Flux models render text poorly.
+                // The frontend overlays the headline as HTML/CSS so it always renders perfect typography.
                 const cleanHeadline = (ad.headline || "")
                     .replace(/["']/g, "")
                     .normalize("NFD")
                     .replace(/[\u0300-\u036f]/g, "")
                     .replace(/[¿¡]/g, "");
 
-                // Prompt versátil: funciona para productos físicos Y servicios/agencias
+                // Prompt versátil: funciona para productos físicos Y servicios/agencias.
+                // NO typography injection — el texto se superpone en el frontend con HTML.
                 const hasManualImage = manual_image_base64 && manual_image_base64.length > 100;
                 const userStyle = manual_image_prompt ? `, ${manual_image_prompt}` : '';
-                let fullPrompt = `${scrapedTitle}${userStyle}, ${basePrompt}, professional photography, 8k, cinematic lighting, high quality, elegant composition, sharp focus`;
-                if (cleanHeadline) {
-                    fullPrompt += `, clean minimal typography overlay: "${cleanHeadline}"`;
-                }
+                let fullPrompt = `${scrapedTitle}${userStyle}, ${basePrompt}, professional photography, 8k, cinematic lighting, high quality, elegant composition, sharp focus, NO TEXT, NO TYPOGRAPHY, NO LETTERS, NO WORDS ON IMAGE, clean background`;
 
                 const finalImageUrl = await (async () => {
                     // SI HAY IMAGEN MANUAL -> PRIORIDAD 1: BRIA PRODUCT SHOT (FAL)
