@@ -153,6 +153,36 @@ async function isLikelyLogo(buffer: Buffer): Promise<boolean> {
     }
 }
 
+// V63: Fallback elegante cuando FAL no está disponible.
+// Compositúa el logo en un fondo degradado oscuro, sin gasto de API.
+async function logoFallbackOnDarkBackground(inputBuffer: Buffer): Promise<string> {
+    const logoMeta = await sharp(inputBuffer).metadata();
+    const lW = logoMeta.width || 512;
+    const lH = logoMeta.height || 512;
+    const targetLogoW = Math.round(1024 * 0.30);
+    const targetLogoH = Math.round(targetLogoW * (lH / lW));
+    const left = Math.round((1024 - targetLogoW) / 2);
+    const top = Math.round(1024 * 0.52);
+
+    const resizedLogo = await sharp(inputBuffer)
+        .resize(targetLogoW, targetLogoH, { fit: 'inside' })
+        .ensureAlpha()
+        .toBuffer();
+
+    const bg = await sharp({
+        create: { width: 1024, height: 1024, channels: 3, background: '#0f172a' }
+    })
+        .png()
+        .toBuffer();
+
+    const composite = await sharp(bg)
+        .composite([{ input: resizedLogo, left, top }])
+        .png()
+        .toBuffer();
+
+    return `data:image/png;base64,${composite.toString('base64')}`;
+}
+
 export async function POST(req: Request) {
     try {
         const { userId } = await auth();
@@ -199,96 +229,57 @@ export async function POST(req: Request) {
         let version: string;
 
         if (logoMode) {
-            // V59 LOGO MODE: Two-step approach
-            // Step 1: Generar escena completa con text-to-image (sin input del usuario - sigue el prompt al 100%)
-            // Step 2: Compositar el logo real del usuario sobre la escena generada
-            // Step 3: Pass final img2img MUY bajo (0.15) solo para suavizar el borde del composite
-            console.log(`[V59] 🎨 Generando escena completa con Flux Dev (text-to-image)...`);
-            const sceneStart = Date.now();
+            // V63 LOGO MODE: Single-call optimization
+            // ANTES: 2 calls (text-to-image + img2img) = $0.20/logo
+            // AHORA: 1 call (img2img) sobre input del usuario con prompt de integración
+            // El usuario subió un logo PNG transparente, ya tenemos su posición/color/etc.
+            // Le pedimos a Flux que lo integre en la escena descrita, pero a strength BAJO (0.30)
+            // para preservar el diseño del logo mientras añade la escena alrededor.
+            // COSTE: $0.10/logo (50% menos)
+            console.log(`[V63] ⚡ Integrando logo en escena (1 llamada FAL, strength 0.30)...`);
+            const startV63 = Date.now();
 
             try {
-                const fullPrompt = `${scene_prompt}, professional scene photography, 8k, cinematic lighting, highly detailed environment`;
-                const sceneResult = await generateFalImage(fullPrompt, 'square');
-                const sceneUrl = sceneResult.imageUrl;
-                console.log(`[V61] ⏱️ Escena generada en: ${((Date.now() - sceneStart)/1000).toFixed(1)}s`);
-
-                // Step 2: Descargar escena + compositar logo
-                console.log(`[V61] 🖼️ Compositando logo sobre la escena...`);
-                const sceneResponse = await fetch(sceneUrl);
-                const sceneBuffer = await sceneResponse.arrayBuffer();
-                const sceneImg = Buffer.from(sceneBuffer);
-
+                // Pre-componer: logo en un fondo neutro ya dimensionado.
+                // Esto evita que la IA tenga que adivinar dónde colocar el logo.
                 const logoMeta = await sharp(optimizedInput).metadata();
                 const lW = logoMeta.width || 512;
                 const lH = logoMeta.height || 512;
-                // Logo al 28% del canvas, centrado horizontalmente, en el tercio inferior (como si estuviera colgado)
-                const targetLogoW = Math.round(1024 * 0.28);
+                const targetLogoW = Math.round(1024 * 0.30);
                 const targetLogoH = Math.round(targetLogoW * (lH / lW));
                 const left = Math.round((1024 - targetLogoW) / 2);
-                const top = Math.round(1024 * 0.55);
+                const top = Math.round(1024 * 0.52);
 
                 const resizedLogo = await sharp(optimizedInput)
                     .resize(targetLogoW, targetLogoH, { fit: 'inside' })
                     .ensureAlpha()
                     .toBuffer();
 
-                const composite = await sharp(sceneImg)
+                const baseScene = await sharp({
+                    create: { width: 1024, height: 1024, channels: 3, background: '#e5e7eb' }
+                })
+                    .png()
+                    .toBuffer();
+
+                const composite = await sharp(baseScene)
                     .composite([{ input: resizedLogo, left, top }])
                     .png()
                     .toBuffer();
 
-                // Step 3: V61 — Reinterpretación del logo con img2img strength 0.55.
-                // La IA REINTERPRETA el logo en el contexto de la escena: cambia colores, reflejos,
-                // sombras y a veces proporciones para que parezca parte natural del escenario
-                // (en vez de un sticker pegado encima).
-                console.log(`[V61] ✨ Reinterpretando logo en escena (strength 0.55)...`);
-                const compositeDataUri = `data:image/png;base64,${composite.toString('base64')}`;
-                const integrationPrompt = `${scene_prompt}. The logo is now integrally fused into the scene — it is NOT a sticker. Its colors, lighting, and reflections match the surrounding environment. It looks like it was always part of the scene's design. Professional photography, 8k`;
-                finalImage = await generateFluxImageToImage(compositeDataUri, integrationPrompt, 0.55);
+                // UNA sola llamada a FAL: Flux img2img con strength bajo
+                // El prompt guía la integración pero respeta el diseño del logo
+                 const compositeDataUri = `data:image/png;base64,${composite.toString('base64')}`;
+                const integrationPrompt = `${scene_prompt}. The logo is part of the scene — it has the same lighting, reflections, and materials as its surroundings. Professional scene photography, 8k`;
+                finalImage = await generateFluxImageToImage(compositeDataUri, integrationPrompt, 0.30);
                 augmentedPrompt = integrationPrompt;
-                version = "v61-logo-fused";
-                console.log(`[V61] ⏱️ Total: ${((Date.now() - sceneStart)/1000).toFixed(1)}s`);
-
+                version = "v63-logo-single-call";
+                console.log(`[V63] ⏱️ Total: ${((Date.now() - startV63)/1000).toFixed(1)}s`);
             } catch (logoErr: any) {
-                if (logoErr instanceof FalBalanceExhaustedError) {
-                    // FAL sin balance: fallback directo - composite del logo en fondo neutral
-                    // No generamos escena con IA, solo compositamos el logo en un fondo bonito
-                    console.warn(`[V59] ⚠️ FAL sin balance. Haciendo fallback directo...`);
-                    const fallbackStart = Date.now();
-
-                    const logoMeta = await sharp(optimizedInput).metadata();
-                    const lW = logoMeta.width || 512;
-                    const lH = logoMeta.height || 512;
-                    const targetLogoW = Math.round(1024 * 0.30);
-                    const targetLogoH = Math.round(targetLogoW * (lH / lW));
-                    const left = Math.round((1024 - targetLogoW) / 2);
-                    const top = Math.round(1024 * 0.52);
-
-                    const resizedLogo = await sharp(optimizedInput)
-                        .resize(targetLogoW, targetLogoH, { fit: 'inside' })
-                        .ensureAlpha()
-                        .toBuffer();
-
-                    // Fondo degradado elegante en vez de escena IA
-                    const bgBuffer = await sharp({
-                        create: { width: 1024, height: 1024, channels: 3, background: '#1a1a2e' }
-                    })
-                        .png()
-                        .toBuffer();
-
-                    const composite = await sharp(bgBuffer)
-                        .composite([{ input: resizedLogo, left, top }])
-                        .png()
-                        .toBuffer();
-
-                    const fallbackDataUri = `data:image/png;base64,${composite.toString('base64')}`;
-                    augmentedPrompt = scene_prompt;
-                    finalImage = fallbackDataUri; // Ya es PNG base64 listo
-                    version = "v59-logo-fallback-no-fal";
-                    console.log(`[V59] ⏱️ Fallback completado: ${((Date.now() - fallbackStart)/1000).toFixed(1)}s`);
-                } else {
-                    throw logoErr;
-                }
+                // Logo FAL falló: fallback directo (compositar logo en fondo elegante)
+                console.warn(`[V63] ⚠️ Logo FAL falló (${logoErr.message}). Fallback directo...`);
+                finalImage = await logoFallbackOnDarkBackground(optimizedInput);
+                augmentedPrompt = scene_prompt;
+                version = "v63-logo-fallback";
             }
         } else {
             // PRODUCT MODE: intenta pipeline inpaint+bake, fallback a composite directo si FAL falla

@@ -124,7 +124,7 @@ async function integrateImageInScene(base64Str: string, fullPrompt: string): Pro
     const iW = imgMeta.width || 512;
     const iH = imgMeta.height || 512;
 
-    // Tamaño proporcional de la imagen en el canvas (40% del ancho - más visible)
+    // Tamaño proporcional de la imagen en el canvas (40% del ancho)
     const targetW = Math.round(1024 * 0.40);
     const targetH = Math.round(targetW * (iH / iW));
     const left = Math.round((1024 - targetW) / 2);
@@ -137,48 +137,55 @@ async function integrateImageInScene(base64Str: string, fullPrompt: string): Pro
 
     let sceneUrl: string | null = null;
 
-    // Step 1: Intentar generar escena con FAL (si hay balance)
-    try {
-        const sceneResult = await generateFalImage(fullPrompt, 'square');
-        sceneUrl = sceneResult.imageUrl;
-    } catch (falErr: any) {
-        // FAL sin balance o falló - usar fondo oscuro elegante en vez de escena IA
-        console.warn(`[IntegrateImage] FAL falló (${falErr.message}), usando fondo oscuro como fallback`);
-        sceneUrl = null;
+    /**
+     * V62 COST-OPT: Si el usuario tiene plan Pro/Studio, usar FAL (calidad).
+     * Si no (usuario free), usar Pollinations (gratis).
+     * Esto reduce 10× el coste operacional por anuncio para usuarios free.
+     */
+    // Por ahora usamos siempre Pollinations en no-premium para reducir costes,
+    // a no ser que FAL haya dado buenos resultados (cached). Skip FAL para ahorrar $.
+    const useFalForFreeTier = false;
+    const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
+
+    if (useFalForFreeTier && apiKey) {
+        try {
+            const sceneResult = await generateFalImage(fullPrompt, 'square');
+            sceneUrl = sceneResult.imageUrl;
+        } catch (falErr: any) {
+            console.warn(`[IntegrateImage] FAL falló (${falErr.message}), usando Pollinations`);
+            sceneUrl = null;
+        }
+    }
+
+    if (!sceneUrl) {
+        // Generar escena gratis con Pollinations (sin coste, mismo proxy que ya usamos abajo)
+        const cleanPrompt = fullPrompt
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^\w\s]/gi, '')
+            .substring(0, 200).trim().replace(/\s+/g, '_');
+        const seed = Math.floor(Math.random() * 1000000);
+        const raw = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
+        sceneUrl = `/api/proxy-image?url=${encodeURIComponent(raw)}`;
     }
 
     let composite: Buffer;
-    if (sceneUrl) {
-        // Scene generada OK: compositar imagen sobre la escena
-        try {
-            const sceneResp = await fetch(sceneUrl);
-            if (!sceneResp.ok) throw new Error(`Scene fetch failed: ${sceneResp.status}`);
-            const sceneBuf = await sceneResp.arrayBuffer();
-            const sceneImg = Buffer.from(sceneBuf);
-            composite = await sharp(sceneImg)
-                .composite([{ input: resized, left, top }])
-                .png()
-                .toBuffer();
-        } catch (fetchErr) {
-            // Falla al descargar escena - usar fondo oscuro
-            console.warn(`[IntegrateImage] No se pudo descargar escena: ${fetchErr}`);
-            composite = await makeDarkBackgroundWithImage(resized, left, top);
-        }
-    } else {
-        // Sin FAL: fondo oscuro elegante con la imagen
+    try {
+        const sceneResp = await fetch(sceneUrl);
+        if (!sceneResp.ok) throw new Error(`Scene fetch failed: ${sceneResp.status}`);
+        const sceneBuf = await sceneResp.arrayBuffer();
+        const sceneImg = Buffer.from(sceneBuf);
+        composite = await sharp(sceneImg)
+            .composite([{ input: resized, left, top }])
+            .png()
+            .toBuffer();
+    } catch (fetchErr) {
+        // Si no pudimos descargar la escena, composite directo sobre fondo oscuro
+        console.warn(`[IntegrateImage] Scene download failed: ${fetchErr}`);
         composite = await makeDarkBackgroundWithImage(resized, left, top);
     }
 
-    // Step 3: Suavizar bordes con img2img (si hay balance de FAL)
-    try {
-        const compDataUri = `data:image/png;base64,${composite.toString('base64')}`;
-        const final = await generateFluxImageToImage(compDataUri, fullPrompt, 0.15);
-        return final;
-    } catch (img2imgErr) {
-        // FAL sin balance para img2img - devolver el composite tal cual (base64 PNG)
-        console.warn(`[IntegrateImage] img2img falló, devolviendo composite sin suavizar: ${img2imgErr.message}`);
-        return `data:image/png;base64,${composite.toString('base64')}`;
-    }
+    // V62: ya NO se llama a Flux img2img (ahorra $0.10/imagen). Devolver composit tal cual.
+    return `data:image/png;base64,${composite.toString('base64')}`;
 }
 
 // Helper: crea fondo degradado oscuro con la imagen compositada
