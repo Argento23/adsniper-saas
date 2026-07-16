@@ -249,7 +249,7 @@ RETURN ONLY VALID JSON with this EXACT structure:
                                 "type": "Hook Name (e.g. AIDA, PAS, Social Proof)",
                                 "headline": "Attention-grabbing headline (max 40 chars)",
                                 "primary_text": "Compelling body copy with emojis, line breaks, benefits-focused, 80-120 words. Use persuasive language, urgency, and social proof.",
-                                "image_prompt": "CRITICAL: A LITERAL, PHYSICAL description of the actual product. NEVER use metaphors. Example: 'A physical [Product Name] resting on a minimal background, 8k, product photography... typography rendering: \"HEADLINE\"'."
+                                "image_prompt": "CRITICAL: Describe the visual scene literally based on the brand and product. If it's a physical product, describe it physically. If it's a service/agency, describe a relevant professional scene (people working, office, digital interface, etc). Example for product: 'A physical [Product Name] on a minimal background, 8k, product photography'. Example for service: 'Modern tech office with diverse team collaborating on laptops, warm lighting, professional photography'."
                             }
                         ]
                     }
@@ -261,8 +261,8 @@ RETURN ONLY VALID JSON with this EXACT structure:
                     - Focus on benefits, not features
                     - Add line breaks (\\n) for readability
                     - CRITICAL FOR IMAGES: The \`image_prompt\` MUST describe the literal PHYSICAL product (${productName}). NO METAPHORS. NO ABSTRACT CONCEPTS. If the product is a car, describe a car driving or parked. Do not draw "success" or "trophies".
-                    - The \`image_prompt\` MUST contain the exact same text you wrote for the \`headline\` field. You must include the text inside double quotes, preceded by "typography rendering:".
-                    - Example: If the headline is "¡Vende Más!", your image_prompt MUST end with: typography rendering: "¡Vende Más!". Do not use generic words like "Success" or "Ganar", use the actual headline.
+                    - If the ad feels like a physical product ad, include the headline text in the image as typography.
+                    - For service/agency ads, focus on the scene and people, typography is optional.
                     - Each ad must feel UNIQUE and creative
 
                     NO MARKDOWN. NO EXPLANATIONS. ONLY JSON.`
@@ -706,24 +706,19 @@ export async function POST(request: Request) {
                     .replace(/[\u0300-\u036f]/g, "")
                     .replace(/[¿¡]/g, "");
 
-                // ANCLAJE FÍSICO: Obligamos a empezar el prompt de Ideogram con el nombre real del producto
-                let fullPrompt = `A beautiful physical ${scrapedTitle}, ${basePrompt}, professional product photography, 8k, cinematic lighting, high quality, studio setup`;
-                if (cleanHeadline) {
-                    fullPrompt += `, typography rendering: "${cleanHeadline}"`;
-                }
-                // 🔍 INTEGRACIÓN AVANZADA (v2.1): Si hay imagen manual, usamos Inpainting/ProductShot
+                // Prompt versátil: funciona para productos físicos Y servicios/agencias
                 const hasManualImage = manual_image_base64 && manual_image_base64.length > 100;
-
-                // Forzamos un prompt descriptivo de iluminación y perspectiva si no existe
-                if (!fullPrompt.toLowerCase().includes('lighting') && !fullPrompt.toLowerCase().includes('shadow')) {
-                    fullPrompt += ", realistic soft shadows, volumetric lighting, high-end product photography, matches environment perspective";
+                const userStyle = manual_image_prompt ? `, ${manual_image_prompt}` : '';
+                let fullPrompt = `${scrapedTitle}${userStyle}, ${basePrompt}, professional photography, 8k, cinematic lighting, high quality, elegant composition, sharp focus`;
+                if (cleanHeadline) {
+                    fullPrompt += `, clean minimal typography overlay: "${cleanHeadline}"`;
                 }
 
                 const finalImageUrl = await (async () => {
                     // SI HAY IMAGEN MANUAL -> PRIORIDAD 1: BRIA PRODUCT SHOT (FAL)
                     if (hasManualImage) {
                         try {
-                            if (process.env.FAL_API_KEY) {
+                            if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
                                 console.log("🚀 Usando Bria Product Shot para integración realista...");
                                 const { generateBriaProductShot } = await import('@/lib/fal');
                                 const briaResult = await generateBriaProductShot(manual_image_base64, fullPrompt);
@@ -744,34 +739,18 @@ export async function POST(request: Request) {
                     }
 
                     // FLUJO ESTÁNDAR (Text-to-Image o Fallbacks)
-                    // 1. TRY FAL.AI (FLUX PRO/DEV)
+                    // 1. TRY FAL.AI (FLUX PRO/DEV) — mejor calidad/precio
                     try {
-                        if (process.env.FAL_API_KEY) {
+                        if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
                             const falResult = await generateFalImage(fullPrompt);
                             if (falResult && falResult.imageUrl) return falResult.imageUrl;
                         }
                     } catch (e) {
-                        console.error(`⚠️ Fal.ai failed, trying Ideogram...`);
+                        console.error(`⚠️ Fal.ai failed, usando fallback local...`);
                     }
 
-                    // 2. TRY IDEOGRAM V2 TEXT-TO-IMAGE
-                    try {
-                        const ideogramImage = await generateIdeogramImage(fullPrompt, scrapedImage);
-                        if (ideogramImage) return ideogramImage;
-                    } catch (e) {
-                        console.error(`⚠️ Ideogram failed, trying Replicate Flux...`);
-                    }
-
-                    // 3. TRY REPLICATE (FLUX)
-                    try {
-                        const replicateResult = await generateReplicateImage(fullPrompt);
-                        if (replicateResult && replicateResult.imageUrl) return replicateResult.imageUrl;
-                    } catch (e) {
-                        console.error(`⚠️ Replicate failed, trying Pollinations...`);
-                    }
-
-                    // 4. FINAL FALLBACK: POLLINATIONS
-                    const cleanPrompt = fullPrompt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s]/gi, '').substring(0, 100).trim().replace(/\s+/g, '_');
+                    // 2. FINAL FALLBACK: POLLINATIONS (si FAL falla)
+                    const cleanPrompt = fullPrompt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s]/gi, '').substring(0, 120).trim().replace(/\s+/g, '_');
                     const seed = Math.floor(Math.random() * 1000000);
                     const rawPollUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
                     return `/api/proxy-image?url=${encodeURIComponent(rawPollUrl)}&fallback=${encodeURIComponent(scrapedImage || '')}`;

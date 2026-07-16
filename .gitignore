@@ -13,6 +13,18 @@
 # testing
 /coverage
 
+# dev artifacts
+*.rar
+*.zip
+*.ps1
+*.py
+DEPLOY_AHORA.txt
+LIMPIAR_CACHE.txt
+Dockerfile
+README.md
+eslint.config.mjs
+postcss.config.mjs
+
 # next.js
 /.next/
 /out/

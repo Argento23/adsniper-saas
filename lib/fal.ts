@@ -104,9 +104,31 @@ export async function generateFalImage(
     prompt: string,
     imageSize: "square_hd" | "square" | "portrait_4_3" | "portrait_16_9" | "landscape_4_3" | "landscape_16_9" = "square"
 ): Promise<FalImageResponse> {
-    const result = await runFalAsync('https://fal.run/fal-ai/flux/dev', {
-        prompt, image_size: imageSize, num_inference_steps: 28, guidance_scale: 3.5, num_images: 1, enable_safety_checker: true
+    const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
+    console.log(`[Fal] 🖼️ Generando imagen con Flux Dev...`);
+
+    const response = await fetch('https://fal.run/fal-ai/flux/dev', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Key ${apiKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            prompt,
+            image_size: imageSize,
+            num_inference_steps: 28,
+            guidance_scale: 3.5,
+            num_images: 1,
+            enable_safety_checker: true,
+        }),
     });
+
+    if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Fal Flux error (${response.status}): ${err}`);
+    }
+
+    const result = await response.json();
     return { imageUrl: result.images[0].url, seed: result.seed };
 }
 
@@ -179,16 +201,45 @@ export async function generateBriaProductShot(
     imageBase64: string,
     sceneDescription: string
 ): Promise<string> {
-    const result = await runFalAsync('https://fal.run/fal-ai/bria/product-shot', {
-        image_url: imageBase64,
-        scene_description: sceneDescription,
-        // v45.1: Use manual padding to give the AI space to draw hands/people around the product.
-        // "automatic" forces a static centered packshot.
-        placement_type: "manual_padding",
-        padding: [300, 300, 300, 300], // [left, right, top, bottom] pixels for context
-        optimize_description: true,
-        num_results: 1
+    console.log(`[Fal] 🎬 Bria Product Shot con escena: "${sceneDescription.substring(0, 60)}..."`);
+
+    const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
+
+    // Upload image to FAL storage via direct REST API
+    const base64Data = imageBase64.split(',')[1] || imageBase64;
+    const buf = Buffer.from(base64Data, 'base64');
+
+    const uploadRes = await fetch('https://storage.fal.ai/', {
+        method: 'POST',
+        headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'image/png' },
+        body: buf,
     });
+    if (!uploadRes.ok) {
+        const errText = await uploadRes.text();
+        throw new Error(`Fal storage upload error (${uploadRes.status}): ${errText.substring(0, 200)}`);
+    }
+    const uploadResult = await uploadRes.json();
+    const imageUrl = uploadResult.url || uploadResult;
+    console.log(`[Fal] ✅ Imagen subida a CDN: ${imageUrl}`);
+
+    // Call Bria Product Shot synchronously
+    const resultRes = await fetch('https://fal.run/fal-ai/bria/product-shot', {
+        method: 'POST',
+        headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            image_url: imageUrl,
+            scene_description: sceneDescription,
+            placement_type: "manual_padding",
+            padding: [300, 300, 300, 300],
+            optimize_description: true,
+            num_results: 1,
+        }),
+    });
+    if (!resultRes.ok) {
+        const errText = await resultRes.text();
+        throw new Error(`Fal Bria error (${resultRes.status}): ${errText.substring(0, 200)}`);
+    }
+    const result = await resultRes.json();
     return result.images[0].url;
 }
 
