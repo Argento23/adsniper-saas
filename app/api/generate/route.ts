@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { generateReplicateImage } from '@/lib/replicate';
-import { generateFalImage } from '@/lib/fal';
+import { generateFalImage, generateFluxImageToImage } from '@/lib/fal';
 import { checkAndTrackUsage } from '@/lib/usageTracker';
+import sharp from 'sharp';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,6 +98,61 @@ const TEMPLATES: Record<string, any> = {
 };
 
 const getRandom = (arr: any[]) => arr[Math.floor(Math.random() * arr.length)];
+
+// Detecta si un base64 es un PNG con canal alpha (logo / gráfico con transparencia)
+function isTransparentPng(base64Str: string): boolean {
+    try {
+        if (!base64Str.includes('data:image/png')) return false;
+        const base64 = base64Str.split(',')[1] || base64Str;
+        const bytes = Buffer.from(base64, 'base64');
+        // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+        if (bytes[0] !== 0x89 || bytes[1] !== 0x50) return false;
+        // Color type at offset 25: 6 = RGBA (has alpha)
+        return bytes[25] === 6;
+    } catch { return false; }
+}
+
+// Dos pasos para integrar imagen en escena (funciona para logos Y productos):
+// 1. Generar escena completa con Flux Dev (text-to-image, solo prompt)
+// 2. Compositar imagen del usuario sobre la escena + img2img suave (0.15)
+async function integrateImageInScene(base64Str: string, fullPrompt: string): Promise<string> {
+    const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
+
+    // Step 1: Generar escena
+    const sceneResult = await generateFalImage(fullPrompt, 'square');
+    const sceneUrl = sceneResult.imageUrl;
+
+    // Step 2: Descargar escena y compositar imagen
+    const sceneResp = await fetch(sceneUrl);
+    const sceneBuf = await sceneResp.arrayBuffer();
+    const sceneImg = Buffer.from(sceneBuf);
+
+    const base64Data = base64Str.includes(',') ? base64Str.split(',')[1] : base64Str;
+    const imgBuf = Buffer.from(base64Data, 'base64');
+
+    const imgMeta = await sharp(imgBuf).metadata();
+    const iW = imgMeta.width || 512;
+    const iH = imgMeta.height || 512;
+    const targetW = Math.round(1024 * 0.30);
+    const targetH = Math.round(targetW * (iH / iW));
+    const left = Math.round((1024 - targetW) / 2);
+    const top = Math.round(1024 * 0.52);
+
+    const resized = await sharp(imgBuf)
+        .resize(targetW, targetH, { fit: 'inside' })
+        .ensureAlpha()
+        .toBuffer();
+
+    const composite = await sharp(sceneImg)
+        .composite([{ input: resized, left, top }])
+        .png()
+        .toBuffer();
+
+    // Step 3: Suavizar bordes
+    const compDataUri = `data:image/png;base64,${composite.toString('base64')}`;
+    const final = await generateFluxImageToImage(compDataUri, fullPrompt, 0.15);
+    return final;
+}
 
 // LOCAL FALLBACK GENERATOR (Ad Copy) - Supports COUNT
 function generateLocalAds(productName: string, desc: string, image: string, visualTheme?: string, count: number = 3, lang: string = 'es') {
@@ -714,26 +770,17 @@ export async function POST(request: Request) {
                 let fullPrompt = `${scrapedTitle}${userStyle}, ${basePrompt}, professional photography, 8k, cinematic lighting, high quality, elegant composition, sharp focus, NO TEXT, NO TYPOGRAPHY, NO LETTERS, NO WORDS ON IMAGE, clean background`;
 
                 const finalImageUrl = await (async () => {
-                    // SI HAY IMAGEN MANUAL -> PRIORIDAD 1: BRIA PRODUCT SHOT (FAL)
+                    // SI HAY IMAGEN MANUAL -> Dos pasos: generar escena + compositar imagen del usuario
+                    // (Bria Product Shot hace que la imagen quede gigante y frontal, especialmente para logos)
                     if (hasManualImage) {
                         try {
                             if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
-                                console.log("🚀 Usando Bria Product Shot para integración realista...");
-                                const { generateBriaProductShot } = await import('@/lib/fal');
-                                const briaResult = await generateBriaProductShot(manual_image_base64, fullPrompt);
-                                if (briaResult) return briaResult;
+                                console.log("🎨 Integrando imagen del usuario en escena (text-to-image + composite)...");
+                                const result = await integrateImageInScene(manual_image_base64, fullPrompt);
+                                if (result) return result;
                             }
                         } catch (e) {
-                            console.error(`⚠️ Bria Product Shot falló, intentando Inpainting...`);
-                        }
-
-                        // PRIORIDAD 2: REPLICATE FLUX FILL
-                        try {
-                            const { generateReplicateInpaint } = await import('@/lib/replicate');
-                            const inpaintResult = await generateReplicateInpaint(manual_image_base64, fullPrompt);
-                            if (inpaintResult) return inpaintResult;
-                        } catch (e) {
-                            console.error(`⚠️ Replicate Inpaint falló, usando flujo estándar...`);
+                            console.error(`⚠️ Integración falló, usando texto-to-image estándar...`);
                         }
                     }
 

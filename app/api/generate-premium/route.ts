@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import sharp from 'sharp';
-import { generateFluxInpaint, generateFluxImageToImage, generateBriaBackgroundRemoval } from '@/lib/fal';
+import { generateFluxInpaint, generateFluxImageToImage, generateBriaBackgroundRemoval, generateFalImage } from '@/lib/fal';
 
 // v41.9: Disable sharp cache to prevent memory saturation in serverless
 sharp.cache(false);
@@ -187,40 +187,50 @@ export async function POST(req: Request) {
         let version: string;
 
         if (logoMode) {
-            // V58 LOGO MODE: Componer logo en escena de forma natural
-            // NO usamos Bria (el logo ya tiene fondo transparente)
-            // NO usamos Image-to-Image strength alto (el logo llena todo el frame y no sigue el prompt)
-            // ESTRATEGIA: Redimensionar logo a proporción (20% del canvas), colocar en fondo neutral,
-            // luego Image-to-Image con strength BAJO (0.30) para que la IA integre naturalmente sin copiar la composición
-            console.log(`[V58] 🎨 Integrando logo en escena (strength 0.30)...`);
-            const iiStart = Date.now();
+            // V59 LOGO MODE: Two-step approach
+            // Step 1: Generar escena completa con text-to-image (sin input del usuario - sigue el prompt al 100%)
+            // Step 2: Compositar el logo real del usuario sobre la escena generada
+            // Step 3: Pass final img2img MUY bajo (0.15) solo para suavizar el borde del composite
+            console.log(`[V59] 🎨 Generando escena completa con Flux Dev (text-to-image)...`);
+            const sceneStart = Date.now();
 
-            // Componer: logo centrado en fondo gris neutral, tamaño proporcional
+            const fullPrompt = `${scene_prompt}, professional scene photography, 8k, cinematic lighting, highly detailed environment`;
+            const sceneResult = await generateFalImage(fullPrompt, 'square');
+            const sceneUrl = sceneResult.imageUrl;
+            console.log(`[V59] ⏱️ Escena generada en: ${((Date.now() - sceneStart)/1000).toFixed(1)}s`);
+
+            // Step 2: Descargar escena + compositar logo
+            console.log(`[V59] 🖼️ Compositando logo sobre la escena...`);
+            const sceneResponse = await fetch(sceneUrl);
+            const sceneBuffer = await sceneResponse.arrayBuffer();
+            const sceneImg = Buffer.from(sceneBuffer);
+
             const logoMeta = await sharp(optimizedInput).metadata();
             const lW = logoMeta.width || 512;
             const lH = logoMeta.height || 512;
-
-            // Logo ocupa 22% del ancho del canvas final
-            const targetLogoW = Math.round(1024 * 0.22);
+            // Logo al 28% del canvas, centrado horizontalmente, en el tercio inferior (como si estuviera colgado)
+            const targetLogoW = Math.round(1024 * 0.28);
             const targetLogoH = Math.round(targetLogoW * (lH / lW));
             const left = Math.round((1024 - targetLogoW) / 2);
-            const top = Math.round((1024 - targetLogoH) / 2);
+            const top = Math.round(1024 * 0.55);
 
             const resizedLogo = await sharp(optimizedInput)
                 .resize(targetLogoW, targetLogoH, { fit: 'inside' })
                 .ensureAlpha()
                 .toBuffer();
 
-            const composed = await sharp({ create: { width: 1024, height: 1024, channels: 3, background: '#606060' } })
+            const composite = await sharp(sceneImg)
                 .composite([{ input: resizedLogo, left, top }])
                 .png()
                 .toBuffer();
 
-            const dataUri = `data:image/png;base64,${composed.toString('base64')}`;
-            augmentedPrompt = `${scene_prompt}, professional scene photography, 8k, cinematic lighting, the logo integrated naturally into the environment as a sign/poster on the wall`;
-            finalImage = await generateFluxImageToImage(dataUri, augmentedPrompt, 0.30);
-            version = "v58-logo-lowstrength";
-            console.log(`[V58] ⏱️ Logo Integração tardó: ${((Date.now() - iiStart)/1000).toFixed(1)}s`);
+            // Step 3: Suavizar bordes del composite
+            console.log(`[V59] ✨ Suavizando bordes del composite...`);
+            const compositeDataUri = `data:image/png;base64,${composite.toString('base64')}`;
+            finalImage = await generateFluxImageToImage(compositeDataUri, fullPrompt, 0.15);
+            augmentedPrompt = fullPrompt;
+            version = "v59-logo-twostep";
+            console.log(`[V59] ⏱️ Total: ${((Date.now() - sceneStart)/1000).toFixed(1)}s`);
         } else {
             // PRODUCT MODE: pipeline actual (inpaint inverso + bake)
             console.log(`[V56] 🎨 Ensamblando Composición Base y Máscara Inversa...`);
