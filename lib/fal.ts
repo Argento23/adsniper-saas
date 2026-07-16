@@ -172,29 +172,35 @@ export async function generateBriaBackgroundRemoval(
 ): Promise<string> {
     console.log(`[Fal] ✂️ Solicitando eliminación de fondo para silueta perfecta...`);
 
-    // Convert base64 data URI to a Buffer and upload via @fal-ai/client SDK
-    const { fal } = await import('@fal-ai/client');
-    fal.config({ credentials: process.env.FAL_KEY || process.env.FAL_API_KEY });
+    const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
 
     const base64Data = imageBase64.split(',')[1] || imageBase64;
     const buf = Buffer.from(base64Data, 'base64');
-    const blob = new Blob([buf], { type: 'image/png' });
-    const file = new File([blob], 'product.png', { type: 'image/png' });
 
-    const imageUrl = await fal.storage.upload(file);
-    console.log(`[Fal] ✅ Imagen subida a CDN: ${imageUrl}`);
-
-    const result = await fal.subscribe('fal-ai/bria/background/remove', {
-        input: { image_url: imageUrl },
-        logs: true,
-        onQueueUpdate: (update) => {
-            if (update.status === 'IN_PROGRESS') {
-                update.logs.map((log: any) => log.message).forEach(console.log);
-            }
-        },
+    const uploadRes = await fetch('https://storage.fal.ai/', {
+        method: 'POST',
+        headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'image/png' },
+        body: buf,
     });
+    if (!uploadRes.ok) {
+        const errText = await uploadRes.text();
+        throw new Error(`Fal storage upload error (${uploadRes.status}): ${errText.substring(0, 200)}`);
+    }
+    const uploadResult = await uploadRes.json();
+    const imageUrl = uploadResult.url || uploadResult;
 
-    return result.data.image.url;
+    // Call Bria background removal synchronously
+    const resultRes = await fetch('https://fal.run/fal-ai/bria/background/remove', {
+        method: 'POST',
+        headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_url: imageUrl }),
+    });
+    if (!resultRes.ok) {
+        const errText = await resultRes.text();
+        throw new Error(`Fal Bria error (${resultRes.status}): ${errText.substring(0, 200)}`);
+    }
+    const result = await resultRes.json();
+    return result.image.url;
 }
 
 export async function generateBriaProductShot(
