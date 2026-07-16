@@ -124,11 +124,11 @@ async function integrateImageInScene(base64Str: string, fullPrompt: string): Pro
     const iW = imgMeta.width || 512;
     const iH = imgMeta.height || 512;
 
-    // Tamaño proporcional de la imagen en el canvas (30% del ancho)
-    const targetW = Math.round(1024 * 0.30);
+    // Tamaño proporcional de la imagen en el canvas (40% del ancho - más visible)
+    const targetW = Math.round(1024 * 0.40);
     const targetH = Math.round(targetW * (iH / iW));
     const left = Math.round((1024 - targetW) / 2);
-    const top = Math.round(1024 * 0.52);
+    const top = Math.round(1024 * 0.50);
 
     const resized = await sharp(imgBuf)
         .resize(targetW, targetH, { fit: 'inside' })
