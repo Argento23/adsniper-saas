@@ -78,7 +78,7 @@ const MOCK_ADS = [
 const FALLBACK_IMAGE = "https://placehold.co/800x800/101827/ffffff.png?text=Ad+Image"; // Simple, reliable placeholder
 
 // --- AD CARD COMPONENT (Fixes Shared State Bug) ---
-const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, brand, videosRemaining, onVideoGenerated, applyLogo }: { ad: any, index: number, premiumCredits: number, onPremiumVideoGenerated: (url: string) => void, isAdmin: boolean, brand: any, videosRemaining: number, onVideoGenerated: (remaining: number) => void, applyLogo: boolean }) => {
+const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, brand, videosRemaining, onVideoGenerated, applyLogo, applyText }: { ad: any, index: number, premiumCredits: number, onPremiumVideoGenerated: (url: string) => void, isAdmin: boolean, brand: any, videosRemaining: number, onVideoGenerated: (remaining: number) => void, applyLogo: boolean, applyText: boolean }) => {
     const { user } = useUser();
     const isAdminUser = isAdmin || user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase().trim() === 'gustavodornhofer@gmail.com');
     const [imgSrc, setImgSrc] = useState(ad.generated_image_url || ad.product_image_fallback || FALLBACK_IMAGE);
@@ -256,16 +256,18 @@ const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, b
             }
             ctx.drawImage(bgImg, sx, sy, sw, sh, 0, 0, SIZE, SIZE);
 
-            // 2. GRADIENTE NEGRO DE FONDO para legibilidad del texto
-            const grad = ctx.createLinearGradient(0, SIZE * 0.55, 0, SIZE);
-            grad.addColorStop(0, 'rgba(0,0,0,0)');
-            grad.addColorStop(0.5, 'rgba(0,0,0,0.55)');
-            grad.addColorStop(1, 'rgba(0,0,0,0.92)');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, SIZE, SIZE);
+            // 2. GRADIENTE NEGRO DE FONDO para legibilidad del texto (solo si applyText)
+            if (applyText) {
+                const grad = ctx.createLinearGradient(0, SIZE * 0.55, 0, SIZE);
+                grad.addColorStop(0, 'rgba(0,0,0,0)');
+                grad.addColorStop(0.5, 'rgba(0,0,0,0.55)');
+                grad.addColorStop(1, 'rgba(0,0,0,0.92)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, SIZE, SIZE);
+            }
 
-            // 3. TIPOGRAFÍA: headline + subcopy en el 75% inferior izquierdo
-            if (ad.headline) {
+            // 3. TIPOGRAFÍA: headline + subcopy en el 75% inferior izquierdo (solo si applyText)
+            if (applyText && ad.headline) {
                 const textMaxWidth = SIZE * 0.72;
                 const paddingX = 36;
                 let y = SIZE - 36 - 16;
@@ -465,8 +467,9 @@ const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, b
                             {/* TYPOGRAPHY OVERLAY (post-process): Headline + Subcopy renderizados con HTML/CSS.
                                 Funciona tanto en modo texto como en Studio Pro. El background es ahora la imagen,
                                 así que el texto se superpone con gradiente para legibilidad.
-                                Cubre hasta 75% del ancho para no chocar con el thumbnail de producto en bottom-right. */}
-                            {ad.headline && (
+                                Cubre hasta 75% del ancho para no chocar con el thumbnail de producto en bottom-right.
+                                Solo se muestra si applyText está activo. */}
+                            {applyText && ad.headline && (
                                 <div className="absolute inset-x-0 bottom-0 z-30 pointer-events-none">
                                     {/* Gradiente de fondo para legibilidad (cubre 75% del ancho) */}
                                     <div className="absolute inset-y-0 left-0 w-3/4 bg-gradient-to-r from-black/90 via-black/65 to-transparent"></div>
@@ -566,7 +569,7 @@ const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, b
                                     )}
 
                                     {/* TYPOGRAPHY OVERLAY EN EL MODAL (mismo overlay HTML/CSS) */}
-                                    {ad.headline && (
+                                    {applyText && ad.headline && (
                                         <div className="absolute inset-x-0 bottom-0 z-30 pointer-events-none">
                                             <div className="absolute inset-y-0 left-0 w-3/4 bg-gradient-to-r from-black/90 via-black/65 to-transparent"></div>
                                             <div className="relative px-8 pb-8 pt-16 w-3/4">
@@ -764,6 +767,7 @@ export default function Dashboard() {
     const [loadingStatus, setLoadingStatus] = useState('');
     const [activeTab, setActiveTab] = useState<'ads' | 'scripts'>('ads');
     const [applyLogo, setApplyLogo] = useState(true);
+    const [applyText, setApplyText] = useState(true);
 
     // Admin Helper
     const isLocalAdmin = user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase().trim() === 'gustavodornhofer@gmail.com') || plan === 'Infinity';
@@ -1337,6 +1341,24 @@ export default function Dashboard() {
                                             </button>
                                         </div>
 
+                                        {/* Text Overlay Toggle */}
+                                        <div className="flex-1 flex items-center justify-between bg-slate-900 rounded-xl px-4 py-3 border border-slate-800 focus-within:border-emerald-500/50 transition-colors">
+                                            <div className="flex flex-col">
+                                                <span className="text-xs font-bold text-slate-300 uppercase flex items-center gap-2">
+                                                    <FaPen className={applyText ? "text-emerald-400" : "text-slate-600"} />
+                                                    Texto en la imagen
+                                                </span>
+                                                <span className="text-[10px] text-slate-500 mt-0.5">Solo imagen o imagen + texto</span>
+                                            </div>
+
+                                            <button
+                                                onClick={() => setApplyText(!applyText)}
+                                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${applyText ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                                            >
+                                                <span className={`${applyText ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`} />
+                                            </button>
+                                        </div>
+
                                         {/* QUANTITY SELECTOR */}
                                         <div className="flex-1 flex items-center justify-between bg-slate-900 rounded-xl px-4 py-3 border border-slate-800">
                                             <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
@@ -1439,6 +1461,7 @@ export default function Dashboard() {
                                         onVideoGenerated={(remaining: number) => setVideosRemaining(remaining)}
                                         onPremiumVideoGenerated={(remaining: number) => setPremiumCredits(remaining)}
                                         applyLogo={applyLogo}
+                                        applyText={applyText}
                                         user={user}
                                     />
                                 ))}
