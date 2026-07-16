@@ -86,32 +86,69 @@ async function createInverseMaskPayload(
 }
 
 // LOGO DETECTION: Check if the image is a flat logo/graphic vs a 3D physical product
-// Logos typically have large transparent areas and don't look like photographed products.
-// We sample the alpha channel: if >50% of pixels are transparent, it's likely a logo/graphic overlay.
+// We analyze both transparency AND the spatial distribution of opaque pixels.
+// - A product photo with background removed: large CONTIGUOUS opaque region (the product itself)
+// - A flat logo/graphic: small or multiple scattered opaque regions (the design elements)
+// Detection: if the biggest opaque blob is < 12% of total pixels AND > 65% is transparent → LOGO
 async function isLikelyLogo(buffer: Buffer): Promise<boolean> {
     try {
         const meta = await sharp(buffer).metadata();
-        // If no alpha channel, it's not a logo with transparency
         if (!meta.hasAlpha) return false;
+        const { width = 1, height = 1 } = meta;
+        const totalPixels = width * height;
 
-        const pixels = await sharp(buffer)
+        // Get alpha channel as raw grayscale values (0-255)
+        const alphaData = await sharp(buffer)
             .ensureAlpha()
-            .extractChannel(3) // Alpha channel only
+            .extractChannel(3)
             .raw()
-            .toBuffer();
+            .toBuffer({ resolveWithObject: false }) as Buffer;
 
+        // Count transparent pixels and find contiguous opaque regions
         let transparentCount = 0;
-        const total = pixels.length;
-        for (let i = 0; i < total; i++) {
-            if (pixels[i] < 25) transparentCount++; // alpha < ~10%
+        const visited = new Uint8Array(alphaData.length);
+        let maxOpaqueBlob = 0;
+
+        for (let i = 0; i < alphaData.length; i++) {
+            if (alphaData[i] < 25) {
+                transparentCount++;
+                continue;
+            }
+            // This pixel is at least partially opaque — check if it's fully opaque
+            if (alphaData[i] < 200) continue; // semi-transparent, skip for blob detection
+
+            // Flood-fill to find connected opaque region size
+            if (visited[i]) continue;
+            let blobSize = 0;
+            const stack = [i];
+            while (stack.length > 0) {
+                const idx = stack.pop()!;
+                if (visited[idx]) continue;
+                if (alphaData[idx] < 200) continue;
+                visited[idx] = 1;
+                blobSize++;
+
+                // Check 4 neighbors
+                const x = idx % width;
+                const y = Math.floor(idx / width);
+                if (x > 0) stack.push(idx - 1);
+                if (x < width - 1) stack.push(idx + 1);
+                if (y > 0) stack.push(idx - width);
+                if (y < height - 1) stack.push(idx + width);
+            }
+            if (blobSize > maxOpaqueBlob) maxOpaqueBlob = blobSize;
         }
 
-        const ratio = transparentCount / total;
-        console.log(`[V57 Logo Detection] Alpha transparency ratio: ${(ratio * 100).toFixed(1)}%`);
-        // If > 40% of pixels are transparent, treat as logo-style image
-        return ratio > 0.4;
+        const transparentRatio = transparentCount / alphaData.length;
+        const opaqueBlobRatio = maxOpaqueBlob / totalPixels;
+
+        console.log(`[V58 Logo Detection] Transparent: ${(transparentRatio * 100).toFixed(1)}%, biggest opaque blob: ${(opaqueBlobRatio * 100).toFixed(1)}% of image`);
+
+        // LOGO if: > 65% transparent AND biggest blob is < 12% of total pixels
+        // This distinguishes logos (small design elements) from products (large contiguous object)
+        return transparentRatio > 0.65 && opaqueBlobRatio < 0.12;
     } catch (e) {
-        console.warn('[V57 Logo Detection] Failed, assuming product:', e);
+        console.warn('[V58 Logo Detection] Failed, assuming product:', e);
         return false;
     }
 }
@@ -141,24 +178,49 @@ export async function POST(req: Request) {
         
         const optimizedInput = await sharp(inputBuffer).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).toBuffer();
 
-        // V57: DETECTAR LOGO vs PRODUCTO para elegir pipeline
+        // V58: DETECTAR LOGO vs PRODUCTO para elegir pipeline
         const logoMode = await isLikelyLogo(optimizedInput);
-        console.log(`[V57] 🏷️ Modo: ${logoMode ? 'LOGO (Image-to-Image)' : 'PRODUCTO (Inpaint + Bake)'}`);
+        console.log(`[V58] 🏷️ Modo: ${logoMode ? 'LOGO (Image-to-Image)' : 'PRODUCTO (Inpaint + Bake)'}`);
 
         let finalImage: string;
         let augmentedPrompt: string;
         let version: string;
 
         if (logoMode) {
-            // LOGO MODE: Image-to-Image con strength alto para integrar el logo en la escena
-            // La IA redibuja el logo dentro del contexto sin preservar píxeles exactos
-            console.log(`[V57] 🎨 Integrando logo en escena vía Image-to-Image (strength 0.75)...`);
+            // V58 LOGO MODE: Componer logo en escena de forma natural
+            // NO usamos Bria (el logo ya tiene fondo transparente)
+            // NO usamos Image-to-Image strength alto (el logo llena todo el frame y no sigue el prompt)
+            // ESTRATEGIA: Redimensionar logo a proporción (20% del canvas), colocar en fondo neutral,
+            // luego Image-to-Image con strength BAJO (0.30) para que la IA integre naturalmente sin copiar la composición
+            console.log(`[V58] 🎨 Integrando logo en escena (strength 0.30)...`);
             const iiStart = Date.now();
-            augmentedPrompt = `${scene_prompt}, exact logo design displayed in the scene, professional photography, 8k, NO TEXT, NO TYPOGRAPHY`;
-            const dataUri = `data:image/png;base64,${optimizedInput.toString('base64')}`;
-            finalImage = await generateFluxImageToImage(dataUri, augmentedPrompt, 0.75);
-            version = "v57-logo-img2img";
-            console.log(`[V57] ⏱️ Logo Image-to-Image tardó: ${((Date.now() - iiStart)/1000).toFixed(1)}s`);
+
+            // Componer: logo centrado en fondo gris neutral, tamaño proporcional
+            const logoMeta = await sharp(optimizedInput).metadata();
+            const lW = logoMeta.width || 512;
+            const lH = logoMeta.height || 512;
+
+            // Logo ocupa 22% del ancho del canvas final
+            const targetLogoW = Math.round(1024 * 0.22);
+            const targetLogoH = Math.round(targetLogoW * (lH / lW));
+            const left = Math.round((1024 - targetLogoW) / 2);
+            const top = Math.round((1024 - targetLogoH) / 2);
+
+            const resizedLogo = await sharp(optimizedInput)
+                .resize(targetLogoW, targetLogoH, { fit: 'inside' })
+                .ensureAlpha()
+                .toBuffer();
+
+            const composed = await sharp({ create: { width: 1024, height: 1024, channels: 3, background: '#606060' } })
+                .composite([{ input: resizedLogo, left, top }])
+                .png()
+                .toBuffer();
+
+            const dataUri = `data:image/png;base64,${composed.toString('base64')}`;
+            augmentedPrompt = `${scene_prompt}, professional scene photography, 8k, cinematic lighting, the logo integrated naturally into the environment as a sign/poster on the wall`;
+            finalImage = await generateFluxImageToImage(dataUri, augmentedPrompt, 0.30);
+            version = "v58-logo-lowstrength";
+            console.log(`[V58] ⏱️ Logo Integração tardó: ${((Date.now() - iiStart)/1000).toFixed(1)}s`);
         } else {
             // PRODUCT MODE: pipeline actual (inpaint inverso + bake)
             console.log(`[V56] 🎨 Ensamblando Composición Base y Máscara Inversa...`);
@@ -177,10 +239,10 @@ export async function POST(req: Request) {
             const bakeStart = Date.now();
             
             // Step 2: Precision Harmony Bake.
-            const strength = 0.22; 
+            const strength = 0.30; 
             finalImage = await generateFluxImageToImage(structureImage, augmentedPrompt, strength);
-            version = "v56-flux-inpaint-bake";
-            console.log(`[V56] ⏱️ Horneado Físico tardó: ${((Date.now() - bakeStart)/1000).toFixed(1)}s`);
+            version = "v58-flux-inpaint-bake";
+            console.log(`[V58] ⏱️ Horneado Físico tardó: ${((Date.now() - bakeStart)/1000).toFixed(1)}s`);
         }
 
         const totalTime = ((Date.now() - startTime)/1000).toFixed(1);
