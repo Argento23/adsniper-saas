@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import sharp from 'sharp';
-import { generateFluxInpaint, generateFluxImageToImage, generateBriaBackgroundRemoval, generateFalImage } from '@/lib/fal';
+import { generateFluxInpaint, generateFluxImageToImage, generateBriaBackgroundRemoval, generateFalImage, FalBalanceExhaustedError } from '@/lib/fal';
 
 // v41.9: Disable sharp cache to prevent memory saturation in serverless
 sharp.cache(false);
@@ -194,43 +194,86 @@ export async function POST(req: Request) {
             console.log(`[V59] 🎨 Generando escena completa con Flux Dev (text-to-image)...`);
             const sceneStart = Date.now();
 
-            const fullPrompt = `${scene_prompt}, professional scene photography, 8k, cinematic lighting, highly detailed environment`;
-            const sceneResult = await generateFalImage(fullPrompt, 'square');
-            const sceneUrl = sceneResult.imageUrl;
-            console.log(`[V59] ⏱️ Escena generada en: ${((Date.now() - sceneStart)/1000).toFixed(1)}s`);
+            try {
+                const fullPrompt = `${scene_prompt}, professional scene photography, 8k, cinematic lighting, highly detailed environment`;
+                const sceneResult = await generateFalImage(fullPrompt, 'square');
+                const sceneUrl = sceneResult.imageUrl;
+                console.log(`[V59] ⏱️ Escena generada en: ${((Date.now() - sceneStart)/1000).toFixed(1)}s`);
 
-            // Step 2: Descargar escena + compositar logo
-            console.log(`[V59] 🖼️ Compositando logo sobre la escena...`);
-            const sceneResponse = await fetch(sceneUrl);
-            const sceneBuffer = await sceneResponse.arrayBuffer();
-            const sceneImg = Buffer.from(sceneBuffer);
+                // Step 2: Descargar escena + compositar logo
+                console.log(`[V59] 🖼️ Compositando logo sobre la escena...`);
+                const sceneResponse = await fetch(sceneUrl);
+                const sceneBuffer = await sceneResponse.arrayBuffer();
+                const sceneImg = Buffer.from(sceneBuffer);
 
-            const logoMeta = await sharp(optimizedInput).metadata();
-            const lW = logoMeta.width || 512;
-            const lH = logoMeta.height || 512;
-            // Logo al 28% del canvas, centrado horizontalmente, en el tercio inferior (como si estuviera colgado)
-            const targetLogoW = Math.round(1024 * 0.28);
-            const targetLogoH = Math.round(targetLogoW * (lH / lW));
-            const left = Math.round((1024 - targetLogoW) / 2);
-            const top = Math.round(1024 * 0.55);
+                const logoMeta = await sharp(optimizedInput).metadata();
+                const lW = logoMeta.width || 512;
+                const lH = logoMeta.height || 512;
+                // Logo al 28% del canvas, centrado horizontalmente, en el tercio inferior (como si estuviera colgado)
+                const targetLogoW = Math.round(1024 * 0.28);
+                const targetLogoH = Math.round(targetLogoW * (lH / lW));
+                const left = Math.round((1024 - targetLogoW) / 2);
+                const top = Math.round(1024 * 0.55);
 
-            const resizedLogo = await sharp(optimizedInput)
-                .resize(targetLogoW, targetLogoH, { fit: 'inside' })
-                .ensureAlpha()
-                .toBuffer();
+                const resizedLogo = await sharp(optimizedInput)
+                    .resize(targetLogoW, targetLogoH, { fit: 'inside' })
+                    .ensureAlpha()
+                    .toBuffer();
 
-            const composite = await sharp(sceneImg)
-                .composite([{ input: resizedLogo, left, top }])
-                .png()
-                .toBuffer();
+                const composite = await sharp(sceneImg)
+                    .composite([{ input: resizedLogo, left, top }])
+                    .png()
+                    .toBuffer();
 
-            // Step 3: Suavizar bordes del composite
-            console.log(`[V59] ✨ Suavizando bordes del composite...`);
-            const compositeDataUri = `data:image/png;base64,${composite.toString('base64')}`;
-            finalImage = await generateFluxImageToImage(compositeDataUri, fullPrompt, 0.15);
-            augmentedPrompt = fullPrompt;
-            version = "v59-logo-twostep";
-            console.log(`[V59] ⏱️ Total: ${((Date.now() - sceneStart)/1000).toFixed(1)}s`);
+                // Step 3: Suavizar bordes del composite
+                console.log(`[V59] ✨ Suavizando bordes del composite...`);
+                const compositeDataUri = `data:image/png;base64,${composite.toString('base64')}`;
+                finalImage = await generateFluxImageToImage(compositeDataUri, fullPrompt, 0.15);
+                augmentedPrompt = fullPrompt;
+                version = "v59-logo-twostep";
+                console.log(`[V59] ⏱️ Total: ${((Date.now() - sceneStart)/1000).toFixed(1)}s`);
+
+            } catch (logoErr: any) {
+                if (logoErr instanceof FalBalanceExhaustedError) {
+                    // FAL sin balance: fallback directo - composite del logo en fondo neutral
+                    // No generamos escena con IA, solo compositamos el logo en un fondo bonito
+                    console.warn(`[V59] ⚠️ FAL sin balance. Haciendo fallback directo...`);
+                    const fallbackStart = Date.now();
+
+                    const logoMeta = await sharp(optimizedInput).metadata();
+                    const lW = logoMeta.width || 512;
+                    const lH = logoMeta.height || 512;
+                    const targetLogoW = Math.round(1024 * 0.30);
+                    const targetLogoH = Math.round(targetLogoW * (lH / lW));
+                    const left = Math.round((1024 - targetLogoW) / 2);
+                    const top = Math.round(1024 * 0.52);
+
+                    const resizedLogo = await sharp(optimizedInput)
+                        .resize(targetLogoW, targetLogoH, { fit: 'inside' })
+                        .ensureAlpha()
+                        .toBuffer();
+
+                    // Fondo degradado elegante en vez de escena IA
+                    const bgBuffer = await sharp({
+                        create: { width: 1024, height: 1024, channels: 3, background: '#1a1a2e' }
+                    })
+                        .png()
+                        .toBuffer();
+
+                    const composite = await sharp(bgBuffer)
+                        .composite([{ input: resizedLogo, left, top }])
+                        .png()
+                        .toBuffer();
+
+                    const fallbackDataUri = `data:image/png;base64,${composite.toString('base64')}`;
+                    augmentedPrompt = scene_prompt;
+                    finalImage = fallbackDataUri; // Ya es PNG base64 listo
+                    version = "v59-logo-fallback-no-fal";
+                    console.log(`[V59] ⏱️ Fallback completado: ${((Date.now() - fallbackStart)/1000).toFixed(1)}s`);
+                } else {
+                    throw logoErr;
+                }
+            }
         } else {
             // PRODUCT MODE: pipeline actual (inpaint inverso + bake)
             console.log(`[V56] 🎨 Ensamblando Composición Base y Máscara Inversa...`);

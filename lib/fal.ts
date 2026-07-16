@@ -70,6 +70,13 @@ export async function pollFalResult(requestId: string, apiKey: string, modelName
 /**
  * Universal Async Fal Runner
  */
+export class FalBalanceExhaustedError extends Error {
+    constructor() {
+        super('FAL_BALANCE_EXHAUSTED');
+        this.name = 'FalBalanceExhaustedError';
+    }
+}
+
 async function runFalAsync(url: string, payload: any): Promise<any> {
     const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
     if (!apiKey) throw new Error('FAL_KEY no configurado');
@@ -88,8 +95,11 @@ async function runFalAsync(url: string, payload: any): Promise<any> {
     });
 
     if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Fal.ai Submit Error (${response.status}): ${error}`);
+        const errorText = await response.text();
+        if (response.status === 403 && errorText.includes('balance')) {
+            throw new FalBalanceExhaustedError();
+        }
+        throw new Error(`Fal.ai Submit Error (${response.status}): ${errorText}`);
     }
 
     const data = await response.json();
