@@ -140,7 +140,6 @@ async function integrateImageInScene(
             }
         }
     }
-    }
 
     // Fallback: composite simple con Pollinations (gratis)
     const base64Data = base64Str.includes(',') ? base64Str.split(',')[1] : base64Str;
