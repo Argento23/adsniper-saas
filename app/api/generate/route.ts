@@ -322,16 +322,32 @@ async function generateIdeogramImage(prompt: string, referenceImage: string | nu
 }
 
 // GROQ API GENERATOR (Llama 3 70B) - Professional Copy & Prompts
-async function generateGroqAds(productName: string, desc: string, count: number, lang: string = 'es') {
+async function generateGroqAds(productName: string, desc: string, count: number, lang: string = 'es', brand: any = {}) {
     const apiKey = process.env.GROQ_API_KEY;
-    console.log(`ðŸ”‘ Groq Check: Key Present? ${!!apiKey && apiKey.length > 5}`);
+    console.log(`🔑 Groq Check: Key Present? ${!!apiKey && apiKey.length > 5}`);
 
     if (!apiKey || apiKey.length < 10) {
-        console.warn("âš ï¸ Groq Key missing or too short.");
+        console.warn("⚠️ Groq Key missing or too short.");
         return [{ type: "ERROR", headline: "GROQ KEY MISSING IN ENV", primary_text: "Check .env.local", image_prompt: "error" }];
     }
+
+    const brandName = brand?.name || productName;
+    const brandTone = brand?.tone || 'Profesional';
+    const brandAvatar = brand?.avatar || '';
+    const brandColor = brand?.primary_color || '';
+    const toneMap: Record<string, string> = {
+        'Profesional': 'professional, trustworthy, authoritative',
+        'Divertido': 'fun, playful, energetic, use humor',
+        'Urgente': 'urgent, FOMO-driven, action-oriented, scarcity',
+        'Lujoso': 'luxurious, elegant, exclusive, premium',
+        'Amigable': 'friendly, warm, approachable, conversational',
+        'Agresivo': 'bold, direct, confrontational, disruptive'
+    };
+    const toneDesc = toneMap[brandTone] || toneMap['Profesional'];
+    const personaLine = brandAvatar ? `\nTARGET PERSONA: ${brandAvatar}` : '';
+
     try {
-        console.log(`ðŸ¦™ Generating ${count} ads with Llama 3 (70b-8192) on Groq...`);
+        console.log(`🦙 Generating ${count} ads with Llama 3 (70b-8192) on Groq... [Brand: ${brandName}, Tone: ${brandTone}]`);
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -339,40 +355,46 @@ async function generateGroqAds(productName: string, desc: string, count: number,
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                model: "llama-3.3-70b-versatile", // Revert to LATEST STABLE
+                model: "llama-3.3-70b-versatile",
                 messages: [
                     {
                         role: "system",
-                        content: `You are an expert Meta Ads copywriter and creative director. Generate ${count} high-converting ad variations in ${lang === 'es' ? 'SPANISH' : 'ENGLISH'}.
+                        content: `You are an expert Meta Ads copywriter and creative director for the brand "${brandName}". Generate ${count} high-converting ad variations in ${lang === 'es' ? 'SPANISH' : 'ENGLISH'}.
+
+BRAND IDENTITY:
+- Brand: ${brandName}
+- Tone: ${toneDesc}
+${personaLine}
 
 RETURN ONLY VALID JSON with this EXACT structure:
 {
   "ads": [
-                            {
-                                "type": "Hook Name (e.g. AIDA, PAS, Social Proof)",
-                                "headline": "Attention-grabbing headline (max 40 chars)",
-                                "primary_text": "Compelling body copy with emojis, line breaks, benefits-focused, 80-120 words. Use persuasive language, urgency, and social proof.",
-                                "image_prompt": "CRITICAL: Describe the visual scene literally based on the brand and product. If it's a physical product, describe it physically. If it's a service/agency, describe a relevant professional scene (people working, office, digital interface, etc). Example for product: 'A physical [Product Name] on a minimal background, 8k, product photography'. Example for service: 'Modern tech office with diverse team collaborating on laptops, warm lighting, professional photography'."
-                            }
-                        ]
-                    }
+    {
+      "type": "Hook Name (e.g. AIDA, PAS, Social Proof)",
+      "headline": "Attention-grabbing headline (max 40 chars)",
+      "primary_text": "Compelling body copy with emojis, line breaks, benefits-focused, 80-120 words.",
+      "image_prompt": "CRITICAL: Describe the literal visual scene. If physical product, describe it physically. If service/agency, describe a relevant professional scene."
+    }
+  ]
+}
 
-                    GUIDELINES:
-                    - Use varied persuasion frameworks (AIDA, PAS, Social Proof, Storytelling)
-                    - Include emojis strategically (2-4 per ad)
-                    - Create urgency and FOMO
-                    - Focus on benefits, not features
-                    - Add line breaks (\\n) for readability
-                    - CRITICAL FOR IMAGES: The \`image_prompt\` MUST describe the literal PHYSICAL product (${productName}). NO METAPHORS. NO ABSTRACT CONCEPTS. If the product is a car, describe a car driving or parked. Do not draw "success" or "trophies".
-                    - If the ad feels like a physical product ad, include the headline text in the image as typography.
-                    - For service/agency ads, focus on the scene and people, typography is optional.
-                    - Each ad must feel UNIQUE and creative
+GUIDELINES:
+- Write copy that matches the brand tone (${toneDesc})
+- Use varied persuasion frameworks (AIDA, PAS, Social Proof, Storytelling)
+- Include emojis strategically (2-4 per ad)
+- Create urgency and FOMO
+- Focus on benefits, not features
+- Add line breaks (\\n) for readability
+- CRITICAL FOR IMAGES: The \`image_prompt\` MUST describe the literal PHYSICAL product (${productName}). NO METAPHORS. NO ABSTRACT CONCEPTS.
+- For service/agency ads, focus on the scene and people, typography is optional.
+- Each ad must feel UNIQUE and creative
+- The headline and copy should speak directly to the target persona if provided
 
-                    NO MARKDOWN. NO EXPLANATIONS. ONLY JSON.`
+NO MARKDOWN. NO EXPLANATIONS. ONLY JSON.`
                     },
                     {
                         role: "user",
-                        content: `Product: ${productName}\n\nDescription: ${desc}\n\nGenerate ${count} CREATIVE, HIGH-CONVERTING ad variations that feel premium and persuasive.`
+                        content: `Brand: ${brandName}\nProduct: ${productName}\n\nDescription: ${desc}\n\nGenerate ${count} CREATIVE, HIGH-CONVERTING ad variations that feel premium and persuasive.`
                     }
                 ],
                 temperature: 0.7
@@ -421,17 +443,20 @@ RETURN ONLY VALID JSON with this EXACT structure:
     }
 }
 
-async function generateGroqScripts(productName: string, desc: string, lang: string = 'es') {
+async function generateGroqScripts(productName: string, desc: string, lang: string = 'es', brand: any = {}) {
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-        console.warn("âš ï¸ No GROQ_API_KEY for scripts, using fallback.");
+        console.warn("⚠️ No GROQ_API_KEY for scripts, using fallback.");
         return generateFallbackScripts(productName, desc, lang);
     }
 
     const isEs = lang === 'es' || lang.includes('es');
+    const brandName = brand?.name || productName;
+    const brandTone = brand?.tone || 'Profesional';
+    const brandAvatar = brand?.avatar || '';
 
     try {
-        console.log(`ðŸŽ¬ Generating AI video scripts with Groq for: ${productName}`);
+        console.log(`🎬 Generating AI video scripts with Groq for: ${brandName} [Tone: ${brandTone}]`);
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -443,7 +468,12 @@ async function generateGroqScripts(productName: string, desc: string, lang: stri
                 messages: [
                     {
                         role: "system",
-                        content: `You are a viral video content strategist and scriptwriter for TikTok, Instagram Reels, and YouTube Shorts.Create 4 UNIQUE, CREATIVE video scripts for a specific product.
+                        content: `You are a viral video content strategist and scriptwriter for TikTok, Instagram Reels, and YouTube Shorts. Create 4 UNIQUE, CREATIVE video scripts for the brand "${brandName}".
+
+BRAND CONTEXT:
+- Brand: ${brandName}
+- Tone: ${brandTone}
+${brandAvatar ? `- Target audience: ${brandAvatar}` : ''}
 
 RETURN ONLY VALID JSON with this EXACT structure:
             {
@@ -483,7 +513,7 @@ NO MARKDOWN.ONLY JSON.`
                     },
                     {
                         role: "user",
-                        content: `Product: ${productName} \n\nDescription: ${desc} \n\nCreate 4 unique, platform - specific video scripts that a content creator would actually want to film.`
+                        content: `Brand: ${brandName}\nProduct: ${productName}\nTone: ${brandTone}\n\nDescription: ${desc}\n\nCreate 4 unique, platform-specific video scripts that match the brand tone and a content creator would actually want to film.`
                     }
                 ],
                 temperature: 0.8
@@ -750,7 +780,7 @@ export async function POST(request: Request) {
             // We use count here to generate ALL ads locally
             data = {
                 ads: [], // Leave empty to trigger GROQ HYBRID FILL below
-                scripts: await generateGroqScripts(scrapedTitle, scrapedDesc, language),
+                scripts: await generateGroqScripts(scrapedTitle, scrapedDesc, language, brand),
                 product_title: scrapedTitle,
                 product_image: scrapedImage,
                 _mode: "local_to_groq_fallback"
@@ -760,7 +790,7 @@ export async function POST(request: Request) {
         // HYBRID FILL: If n8n returned fewer ads than requested, fill the gap locally
         if (data.ads && Array.isArray(data.ads) && data.ads.length < count) {
             // Try Groq First
-            const groqAds = await generateGroqAds(scrapedTitle, scrapedDesc, count - data.ads.length, language);
+            const groqAds = await generateGroqAds(scrapedTitle, scrapedDesc, count - data.ads.length, language, brand);
 
             if (groqAds && Array.isArray(groqAds) && groqAds.length > 0) {
                 // Check for ERROR object
@@ -849,7 +879,7 @@ export async function POST(request: Request) {
 
         // Ensure scripts are not undefined if n8n failed to return them
         if (!data.scripts || !Array.isArray(data.scripts) || data.scripts.length === 0) {
-            data.scripts = await generateGroqScripts(scrapedTitle, scrapedDesc, language);
+            data.scripts = await generateGroqScripts(scrapedTitle, scrapedDesc, language, brand);
         }
 
 
