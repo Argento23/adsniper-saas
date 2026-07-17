@@ -144,66 +144,37 @@ async function isLikelyLogo(buffer: Buffer): Promise<boolean> {
     }
 }
 
-// V73: Remove solid background from logo using color sampling + flood fill from corners
-// Works for both alpha and non-alpha images
+// V74: BRUTE FORCE background removal — remove any pixel with all RGB > 240
+// This is the simplest possible approach that GUARANTEES white backgrounds are removed.
+// Logout is bright RGB across image → those become transparent.
 async function removeSolidBackground(buffer: Buffer): Promise<Buffer> {
     const meta = await sharp(buffer).metadata();
     const { width = 1, height = 1 } = meta;
-
-    // Get raw RGBA pixels
-    const raw = await sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: false }) as Buffer;
     const channels = 4;
 
-    // Sample center of each edge (top-center, bottom-center, left-center, right-center)
-    // These are more likely to be background than corners (which might have artifacts)
-    const samplePoints = [
-        { x: Math.floor(width / 2), y: 0 },                    // top center
-        { x: Math.floor(width / 2), y: height - 1 },           // bottom center
-        { x: 0, y: Math.floor(height / 2) },                    // left center
-        { x: width - 1, y: Math.floor(height / 2) },           // right center
-        { x: 0, y: 0 },                                         // top-left
-        { x: width - 1, y: 0 },                                 // top-right
-    ];
+    const raw = await sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: false }) as Buffer;
+    const output = Buffer.from(raw);
 
-    // Collect background color candidates (sample 5x5 area around each point)
-    const samples: { r: number; g: number; b: number }[] = [];
-    for (const pt of samplePoints) {
-        for (let dy = -2; dy <= 2; dy++) {
-            for (let dx = -2; dx <= 2; dx++) {
-                const sx = Math.max(0, Math.min(width - 1, pt.x + dx));
-                const sy = Math.max(0, Math.min(height - 1, pt.y + dy));
-                const idx = (sy * width + sx) * channels;
-                samples.push({ r: raw[idx], g: raw[idx + 1], b: raw[idx + 2] });
-            }
-        }
-    }
-
-    // K-means-like: find the dominant color cluster (background)
-    // Simple approach: take the most common color neighborhood
-    let rSum = 0, gSum = 0, bSum = 0;
-    for (const s of samples) { rSum += s.r; gSum += s.g; bSum += s.b; }
-    const bgR = Math.round(rSum / samples.length);
-    const bgG = Math.round(gSum / samples.length);
-    const bgB = Math.round(bSum / samples.length);
-    console.log(`[V73] 🎨 Detected background: rgb(${bgR}, ${bgG}, ${bgB}) from ${samples.length} samples`);
-
-    // Flood-fill transparency: pixels close to background color → transparent
-    const threshold = 60;
-    const output = Buffer.alloc(raw.length);
+    let transparentCount = 0;
+    let opaqueCount = 0;
+    const threshold = 240;
 
     for (let i = 0; i < raw.length; i += channels) {
         const r = raw[i], g = raw[i + 1], b = raw[i + 2];
-        const dist = Math.sqrt((r - bgR) ** 2 + (g - bgG) ** 2 + (b - bgB) ** 2);
-        output[i] = r;
-        output[i + 1] = g;
-        output[i + 2] = b;
-        output[i + 3] = dist < threshold ? 0 : 255;
+        const a = raw[i + 3];
+        // Only remove pixels with alpha > 200 that are near-white background.
+        // Anti-aliased pixels with low alpha survive (preserve smooth edges).
+        if (a > 200 && r > threshold && g > threshold && b > threshold) {
+            output[i + 3] = 0; // transparent
+            transparentCount++;
+        } else {
+            output[i + 3] = Math.max(a, 200); // preserve logo, smooth AA edges
+            opaqueCount++;
+        }
     }
 
-    // Smooth the alpha edge to avoid harsh cuts
-    return sharp(output, { raw: { width, height, channels } })
-        .png()
-        .toBuffer();
+    console.log(`[V74] ✂️ Removed ${transparentCount} bg pixels, kept ${opaqueCount} logo pixels (${(transparentCount / (transparentCount + opaqueCount) * 100).toFixed(1)}% transparent)`);
+    return sharp(output, { raw: { width, height, channels } }).png().toBuffer();
 }
 
 // V73: Fallback elegante cuando FAL no está disponible.
