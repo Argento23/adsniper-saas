@@ -113,10 +113,11 @@ function isTransparentPng(base64Str: string): boolean {
 }
 
 // Dos pasos para integrar imagen en escena (funciona para logos Y productos):
-// 1. Generar escena completa con Flux Dev (text-to-image, solo prompt)
-// 2. Compositar imagen del usuario sobre la escena + img2img suave (0.15)
-// Si FAL falla (balance agotado), hace fallback: imagen del usuario en fondo elegante sin IA
+// 1. Generar escena completa con Pollinations (gratis, server-to-server directo)
+// 2. Compositar imagen del usuario sobre la escena (con sharp)
+// Output: data URI de 768x768 PNG (compromise entre calidad y data URI size)
 async function integrateImageInScene(base64Str: string, fullPrompt: string): Promise<string> {
+    const SIZE = 768;
     const base64Data = base64Str.includes(',') ? base64Str.split(',')[1] : base64Str;
     const imgBuf = Buffer.from(base64Data, 'base64');
 
@@ -125,10 +126,10 @@ async function integrateImageInScene(base64Str: string, fullPrompt: string): Pro
     const iH = imgMeta.height || 512;
 
     // Tamaño proporcional de la imagen en el canvas (40% del ancho)
-    const targetW = Math.round(1024 * 0.40);
+    const targetW = Math.round(SIZE * 0.40);
     const targetH = Math.round(targetW * (iH / iW));
-    const left = Math.round((1024 - targetW) / 2);
-    const top = Math.round(1024 * 0.50);
+    const left = Math.round((SIZE - targetW) / 2);
+    const top = Math.round(SIZE * 0.50);
 
     const resized = await sharp(imgBuf)
         .resize(targetW, targetH, { fit: 'inside' })
@@ -137,13 +138,7 @@ async function integrateImageInScene(base64Str: string, fullPrompt: string): Pro
 
     let sceneUrl: string | null = null;
 
-    /**
-     * V62 COST-OPT: Si el usuario tiene plan Pro/Studio, usar FAL (calidad).
-     * Si no (usuario free), usar Pollinations (gratis).
-     * Esto reduce 10× el coste operacional por anuncio para usuarios free.
-     */
-    // Por ahora usamos siempre Pollinations en no-premium para reducir costes,
-    // a no ser que FAL haya dado buenos resultados (cached). Skip FAL para ahorrar $.
+    /* COST-OPT: Ya no usamos FAL para usuarios free. Solo Pollinations (gratis). */
     const useFalForFreeTier = false;
     const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
 
@@ -158,14 +153,14 @@ async function integrateImageInScene(base64Str: string, fullPrompt: string): Pro
     }
 
     if (!sceneUrl) {
-        // Generar escena gratis con Pollinations (sin coste, mismo proxy que ya usamos abajo)
+        // Generar escena gratis con Pollinations — server-to-server directo,
+        // no usamos el proxy porque esa ruta no existe (era client-only).
         const cleanPrompt = fullPrompt
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
             .replace(/[^\w\s]/gi, '')
             .substring(0, 200).trim().replace(/\s+/g, '_');
         const seed = Math.floor(Math.random() * 1000000);
-        const raw = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
-        sceneUrl = `/api/proxy-image?url=${encodeURIComponent(raw)}`;
+        sceneUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=768&height=768&nologo=true&seed=${seed}`;
     }
 
     let composite: Buffer;
@@ -192,7 +187,7 @@ async function integrateImageInScene(base64Str: string, fullPrompt: string): Pro
 async function makeDarkBackgroundWithImage(imgBuffer: Buffer, left: number, top: number): Promise<Buffer> {
     // Fondo degradado elegante: azul oscuro profundo
     const bg = await sharp({
-        create: { width: 1024, height: 1024, channels: 3, background: '#0f172a' }
+        create: { width: 768, height: 768, channels: 3, background: '#0f172a' }
     })
         .png()
         .toBuffer();
@@ -819,22 +814,20 @@ export async function POST(request: Request) {
                 let fullPrompt = `${scrapedTitle}${userStyle}, ${basePrompt}, professional photography, 8k, cinematic lighting, high quality, elegant composition, sharp focus, NO TEXT, NO TYPOGRAPHY, NO LETTERS, NO WORDS ON IMAGE, clean background`;
 
                 const finalImageUrl = await (async () => {
-                    // SI HAY IMAGEN MANUAL -> Dos pasos: generar escena + compositar imagen del usuario
-                    // (Bria Product Shot hace que la imagen quede gigante y frontal, especialmente para logos)
+                    // SI HAY IMAGEN MANUAL -> Integrar la imagen del usuario en una escena
+                    // USA Pollinations (gratis) para la escena, no FAL — así el coste es $0 para usuarios free.
                     if (hasManualImage) {
                         try {
-                            if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
-                                console.log("🎨 Integrando imagen del usuario en escena (text-to-image + composite)...");
-                                const result = await integrateImageInScene(manual_image_base64, fullPrompt);
-                                if (result) return result;
-                            }
+                            console.log("🎨 Integrando imagen del usuario en escena (Pollinations + composite)...");
+                            const result = await integrateImageInScene(manual_image_base64, fullPrompt);
+                            if (result) return result;
                         } catch (e) {
-                            console.error(`⚠️ Integración falló, usando texto-to-image estándar...`);
+                            console.error(`⚠️ Integración falló (${e.message}), usando texto-to-image estándar...`);
                         }
                     }
 
-                    // FLUJO ESTÁNDAR (Text-to-Image o Fallbacks)
-                    // 1. TRY FAL.AI (FLUX PRO/DEV) — mejor calidad/precio
+                    // FLUJO ESTÁNDAR (Text-to-Image sin imagen manual)
+                    // 1. TRY FAL.AI (FLUX PRO/DEV) — solo se usa si NO había imagen manual
                     try {
                         if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
                             const falResult = await generateFalImage(fullPrompt);

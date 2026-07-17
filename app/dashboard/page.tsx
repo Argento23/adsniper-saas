@@ -468,8 +468,9 @@ const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, b
                                 Funciona tanto en modo texto como en Studio Pro. El background es ahora la imagen,
                                 así que el texto se superpone con gradiente para legibilidad.
                                 Cubre hasta 75% del ancho para no chocar con el thumbnail de producto en bottom-right.
-                                Solo se muestra si applyText está activo. */}
-                            {applyText && ad.headline && (
+                                Solo se muestra si applyText está activo.
+                                Para Studio Pro (inpainting 8K) NO se muestra porque ya viene integrado en la imagen. */}
+                            {applyText && ad.headline && !ad.type?.includes('Studio') && (
                                 <div className="absolute inset-x-0 bottom-0 z-30 pointer-events-none">
                                     {/* Gradiente de fondo para legibilidad (cubre 75% del ancho) */}
                                     <div className="absolute inset-y-0 left-0 w-3/4 bg-gradient-to-r from-black/90 via-black/65 to-transparent"></div>
@@ -568,8 +569,8 @@ const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, b
                                         </div>
                                     )}
 
-                                    {/* TYPOGRAPHY OVERLAY EN EL MODAL (mismo overlay HTML/CSS) */}
-                                    {applyText && ad.headline && (
+                                    {/* TYPOGRAPHY OVERLAY EN EL MODAL (mismo overlay HTML/CSS). Excluir Studio Pro. */}
+                                    {applyText && ad.headline && !ad.type?.includes('Studio') && (
                                         <div className="absolute inset-x-0 bottom-0 z-30 pointer-events-none">
                                             <div className="absolute inset-y-0 left-0 w-3/4 bg-gradient-to-r from-black/90 via-black/65 to-transparent"></div>
                                             <div className="relative px-8 pb-8 pt-16 w-3/4">
@@ -911,13 +912,13 @@ export default function Dashboard() {
 
             setLoadingStatus('🎨 Puliendo detalles finales...');
             
-            // Successfully generated Premium Image
+                        // Successfully generated Premium Image
             fetchCredits(); 
 
             setAds([{
                 type: "Studio Inpainting 8K",
-                headline: "🏆 Escena Generada",
-                primary_text: "Tu producto ha sido integrado naturalmente en la escena por la IA.\nPrompt: " + data.prompt_used,
+                headline: "",  // Vacío: el Studio Pro NO muestra texto en la imagen
+                primary_text: data.prompt_used,  // Solo para el detalle interno
                 generated_image_url: data.final_composition,
                 product_image_fallback: manualImageBase64
             }]);

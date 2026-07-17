@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import sharp from 'sharp';
-import { generateFluxInpaint, generateFluxImageToImage, generateBriaBackgroundRemoval, generateFalImage, FalBalanceExhaustedError } from '@/lib/fal';
+import { generateFluxInpaint, generateFluxImageToImage, generateFluxReduxImage, generateBriaBackgroundRemoval, generateFalImage, FalBalanceExhaustedError } from '@/lib/fal';
 
 // v41.9: Disable sharp cache to prevent memory saturation in serverless
 sharp.cache(false);
@@ -229,59 +229,31 @@ export async function POST(req: Request) {
         let version: string;
 
         if (logoMode) {
-            // V63 LOGO MODE: Single-call optimization
-            // ANTES: 2 calls (text-to-image + img2img) = $0.20/logo
-            // AHORA: 1 call (img2img) sobre input del usuario con prompt de integración
-            // El usuario subió un logo PNG transparente, ya tenemos su posición/color/etc.
-            // Le pedimos a Flux que lo integre en la escena descrita, pero a strength BAJO (0.30)
-            // para preservar el diseño del logo mientras añade la escena alrededor.
-            // COSTE: $0.10/logo (50% menos)
-            console.log(`[V63] ⚡ Integrando logo en escena (1 llamada FAL, strength 0.30)...`);
-            const startV63 = Date.now();
+            // V64 LOGO MODE: Flux Redux — toma el logo como REFERENCIA visual
+            // y genera una nueva escena desde el prompt.
+            // Mantiene los COLORES y la ESENCIA del logo pero la composición la decide Flux.
+            // El logo ya no se queda "pegado" en el mismo tamaño/posición: Flux decide
+            // dónde poner el diseño dentro de la escena (en el pecho de un robot, en una pared, etc.).
+            // 1 sola llamada FAL = $0.10
+            console.log(`[V64] ⚡ Logo → escena vía Flux Redux (1 llamada, $0.10)...`);
+            const startV64 = Date.now();
 
             try {
-                // Pre-componer: logo en un fondo neutro ya dimensionado.
-                // Esto evita que la IA tenga que adivinar dónde colocar el logo.
-                const logoMeta = await sharp(optimizedInput).metadata();
-                const lW = logoMeta.width || 512;
-                const lH = logoMeta.height || 512;
-                const targetLogoW = Math.round(1024 * 0.30);
-                const targetLogoH = Math.round(targetLogoW * (lH / lW));
-                const left = Math.round((1024 - targetLogoW) / 2);
-                const top = Math.round(1024 * 0.52);
-
-                const resizedLogo = await sharp(optimizedInput)
-                    .resize(targetLogoW, targetLogoH, { fit: 'inside' })
-                    .ensureAlpha()
-                    .toBuffer();
-
-                const baseScene = await sharp({
-                    create: { width: 1024, height: 1024, channels: 3, background: '#e5e7eb' }
-                })
-                    .png()
-                    .toBuffer();
-
-                const composite = await sharp(baseScene)
-                    .composite([{ input: resizedLogo, left, top }])
-                    .png()
-                    .toBuffer();
-
-                // UNA sola llamada a FAL: Flux img2img con strength bajo
-                // El prompt guía la integración pero respeta el diseño del logo
-                 const compositeDataUri = `data:image/png;base64,${composite.toString('base64')}`;
-                const integrationPrompt = `${scene_prompt}. The logo is part of the scene — it has the same lighting, reflections, and materials as its surroundings. Professional scene photography, 8k`;
-                finalImage = await generateFluxImageToImage(compositeDataUri, integrationPrompt, 0.30);
+                // Cargar logo como data URI para que Flux Redux lo lea
+                const logoB64 = `data:image/png;base64,${optimizedInput.toString('base64')}`;
+                const integrationPrompt = `${scene_prompt}. The logo design appears naturally within the scene, integrated with the same materials and lighting as the environment. Professional photography, 8k`;
+                finalImage = await generateFluxReduxImage(logoB64, integrationPrompt, 'square_hd');
                 augmentedPrompt = integrationPrompt;
-                version = "v63-logo-single-call";
-                console.log(`[V63] ⏱️ Total: ${((Date.now() - startV63)/1000).toFixed(1)}s`);
+                version = "v64-logo-redux";
+                console.log(`[V64] ⏱️ Total: ${((Date.now() - startV64)/1000).toFixed(1)}s`);
             } catch (logoErr: any) {
                 // Logo FAL falló: fallback directo (compositar logo en fondo elegante)
-                console.warn(`[V63] ⚠️ Logo FAL falló (${logoErr.message}). Fallback directo...`);
+                console.warn(`[V64] ⚠️ Logo FAL falló (${logoErr.message}). Fallback directo...`);
                 finalImage = await logoFallbackOnDarkBackground(optimizedInput);
                 augmentedPrompt = scene_prompt;
-                version = "v63-logo-fallback";
+                version = "v64-logo-fallback";
             }
-        } else {
+} else {
             // PRODUCT MODE: intenta pipeline inpaint+bake, fallback a composite directo si FAL falla
             try {
                 console.log(`[V60] 🎨 Ensamblando Composición Base y Máscara Inversa...`);
