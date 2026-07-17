@@ -3,6 +3,7 @@ import { auth, clerkClient } from '@clerk/nextjs/server';
 import { generateReplicateImage } from '@/lib/replicate';
 import { generateFalImage, generateFluxImageToImage, generateBriaProductShot } from '@/lib/fal';
 import { checkAndTrackUsage } from '@/lib/usageTracker';
+import { consumeCredits } from '@/lib/credits';
 import sharp from 'sharp';
 
 export const dynamic = 'force-dynamic';
@@ -112,30 +113,33 @@ function isTransparentPng(base64Str: string): boolean {
     } catch { return false; }
 }
 
-// V65: Integración coherente de la imagen del usuario en una escena.
-// Usa Bria Product Shot (FAL): toma la imagen del usuario, una descripción de escena,
-// y devuelve una imagen donde la imagen del usuario aparece naturalmente integrada.
-// ANTES: img2img + sharp composite (logo pegado como sticker).
-// AHORA: Bria Product Shot con placement_type="original" + padding 50px (tamaño natural).
-// COSTE: $0.10/imagen (FAL balance).
-async function integrateImageInScene(base64Str: string, fullPrompt: string): Promise<string> {
+// V66: Integración coherente de la imagen del usuario en una escena.
+// - provider='bria': usa Bria Product Shot (FAL) — coherente, $0.10 (solo planes pagos)
+// - provider='pollinations': usa Pollinations + sharp composite — gratis (free tier)
+// - provider='bria_inpaint': inpaint para preservar geometría exacta
+// El provider se elige según el plan del usuario.
+async function integrateImageInScene(
+    base64Str: string,
+    fullPrompt: string,
+    provider: 'pollinations' | 'bria' | 'bria_inpaint' = 'pollinations'
+): Promise<string> {
     const SIZE = 768;
 
-    if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
-        try {
-            console.log(`[V65] 🎬 Bria Product Shot: escena coherente con imagen del usuario...`);
-            const result = await generateBriaProductShot(base64Str, fullPrompt);
-            // result es URL — descargar y devolver base64 para no requerir proxy
-            const dl = await fetch(result);
-            if (!dl.ok) throw new Error(`Download failed: ${dl.status}`);
-            const buf = Buffer.from(await dl.arrayBuffer());
-
-            // Resize a 768x768 para data URI eficiente (data URI = menor que 1024)
-            const resized = await sharp(buf).resize(SIZE, SIZE, { fit: 'inside' }).png().toBuffer();
-            return `data:image/png;base64,${resized.toString('base64')}`;
-        } catch (falErr: any) {
-            console.warn(`[V65] ⚠️ Bria Product Shot falló (${falErr.message}), usando composite local...`);
+    if (provider === 'bria' || provider === 'bria_inpaint') {
+        if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
+            try {
+                console.log(`[V66] Bria Product Shot (plan con Bria disponible)...`);
+                const result = await generateBriaProductShot(base64Str, fullPrompt);
+                const dl = await fetch(result);
+                if (!dl.ok) throw new Error(`Download failed: ${dl.status}`);
+                const buf = Buffer.from(await dl.arrayBuffer());
+                const resized = await sharp(buf).resize(SIZE, SIZE, { fit: 'inside' }).png().toBuffer();
+                return `data:image/png;base64,${resized.toString('base64')}`;
+            } catch (falErr: any) {
+                console.warn(`[V66] Bria falló (${falErr.message}), usando composite local...`);
+            }
         }
+    }
     }
 
     // Fallback: composite simple con Pollinations (gratis)
@@ -659,39 +663,31 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        let credits = 3;
-        let isAdmin = false;
+        // V66: SISTEMA DE CRÉDITOS UNIFICADO.
+        // El coste por generación es 1 crédito (cada ad cuenta como 1).
+        // Si count=3, cuesta 3 créditos. Si admiin, bypass.
+        const creditCheck = await consumeCredits(userId, 1, 'image');
+        if (!creditCheck.canProceed) {
+            return NextResponse.json({
+                error: 'NO_CREDITS',
+                message: creditCheck.reason || 'Sin créditos este mes',
+                plan: creditCheck.plan,
+                remaining: creditCheck.remaining,
+                limit: creditCheck.limit,
+                resetDate: creditCheck.resetDate.toISOString()
+            }, { status: 403 });
+        }
+        const isAdmin = creditCheck.plan === 'agency' && creditCheck.remaining === 999; // admin bypass
         let clerkUser: any = null;
-
-        try {
-            // FIX DEFINITIVO PARA VERCEL Y CLERK BETA 46: 
-            // Intentar usar clerkClient si existe, pero si crashea por undefined object, no frenar la app.
-            if (typeof clerkClient !== 'undefined' && clerkClient.users) {
-                clerkUser = await clerkClient.users.getUser(userId);
-                if (clerkUser) {
-                    credits = typeof clerkUser.publicMetadata?.credits === 'number' ? clerkUser.publicMetadata.credits : 3;
-                    const userEmail = clerkUser.emailAddresses[0]?.emailAddress?.toLowerCase().trim();
-                    isAdmin = userEmail === 'gustavodornhofer@gmail.com';
-                    console.log(`[Generate API] User: ${userEmail}, isAdmin: ${isAdmin}`);
-                }
-            } else {
-                console.warn("⚠️ Clerk Client users object is undefined in this Beta. Falling back to default limits.");
-            }
-        } catch (clerkError) {
-            console.error("⚠️ Clerk fetch error ignored to prevent crash:", clerkError);
-        }
-
-        if (credits <= 0 && !isAdmin) {
-            return NextResponse.json({ error: 'NO_CREDITS', message: 'Has usado tus 3 créditos gratuitos. Mejorá tu plan para seguir generando.' }, { status: 403 });
-        }
 
         // Validation
         if (!productUrl && !manual_title) {
             return NextResponse.json({ error: 'URL or Product Name required' }, { status: 400 });
         }
 
-        // DEDUCT CREDIT - MOVED TO END (ONLY ON SUCCESS)
-        let remainingCredits = credits;
+        // DEDUCT CREDIT - V66: ya consumido al inicio (consumeCredits devuelve remaining)
+        const remainingCredits = creditCheck.remaining;
+        const limitCredits = creditCheck.limit;
 
         console.log(`ðŸŽ¯ Generating ${count} ads for: ${productUrl || manual_title} (Lang: ${language})`);
 
@@ -812,12 +808,13 @@ export async function POST(request: Request) {
                 let fullPrompt = `${scrapedTitle}${userStyle}, ${basePrompt}, professional photography, 8k, cinematic lighting, high quality, elegant composition, sharp focus, NO TEXT, NO TYPOGRAPHY, NO LETTERS, NO WORDS ON IMAGE, clean background`;
 
                 const finalImageUrl = await (async () => {
-                    // SI HAY IMAGEN MANUAL -> Integrar la imagen del usuario en una escena
-                    // USA Pollinations (gratis) para la escena, no FAL — así el coste es $0 para usuarios free.
+                    // V66: SI HAY IMAGEN MANUAL -> Integrar con provider según plan del usuario
                     if (hasManualImage) {
                         try {
-                            console.log("🎨 Integrando imagen del usuario en escena (Pollinations + composite)...");
-                            const result = await integrateImageInScene(manual_image_base64, fullPrompt);
+                            const creditsLib = await import('@/lib/credits');
+                            const provider = await creditsLib.getRecommendedProvider(userId);
+                            console.log(`[V66] Plan: ${creditCheck.plan}, Provider recomendado: ${provider}`);
+                            const result = await integrateImageInScene(manual_image_base64, fullPrompt, provider as any);
                             if (result) return result;
                         } catch (e) {
                             console.error(`⚠️ Integración falló (${e.message}), usando texto-to-image estándar...`);
@@ -848,22 +845,6 @@ export async function POST(request: Request) {
             data.ads = processedAds;
         }
 
-        // DEDUCT CREDIT ONLY AFTER SUCCESSFUL GENERATION
-        if (!isAdmin) {
-            remainingCredits = credits - 1;
-            try {
-                if (typeof clerkClient !== 'undefined' && clerkClient.users && clerkUser) {
-                    await clerkClient.users.updateUserMetadata(userId, {
-                        publicMetadata: {
-                            ...clerkUser.publicMetadata,
-                            credits: remainingCredits
-                        }
-                    });
-                }
-            } catch (updateError) {
-                console.error("⚠️ Fallo al actualizar créditos en Clerk, ignorando para no romper la generación:", updateError);
-            }
-        }
 
         // Ensure scripts are not undefined if n8n failed to return them
         if (!data.scripts || !Array.isArray(data.scripts) || data.scripts.length === 0) {
@@ -876,7 +857,10 @@ export async function POST(request: Request) {
             product_image: scrapedImage,
             product_title: scrapedTitle || data.product_title,
             _mode: data._mode || "hybrid_ai",
-            credits: remainingCredits,
+            plan: creditCheck.plan,
+            credits: updatedRemaining,
+            creditsLimit: updatedLimit,
+            creditsResetDate: creditCheck.resetDate.toISOString(),
             VERSION_MARKER: "PROXY_V2" // For browser verification
         });
 

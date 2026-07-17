@@ -9,24 +9,13 @@ sharp.cache(false);
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; 
 
+// V66: Credit consumption delegated to lib/credits.ts (system-wide).
+// Studio Pro requires plan 'studio' or 'agency'. Cost: 1 credit per image.
 const ADMIN_EMAIL = 'gustavodornhofer@gmail.com';
 
-async function consumePremiumCredit(userId: string): Promise<{ canProceed: boolean; isAdmin: boolean }> {
-    const clerk = clerkClient;
-    const user = await clerk.users.getUser(userId);
-    const meta = user.publicMetadata as any;
-    const emails = user.emailAddresses.map(e => e.emailAddress.toLowerCase().trim());
-    const isAdmin = emails.some(email => email === ADMIN_EMAIL.toLowerCase().trim());
-
-    if (isAdmin) return { canProceed: true, isAdmin };
-    if (meta.plan === 'Infinity') return { canProceed: true, isAdmin };
-
-    const credits = meta.premiumStudioCredits !== undefined ? Number(meta.premiumStudioCredits) : 0;
-    if (credits <= 0) return { canProceed: false, isAdmin };
-    await clerk.users.updateUserMetadata(userId, {
-        publicMetadata: { ...meta, premiumStudioCredits: credits - 1 }
-    });
-    return { canProceed: true, isAdmin };
+async function consumePremiumCredit(userId: string, cost: number = 1) {
+    const ck = await import('@/lib/credits');
+    return await ck.consumeCredits(userId, cost, 'image');
 }
 
 // V56: Native 3D Inverse Mask Logic + Harmony Bake Base
@@ -192,8 +181,18 @@ export async function POST(req: Request) {
         if (!image_base64) return NextResponse.json({ error: 'Falta la imagen' }, { status: 400 });
         if (!scene_prompt) return NextResponse.json({ error: 'Falta el prompt de la escena' }, { status: 400 });
 
-        const { canProceed, isAdmin } = await consumePremiumCredit(userId);
-        if (!canProceed) return NextResponse.json({ error: 'NO_PREMIUM_CREDITS' }, { status: 403 });
+        const creditCheck = await consumePremiumCredit(userId, 1);
+        if (!creditCheck.canProceed) {
+            return NextResponse.json({
+                error: 'NO_PREMIUM_CREDITS',
+                message: creditCheck.reason || 'Sin créditos Studio Pro',
+                plan: creditCheck.plan,
+                remaining: creditCheck.remaining,
+                limit: creditCheck.limit,
+                resetDate: creditCheck.resetDate.toISOString()
+            }, { status: 403 });
+        }
+        const isAdmin = creditCheck.plan === 'agency' && creditCheck.remaining === 999;
 
         console.log(`[V56] ⚡ INICIANDO ESTUDIO DE INTEGRACIÓN PROFUNDA (INPAINT + BAKE)...`);
         const startTime = Date.now();
