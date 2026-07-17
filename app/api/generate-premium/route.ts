@@ -144,7 +144,57 @@ async function isLikelyLogo(buffer: Buffer): Promise<boolean> {
     }
 }
 
-// V63: Fallback elegante cuando FAL no está disponible.
+// V73: Remove solid background from logo using color sampling
+// Samples corners to detect background color, then makes matching pixels transparent
+async function removeSolidBackground(buffer: Buffer): Promise<Buffer> {
+    const meta = await sharp(buffer).metadata();
+    if (meta.hasAlpha) return buffer; // Already has transparency
+
+    const { width = 1, height = 1 } = meta;
+    const sampleSize = 10;
+
+    // Sample 4 corners to detect background color
+    const corners = await Promise.all([
+        sharp(buffer).extract({ left: 0, top: 0, width: sampleSize, height: sampleSize }).raw().toBuffer(),
+        sharp(buffer).extract({ left: width - sampleSize, top: 0, width: sampleSize, height: sampleSize }).raw().toBuffer(),
+        sharp(buffer).extract({ left: 0, top: height - sampleSize, width: sampleSize, height: sampleSize }).raw().toBuffer(),
+        sharp(buffer).extract({ left: width - sampleSize, top: height - sampleSize, width: sampleSize, height: sampleSize }).raw().toBuffer(),
+    ]);
+
+    // Average RGB from all corners
+    let rSum = 0, gSum = 0, bSum = 0, count = 0;
+    for (const corner of corners) {
+        for (let i = 0; i < corner.length; i += 3) {
+            rSum += corner[i];
+            gSum += corner[i + 1];
+            bSum += corner[i + 2];
+            count++;
+        }
+    }
+    const bgR = Math.round(rSum / count);
+    const bgG = Math.round(gSum / count);
+    const bgB = Math.round(bSum / count);
+    console.log(`[V73] 🎨 Detected solid background: rgb(${bgR}, ${bgG}, ${bgB})`);
+
+    // Create a mask: transparent where pixels match the background color
+    const threshold = 45;
+    const raw = await sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: false }) as Buffer;
+    const channels = 4;
+    const output = Buffer.alloc(width * height * channels);
+
+    for (let i = 0; i < raw.length; i += channels) {
+        const r = raw[i], g = raw[i + 1], b = raw[i + 2];
+        const dist = Math.sqrt((r - bgR) ** 2 + (g - bgG) ** 2 + (b - bgB) ** 2);
+        output[i] = r;
+        output[i + 1] = g;
+        output[i + 2] = b;
+        output[i + 3] = dist < threshold ? 0 : 255; // transparent if close to bg
+    }
+
+    return sharp(output, { raw: { width, height, channels } }).png().toBuffer();
+}
+
+// V73: Fallback elegante cuando FAL no está disponible.
 // Compositúa el logo en un fondo degradado oscuro, sin gasto de API.
 async function logoFallbackOnDarkBackground(inputBuffer: Buffer): Promise<string> {
     const logoMeta = await sharp(inputBuffer).metadata();
@@ -218,7 +268,7 @@ export async function POST(req: Request) {
             inputBuffer = Buffer.from(base64Data, 'base64');
         }
 
-        const optimizedInput = await sharp(inputBuffer).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).toBuffer();
+        let optimizedInput = await sharp(inputBuffer).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).toBuffer();
 
         // V72: DETECTAR LOGO vs PRODUCTO para elegir pipeline
         // Si la imagen tiene alpha transparente → probablemente logo
@@ -227,6 +277,15 @@ export async function POST(req: Request) {
         const promptSuggestsLogo = /logo|neon|sign|brand|signage|icon|emblem|badge|symbol/i.test(scene_prompt);
         const logoMode = imageIsLogo || promptSuggestsLogo;
         console.log(`[V72] 🏷️ imageIsLogo: ${imageIsLogo}, promptSuggestsLogo: ${promptSuggestsLogo} → ${logoMode ? 'LOGO (Scene-First + Bake)' : 'PRODUCTO (Inpaint + Bake)'}`);
+
+        // V73: If logo mode and no alpha channel, remove solid background
+        if (logoMode) {
+            const hasAlpha = (await sharp(optimizedInput).metadata()).hasAlpha;
+            if (!hasAlpha) {
+                console.log(`[V73] ✂️ Logo sin transparencia — eliminando fondo sólido...`);
+                optimizedInput = await removeSolidBackground(optimizedInput);
+            }
+        }
 
         let finalImage: string;
         let augmentedPrompt: string;
