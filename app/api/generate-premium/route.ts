@@ -221,8 +221,12 @@ export async function POST(req: Request) {
         const optimizedInput = await sharp(inputBuffer).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).toBuffer();
 
         // V72: DETECTAR LOGO vs PRODUCTO para elegir pipeline
-        const logoMode = await isLikelyLogo(optimizedInput);
-        console.log(`[V72] 🏷️ Modo: ${logoMode ? 'LOGO (Scene-First + Bake)' : 'PRODUCTO (Inpaint + Bake)'}`);
+        // Si la imagen tiene alpha transparente → probablemente logo
+        // Si el prompt menciona logo/neon/sign/brand/Signage → forzar modo logo
+        const imageIsLogo = await isLikelyLogo(optimizedInput);
+        const promptSuggestsLogo = /logo|neon|sign|brand|signage|icon|emblem|badge|symbol/i.test(scene_prompt);
+        const logoMode = imageIsLogo || promptSuggestsLogo;
+        console.log(`[V72] 🏷️ imageIsLogo: ${imageIsLogo}, promptSuggestsLogo: ${promptSuggestsLogo} → ${logoMode ? 'LOGO (Scene-First + Bake)' : 'PRODUCTO (Inpaint + Bake)'}`);
 
         let finalImage: string;
         let augmentedPrompt: string;
