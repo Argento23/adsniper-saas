@@ -296,17 +296,17 @@ if (logoMode) {
                     .negate()
                     .toColorspace('srgb')
                     .resize(targetLogoW + 40, targetLogoH + 40, { fit: 'inside' })
-                    .blur(16)
+                    .blur(20)
                     .ensureAlpha()
                     .toBuffer();
 
-                // 3b: Ambient glow — subtle colored glow from logo edges
+                // 3b: Ambient glow — strong colored glow from logo edges
                 const glow = await sharp(resizedLogo)
                     .ensureAlpha()
                     .extractChannel(3)
                     .toColorspace('srgb')
-                    .resize(targetLogoW + 60, targetLogoH + 60, { fit: 'inside' })
-                    .blur(20)
+                    .resize(targetLogoW + 80, targetLogoH + 80, { fit: 'inside' })
+                    .blur(30)
                     .ensureAlpha()
                     .toBuffer();
 
@@ -331,12 +331,12 @@ if (logoMode) {
                     .png().toBuffer();
 
                 // PASO 4: img2img bake — THIS is the critical step
-                // At 0.30 strength the AI re-renders lighting/colors but preserves composition
-                console.log(`[V72] 🔥 Step 4: Baking physical lighting (strength 0.30)...`);
+                // At 0.35 strength the AI re-renders lighting/colors but preserves composition
+                console.log(`[V72] 🔥 Step 4: Baking physical lighting (strength 0.35)...`);
                 const bakeStart = Date.now();
                 const compositedDataUri = `data:image/png;base64,${composited.toString('base64')}`;
                 const bakePrompt = `${scene_prompt}, the central signage or logo is physically mounted on the wall surface, realistic shadows and light reflections, cohesive scene lighting, professional product photography, 8k, masterpiece`;
-                finalImage = await generateFluxImageToImage(compositedDataUri, bakePrompt, 0.30);
+                finalImage = await generateFluxImageToImage(compositedDataUri, bakePrompt, 0.35);
                 augmentedPrompt = bakePrompt;
                 version = "v72-scene-first-bake";
                 console.log(`[V72] ⏱️ Bake: ${((Date.now() - bakeStart)/1000).toFixed(1)}s`);
