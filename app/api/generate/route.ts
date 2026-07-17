@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
-import { generateReplicateImage } from '@/lib/replicate';
 import { generateFalImage, generateFluxImageToImage, generateBriaProductShot } from '@/lib/fal';
 import { checkAndTrackUsage } from '@/lib/usageTracker';
 import { consumeCredits } from '@/lib/credits';
@@ -113,7 +112,7 @@ function isTransparentPng(base64Str: string): boolean {
     } catch { return false; }
 }
 
-// V66: Integración coherente de la imagen del usuario en una escena.
+// V69: Integración coherente de la imagen del usuario en una escena.
 // - provider='bria': usa Bria Product Shot (FAL) — coherente, $0.10 (solo planes pagos)
 // - provider='pollinations': usa Pollinations + sharp composite — gratis (free tier)
 // - provider='bria_inpaint': inpaint para preservar geometría exacta
@@ -123,20 +122,20 @@ async function integrateImageInScene(
     fullPrompt: string,
     provider: 'pollinations' | 'bria' | 'bria_inpaint' = 'pollinations'
 ): Promise<string> {
-    const SIZE = 768;
+    const SIZE = 512; // Reduced from 768 to keep data URIs lighter (~60% smaller)
 
     if (provider === 'bria' || provider === 'bria_inpaint') {
         if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
             try {
-                console.log(`[V66] Bria Product Shot (plan con Bria disponible)...`);
+                console.log(`[V69] Bria Product Shot (plan con Bria disponible)...`);
                 const result = await generateBriaProductShot(base64Str, fullPrompt);
-                const dl = await fetch(result);
+                const dl = await fetch(result, { signal: AbortSignal.timeout(30000) });
                 if (!dl.ok) throw new Error(`Download failed: ${dl.status}`);
                 const buf = Buffer.from(await dl.arrayBuffer());
                 const resized = await sharp(buf).resize(SIZE, SIZE, { fit: 'inside' }).png().toBuffer();
                 return `data:image/png;base64,${resized.toString('base64')}`;
             } catch (falErr: any) {
-                console.warn(`[V66] Bria falló (${falErr.message}), usando composite local...`);
+                console.warn(`[V69] Bria falló (${falErr.message}), usando composite local...`);
             }
         }
     }
@@ -157,29 +156,32 @@ async function integrateImageInScene(
         .ensureAlpha()
         .toBuffer();
 
-    let sceneUrl: string | null = null;
     try {
         const cleanPrompt = fullPrompt
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
             .replace(/[^\w\s]/gi, '')
-            .substring(0, 200).trim().replace(/\s+/g, '_');
+            .substring(0, 150).trim().replace(/\s+/g, '_');
         const seed = Math.floor(Math.random() * 1000000);
-        sceneUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=${SIZE}&height=${SIZE}&nologo=true&seed=${seed}`;
-        const sceneResp = await fetch(sceneUrl);
+        const sceneUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=${SIZE}&height=${SIZE}&nologo=true&seed=${seed}`;
+        console.log(`[V69] Pollinations scene: ${sceneUrl.substring(0, 80)}...`);
+        const sceneResp = await fetch(sceneUrl, { signal: AbortSignal.timeout(25000) });
         if (!sceneResp.ok) throw new Error(`Scene fetch failed: ${sceneResp.status}`);
         const sceneImg = Buffer.from(await sceneResp.arrayBuffer());
         const composite = await sharp(sceneImg)
+            .resize(SIZE, SIZE, { fit: 'cover' })
             .composite([{ input: resized, left, top }])
             .png()
             .toBuffer();
         return `data:image/png;base64,${composite.toString('base64')}`;
-    } catch {
+    } catch (sceneErr: any) {
+        console.warn(`[V69] Pollinations scene failed (${sceneErr.message}), usando dark background...`);
         // Última opción: composite sobre fondo oscuro
         const bg = await sharp({ create: { width: SIZE, height: SIZE, channels: 3, background: '#0f172a' } })
             .png().toBuffer();
         const composite = await sharp(bg)
             .composite([{ input: resized, left, top }])
-            .png().toBuffer();
+            .png()
+            .toBuffer();
         return `data:image/png;base64,${composite.toString('base64')}`;
     }
 }
@@ -815,8 +817,8 @@ export async function POST(request: Request) {
                             console.log(`[V66] Plan: ${creditCheck.plan}, Provider recomendado: ${provider}`);
                             const result = await integrateImageInScene(manual_image_base64, fullPrompt, provider as any);
                             if (result) return result;
-                        } catch (e) {
-                            console.error(`⚠️ Integración falló (${e.message}), usando texto-to-image estándar...`);
+                        } catch (e: any) {
+                            console.error(`⚠️ Integración falló (${e?.message || e}), usando texto-to-image estándar...`);
                         }
                     }
 
@@ -857,8 +859,8 @@ export async function POST(request: Request) {
             product_title: scrapedTitle || data.product_title,
             _mode: data._mode || "hybrid_ai",
             plan: creditCheck.plan,
-            credits: updatedRemaining,
-            creditsLimit: updatedLimit,
+            credits: remainingCredits,
+            creditsLimit: limitCredits,
             creditsResetDate: creditCheck.resetDate.toISOString(),
             VERSION_MARKER: "PROXY_V2" // For browser verification
         });

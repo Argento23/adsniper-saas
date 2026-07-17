@@ -173,9 +173,13 @@ export async function generateFluxInpaint(
     prompt: string,
     strength: number = 0.85
 ): Promise<string> {
+    console.log(`[Fal] 🎨 Inpainting con strength ${strength}...`);
     const result = await runFalAsync('https://fal.run/fal-ai/flux-general/inpainting', {
         image_url: imageUrl, mask_url: maskUrl, prompt, strength, num_inference_steps: 24, guidance_scale: 3.5
     });
+    if (!result.images || !result.images[0] || !result.images[0].url) {
+        throw new Error('Inpainting returned empty result');
+    }
     return result.images[0].url;
 }
 

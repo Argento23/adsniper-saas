@@ -74,11 +74,11 @@ async function createInverseMaskPayload(
     };
 }
 
-// LOGO DETECTION: Check if the image is a flat logo/graphic vs a 3D physical product
+// V69 LOGO DETECTION: Check if the image is a flat logo/graphic vs a 3D physical product
 // We analyze both transparency AND the spatial distribution of opaque pixels.
 // - A product photo with background removed: large CONTIGUOUS opaque region (the product itself)
 // - A flat logo/graphic: small or multiple scattered opaque regions (the design elements)
-// Detection: if the biggest opaque blob is < 12% of total pixels AND > 65% is transparent → LOGO
+// V69: Lowered thresholds to catch more logos (was >65% transparent + <12% blob → now >45% + <20%)
 async function isLikelyLogo(buffer: Buffer): Promise<boolean> {
     try {
         const meta = await sharp(buffer).metadata();
@@ -97,14 +97,15 @@ async function isLikelyLogo(buffer: Buffer): Promise<boolean> {
         let transparentCount = 0;
         const visited = new Uint8Array(alphaData.length);
         let maxOpaqueBlob = 0;
+        let opaqueCount = 0;
 
         for (let i = 0; i < alphaData.length; i++) {
             if (alphaData[i] < 25) {
                 transparentCount++;
                 continue;
             }
-            // This pixel is at least partially opaque — check if it's fully opaque
-            if (alphaData[i] < 200) continue; // semi-transparent, skip for blob detection
+            if (alphaData[i] < 200) continue; // semi-transparent, skip
+            opaqueCount++;
 
             // Flood-fill to find connected opaque region size
             if (visited[i]) continue;
@@ -117,7 +118,6 @@ async function isLikelyLogo(buffer: Buffer): Promise<boolean> {
                 visited[idx] = 1;
                 blobSize++;
 
-                // Check 4 neighbors
                 const x = idx % width;
                 const y = Math.floor(idx / width);
                 if (x > 0) stack.push(idx - 1);
@@ -130,14 +130,16 @@ async function isLikelyLogo(buffer: Buffer): Promise<boolean> {
 
         const transparentRatio = transparentCount / alphaData.length;
         const opaqueBlobRatio = maxOpaqueBlob / totalPixels;
+        const opaqueRatio = opaqueCount / totalPixels;
 
-        console.log(`[V58 Logo Detection] Transparent: ${(transparentRatio * 100).toFixed(1)}%, biggest opaque blob: ${(opaqueBlobRatio * 100).toFixed(1)}% of image`);
+        console.log(`[V69 Logo Detection] Transparent: ${(transparentRatio * 100).toFixed(1)}%, opaque blob: ${(opaqueBlobRatio * 100).toFixed(1)}%, total opaque: ${(opaqueRatio * 100).toFixed(1)}%`);
 
-        // LOGO if: > 65% transparent AND biggest blob is < 12% of total pixels
-        // This distinguishes logos (small design elements) from products (large contiguous object)
-        return transparentRatio > 0.65 && opaqueBlobRatio < 0.12;
+        // LOGO if: > 45% transparent AND biggest blob is < 20% of total pixels
+        // OR: mostly transparent (> 60%) regardless of blob size (logos with alpha channel)
+        // This catches more logos while still excluding large product photos
+        return (transparentRatio > 0.45 && opaqueBlobRatio < 0.20) || (transparentRatio > 0.60);
     } catch (e) {
-        console.warn('[V58 Logo Detection] Failed, assuming product:', e);
+        console.warn('[V69 Logo Detection] Failed, assuming product:', e);
         return false;
     }
 }
@@ -194,7 +196,7 @@ export async function POST(req: Request) {
         }
         const isAdmin = creditCheck.plan === 'agency' && creditCheck.remaining === 999;
 
-        console.log(`[V56] ⚡ INICIANDO ESTUDIO DE INTEGRACIÓN PROFUNDA (INPAINT + BAKE)...`);
+        console.log(`[V69] ⚡ INICIANDO ESTUDIO DE INTEGRACIÓN PROFUNDA (INPAINT + BAKE)...`);
         const startTime = Date.now();
         
         let inputBuffer: Buffer;
@@ -202,121 +204,153 @@ export async function POST(req: Request) {
 
         // Intentar Bria para remover fondo (si hay balance de FAL)
         try {
-            console.log(`[V60] ✂️ Intentando eliminar fondo con Bria...`);
+            console.log(`[V69] ✂️ Intentando eliminar fondo con Bria...`);
             const transparentPngUrl = await generateBriaBackgroundRemoval(image_base64);
-            console.log(`[V60] 📥 Descargando silueta desde: ${transparentPngUrl}`);
+            console.log(`[V69] 📥 Descargando silueta desde: ${transparentPngUrl}`);
             const imageFetchResponse = await fetch(transparentPngUrl);
             const imageArrayBuffer = await imageFetchResponse.arrayBuffer();
             inputBuffer = Buffer.from(imageArrayBuffer);
             briaUsed = true;
-            console.log(`[V60] ✅ Bria OK, fondo eliminado`);
+            console.log(`[V69] ✅ Bria OK, fondo eliminado`);
         } catch (briaErr: any) {
             // Bria falló (balance agotado o error de red) - usar imagen original sin procesar fondo
-            console.warn(`[V60] ⚠️ Bria falló (${briaErr.message}). Usando imagen original como input.`);
+            console.warn(`[V69] ⚠️ Bria falló (${briaErr.message}). Usando imagen original como input.`);
             const base64Data = image_base64.includes(',') ? image_base64.split(',')[1] : image_base64;
             inputBuffer = Buffer.from(base64Data, 'base64');
         }
 
         const optimizedInput = await sharp(inputBuffer).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).toBuffer();
 
-        // V58: DETECTAR LOGO vs PRODUCTO para elegir pipeline
+        // V69: DETECTAR LOGO vs PRODUCTO para elegir pipeline
         const logoMode = await isLikelyLogo(optimizedInput);
-        console.log(`[V58] 🏷️ Modo: ${logoMode ? 'LOGO (Image-to-Image)' : 'PRODUCTO (Inpaint + Bake)'}`);
+        console.log(`[V69] 🏷️ Modo: ${logoMode ? 'LOGO (Inpainting)' : 'PRODUCTO (Inpaint + Bake)'}`);
 
         let finalImage: string;
         let augmentedPrompt: string;
         let version: string;
 
 if (logoMode) {
-            // V67 LOGO MODE: Pipeline híbrido optimizado
-            // ANTES (V65 Bria): pegaba el logo según el prompt literal ("logo colgado en pared" → lo colgaba)
-            // Problema: el logo quedaba en una posición específica sin importar la composición.
-            //
-            // AHORA (V67): 3 pasos para的产品inTEGRACIÓN REAL
-            // 1. Flux Dev genera la escena desde tu prompt (sin input del logo) — calidad fotográfica, obedece tu prompt
-            // 2. Composite del logo en una posición naturaldentro de la escena (no Esquinas, no centro perfecto)
-            // 3. Flux Dev img2img STRENGTH BAJO (0.20) para fusionar bordes y lighting
-            //
-            // RESULTADO: la escena cumple tu prompt, y el logo aparece naturalmente incorporado
-            // (NO como sticker, NO literal, NO superpuesto)
-            // COSTE: 2 llamadas FAL = $0.20
-            const startV67 = Date.now();
-            console.log(`[V67] 🎬 Logo: escena contextual + composite inteligente...`);
+            // V69 LOGO MODE: Inpainting — el logo es la BASE, la escena se genera ALREDEDOR
+            // ANTES (V67): escena + composite + img2img → logo sobreimpreso como sticker
+            // ANTES (V65): Bria Product Shot → pegaba literal según prompt
+            // AHORA (V69): 1 sola llamada FAL con inverse mask
+            // 1. Logo como imagen base (centrado en lienzo gris)
+            // 2. Máscara inversa: negro sobre el logo (proteger), blanco alrededor (generar escena)
+            // 3. Flux inpainting genera la escena alrededor del logo respetando su forma
+            // COSTE: 1 llamada FAL = $0.10
+            const startV69 = Date.now();
+            console.log(`[V69] 🎬 Logo: Inpainting — escena generada alrededor del logo...`);
 
             try {
-                // Paso 1: Genera LA ESCENA con Flux Dev (prompt del usuario, sin input).
-                // ESTO es clave — genera una escena que obedece tu prompt al 100%
-                // sin quedar atado al conformato de tu logo.
-                const scenePrompt = `${scene_prompt}. Professional scene photography, 8k, high detail, masterful composition`;
-                const sceneResult = await generateFalImage(scenePrompt, 'square');
-                const sceneUrl = sceneResult.imageUrl;
-
-                // Descargar la escena como Buffer
-                const sceneResp = await fetch(sceneUrl);
-                if (!sceneResp.ok) throw new Error(`Scene download failed: ${sceneResp.status}`);
-                const sceneBuf = Buffer.from(await sceneResp.arrayBuffer());
-
-                // Paso 2: Composite del logo en posición NATURAL (no esquina - no centro)
-                // Estrategia: posición basada en la lógica del prompt.
-                // Por defecto: centro-izquierda (lugar más natural para logos)
+                // Paso 1: Preparar logo como imagen base (centrado en lienzo 1024x1024)
                 const logoMeta = await sharp(optimizedInput).metadata();
                 const lW = logoMeta.width || 512;
                 const lH = logoMeta.height || 512;
-                // Logo al 22% del canvas (NO Grande, NO sticker)
-                const targetLogoW = Math.round(1024 * 0.22);
+                // Logo al 30% del canvas (visible pero no dominante para que la escena tenga protagonismo)
+                const targetLogoW = Math.round(1024 * 0.30);
                 const targetLogoH = Math.round(targetLogoW * (lH / lW));
-                // Centro izquierdo (donde normalmente aparece un logo)
-                const left = Math.round(1024 * 0.39); // 39% horizontal = centro-izquierda
-                const top = Math.round(1024 * 0.39); // 39% vertical = centro-arriba
+                const logoLeft = Math.round((1024 - targetLogoW) / 2);
+                const logoTop = Math.round((1024 - targetLogoH) / 2);
 
                 const resizedLogo = await sharp(optimizedInput)
                     .resize(targetLogoW, targetLogoH, { fit: 'inside' })
                     .ensureAlpha()
                     .toBuffer();
 
-                const composite = await sharp(sceneBuf)
-                    .composite([{ input: resizedLogo, left, top }])
-                    .png()
+                // Base image: fondo gris neutro + logo centrado
+                const baseBuffer = await sharp({ create: { width: 1024, height: 1024, channels: 3, background: '#808080' } })
+                    .composite([{ input: resizedLogo, left: logoLeft, top: logoTop }])
+                    .jpeg({ quality: 95 })
                     .toBuffer();
 
-                // Paso 3: HARMONIC INTEGRATION - Flux Dev img2img para integrar lighting
-                // strength 0.25 es SUFICIENTE para ajustar bordes/lighting sin romper nada
-                const compositeDataUri = `data:image/png;base64,${composite.toString('base64')}`;
-                const integrationPrompt = `${scene_prompt}. The logo becomes merged with the environment: edges blent, lighting reflected on surfaces, shadows underneath. Looks like always part of the scene.`;
-                finalImage = await generateFluxImageToImage(compositeDataUri, integrationPrompt, 0.25);
-                augmentedPrompt = integrationPrompt;
-                version = "v67-logo-hybrid";
-                console.log(`[V67] ⏱️ Total: ${((Date.now() - startV67)/1000).toFixed(1)}s`);
+                // Paso 2: Máscara inversa — proteger el logo, generar todo lo demás
+                const maskSilhouette = await sharp(resizedLogo)
+                    .ensureAlpha()
+                    .extractChannel(3)
+                    .negate()
+                    .toColorspace('srgb')
+                    .toBuffer();
+
+                const maskBuffer = await sharp({ create: { width: 1024, height: 1024, channels: 3, background: '#FFFFFF' } })
+                    .composite([{ input: maskSilhouette, left: logoLeft, top: logoTop }])
+                    .jpeg({ quality: 90 })
+                    .toBuffer();
+
+                const baseDataUri = `data:image/jpeg;base64,${baseBuffer.toString('base64')}`;
+                const maskDataUri = `data:image/jpeg;base64,${maskBuffer.toString('base64')}`;
+
+                // Paso 3: Flux inpainting — genera escena alrededor del logo
+                // V69: Improved prompt — emphasize logo as part of the scene, not on top
+                const inpaintPrompt = `${scene_prompt}, the logo in the center is a physical object placed in this environment, professional product photography, 8k, cinematic lighting, natural shadows and reflections cast by the central logo element, the scene surrounds and complements the logo, harmonious composition, photorealistic, NO TEXT, NO TYPOGRAPHY`;
+                finalImage = await generateFluxInpaint(baseDataUri, maskDataUri, inpaintPrompt, 0.85);
+                augmentedPrompt = inpaintPrompt;
+                version = "v69-logo-inpaint";
+                console.log(`[V69] ⏱️ Total: ${((Date.now() - startV69)/1000).toFixed(1)}s`);
             } catch (logoErr: any) {
-                console.warn(`[V67] ⚠️ Logo híbrido falló (${logoErr.message}). Fallback directo...`);
-                finalImage = await logoFallbackOnDarkBackground(optimizedInput);
-                augmentedPrompt = scene_prompt;
-                version = "v67-logo-fallback";
+                console.warn(`[V69] ⚠️ Logo inpaint falló (${logoErr.message}). Intentando fallback img2img...`);
+                // V69: Better fallback — use img2img instead of just dark background
+                try {
+                    const sceneResult = await generateFalImage(scene_prompt);
+                    if (sceneResult && sceneResult.imageUrl) {
+                        // Composite logo on scene, then img2img to blend
+                        const sceneBuf = await (await fetch(sceneResult.imageUrl, { signal: AbortSignal.timeout(15000) })).arrayBuffer();
+                        const sceneBuffer = Buffer.from(sceneBuf);
+                        const logoMeta = await sharp(optimizedInput).metadata();
+                        const lW = logoMeta.width || 512;
+                        const lH = logoMeta.height || 512;
+                        const targetLogoW = Math.round(1024 * 0.22);
+                        const targetLogoH = Math.round(targetLogoW * (lH / lW));
+                        const logoLeft = Math.round((1024 - targetLogoW) / 2);
+                        const logoTop = Math.round((1024 - targetLogoH) / 2);
+                        const resizedLogo = await sharp(optimizedInput)
+                            .resize(targetLogoW, targetLogoH, { fit: 'inside' })
+                            .ensureAlpha()
+                            .toBuffer();
+                        const composited = await sharp(sceneBuffer)
+                            .resize(1024, 1024, { fit: 'cover' })
+                            .composite([{ input: resizedLogo, left: logoLeft, top: logoTop }])
+                            .png()
+                            .toBuffer();
+                        const compositedDataUri = `data:image/png;base64,${composited.toString('base64')}`;
+                        // img2img at 0.35 strength to blend without destroying
+                        finalImage = await generateFluxImageToImage(compositedDataUri, `${scene_prompt}, harmonious integration, natural lighting, photorealistic`, 0.35);
+                        augmentedPrompt = scene_prompt;
+                        version = "v69-logo-img2img-fallback";
+                    } else {
+                        finalImage = await logoFallbackOnDarkBackground(optimizedInput);
+                        augmentedPrompt = scene_prompt;
+                        version = "v69-logo-dark-fallback";
+                    }
+                } catch {
+                    finalImage = await logoFallbackOnDarkBackground(optimizedInput);
+                    augmentedPrompt = scene_prompt;
+                    version = "v69-logo-dark-fallback";
+                }
             }
         } else {
-            // PRODUCT MODE: intenta pipeline inpaint+bake, fallback a composite directo si FAL falla
+            // V69 PRODUCT MODE: intenta pipeline inpaint+bake, fallback a composite directo si FAL falla
             try {
-                console.log(`[V60] 🎨 Ensamblando Composición Base y Máscara Inversa...`);
+                console.log(`[V69] 🎨 Ensamblando Composición Base y Máscara Inversa...`);
                 const { baseImage, maskImage } = await createInverseMaskPayload(optimizedInput);
 
-                console.log(`[V60] 🖐️ ESTRUCTURA (Step 1): Construyendo entorno 3D perfecto...`);
+                console.log(`[V69] 🖐️ ESTRUCTURA (Step 1): Construyendo entorno 3D perfecto...`);
                 const inpaintStart = Date.now();
                 
                 augmentedPrompt = `${scene_prompt}, product photography, dynamic lighting, masterpiece, 8k resolution, NO TEXT, NO TYPOGRAPHY, NO LETTERS, NO WORDS ON IMAGE`;
                 
                 const structureImage = await generateFluxInpaint(baseImage, maskImage, augmentedPrompt, 1.0);
-                console.log(`[V60] ⏱️ Estructura Inpaint tardó: ${((Date.now() - inpaintStart)/1000).toFixed(1)}s`);
+                console.log(`[V69] ⏱️ Estructura Inpaint tardó: ${((Date.now() - inpaintStart)/1000).toFixed(1)}s`);
 
-                console.log(`[V60] 💡 HORNEADO FÍSICO (Step 2): Fusionando luz de la habitación sobre el producto...`);
+                console.log(`[V69] 💡 HORNEADO FÍSICO (Step 2): Fusionando luz de la habitación sobre el producto...`);
                 const bakeStart = Date.now();
                 
                 const strength = 0.30; 
                 finalImage = await generateFluxImageToImage(structureImage, augmentedPrompt, strength);
-                version = "v60-flux-inpaint-bake";
-                console.log(`[V60] ⏱️ Horneado Físico tardó: ${((Date.now() - bakeStart)/1000).toFixed(1)}s`);
+                version = "v69-product-inpaint-bake";
+                console.log(`[V69] ⏱️ Horneado Físico tardó: ${((Date.now() - bakeStart)/1000).toFixed(1)}s`);
             } catch (productErr: any) {
                 // Si FAL falla (balance agotado o cualquier error), hacer fallback: composite directo en fondo elegante
-                console.warn(`[V60] ⚠️ Producto FAL falló (${productErr.message}). Fallback directo...`);
+                console.warn(`[V69] ⚠️ Producto FAL falló (${productErr.message}). Fallback directo...`);
                 const fallbackStart = Date.now();
 
                 const prodMeta = await sharp(optimizedInput).metadata();
@@ -345,13 +379,13 @@ if (logoMode) {
 
                 augmentedPrompt = scene_prompt;
                 finalImage = `data:image/png;base64,${composite.toString('base64')}`;
-                version = "v60-product-fallback-no-fal";
-                console.log(`[V60] ⏱️ Fallback completado: ${((Date.now() - fallbackStart)/1000).toFixed(1)}s`);
+                version = "v69-product-fallback-no-fal";
+                console.log(`[V69] ⏱️ Fallback completado: ${((Date.now() - fallbackStart)/1000).toFixed(1)}s`);
             }
         }
 
         const totalTime = ((Date.now() - startTime)/1000).toFixed(1);
-        console.log(`[V56] ✅ COMPLETADO en ${totalTime}s.`);
+        console.log(`[V69] ✅ COMPLETADO en ${totalTime}s.`);
 
         return NextResponse.json({
             success: true,
