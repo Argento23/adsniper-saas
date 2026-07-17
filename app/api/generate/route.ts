@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { generateReplicateImage } from '@/lib/replicate';
-import { generateFalImage, generateFluxImageToImage } from '@/lib/fal';
+import { generateFalImage, generateFluxImageToImage, generateBriaProductShot } from '@/lib/fal';
 import { checkAndTrackUsage } from '@/lib/usageTracker';
 import sharp from 'sharp';
 
@@ -112,20 +112,38 @@ function isTransparentPng(base64Str: string): boolean {
     } catch { return false; }
 }
 
-// Dos pasos para integrar imagen en escena (funciona para logos Y productos):
-// 1. Generar escena completa con Pollinations (gratis, server-to-server directo)
-// 2. Compositar imagen del usuario sobre la escena (con sharp)
-// Output: data URI de 768x768 PNG (compromise entre calidad y data URI size)
+// V65: Integración coherente de la imagen del usuario en una escena.
+// Usa Bria Product Shot (FAL): toma la imagen del usuario, una descripción de escena,
+// y devuelve una imagen donde la imagen del usuario aparece naturalmente integrada.
+// ANTES: img2img + sharp composite (logo pegado como sticker).
+// AHORA: Bria Product Shot con placement_type="original" + padding 50px (tamaño natural).
+// COSTE: $0.10/imagen (FAL balance).
 async function integrateImageInScene(base64Str: string, fullPrompt: string): Promise<string> {
     const SIZE = 768;
+
+    if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
+        try {
+            console.log(`[V65] 🎬 Bria Product Shot: escena coherente con imagen del usuario...`);
+            const result = await generateBriaProductShot(base64Str, fullPrompt);
+            // result es URL — descargar y devolver base64 para no requerir proxy
+            const dl = await fetch(result);
+            if (!dl.ok) throw new Error(`Download failed: ${dl.status}`);
+            const buf = Buffer.from(await dl.arrayBuffer());
+
+            // Resize a 768x768 para data URI eficiente (data URI = menor que 1024)
+            const resized = await sharp(buf).resize(SIZE, SIZE, { fit: 'inside' }).png().toBuffer();
+            return `data:image/png;base64,${resized.toString('base64')}`;
+        } catch (falErr: any) {
+            console.warn(`[V65] ⚠️ Bria Product Shot falló (${falErr.message}), usando composite local...`);
+        }
+    }
+
+    // Fallback: composite simple con Pollinations (gratis)
     const base64Data = base64Str.includes(',') ? base64Str.split(',')[1] : base64Str;
     const imgBuf = Buffer.from(base64Data, 'base64');
-
     const imgMeta = await sharp(imgBuf).metadata();
     const iW = imgMeta.width || 512;
     const iH = imgMeta.height || 512;
-
-    // Tamaño proporcional de la imagen en el canvas (40% del ancho)
     const targetW = Math.round(SIZE * 0.40);
     const targetH = Math.round(targetW * (iH / iW));
     const left = Math.round((SIZE - targetW) / 2);
@@ -137,50 +155,30 @@ async function integrateImageInScene(base64Str: string, fullPrompt: string): Pro
         .toBuffer();
 
     let sceneUrl: string | null = null;
-
-    /* COST-OPT: Ya no usamos FAL para usuarios free. Solo Pollinations (gratis). */
-    const useFalForFreeTier = false;
-    const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
-
-    if (useFalForFreeTier && apiKey) {
-        try {
-            const sceneResult = await generateFalImage(fullPrompt, 'square');
-            sceneUrl = sceneResult.imageUrl;
-        } catch (falErr: any) {
-            console.warn(`[IntegrateImage] FAL falló (${falErr.message}), usando Pollinations`);
-            sceneUrl = null;
-        }
-    }
-
-    if (!sceneUrl) {
-        // Generar escena gratis con Pollinations — server-to-server directo,
-        // no usamos el proxy porque esa ruta no existe (era client-only).
+    try {
         const cleanPrompt = fullPrompt
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
             .replace(/[^\w\s]/gi, '')
             .substring(0, 200).trim().replace(/\s+/g, '_');
         const seed = Math.floor(Math.random() * 1000000);
-        sceneUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=768&height=768&nologo=true&seed=${seed}`;
-    }
-
-    let composite: Buffer;
-    try {
+        sceneUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=${SIZE}&height=${SIZE}&nologo=true&seed=${seed}`;
         const sceneResp = await fetch(sceneUrl);
         if (!sceneResp.ok) throw new Error(`Scene fetch failed: ${sceneResp.status}`);
-        const sceneBuf = await sceneResp.arrayBuffer();
-        const sceneImg = Buffer.from(sceneBuf);
-        composite = await sharp(sceneImg)
+        const sceneImg = Buffer.from(await sceneResp.arrayBuffer());
+        const composite = await sharp(sceneImg)
             .composite([{ input: resized, left, top }])
             .png()
             .toBuffer();
-    } catch (fetchErr) {
-        // Si no pudimos descargar la escena, composite directo sobre fondo oscuro
-        console.warn(`[IntegrateImage] Scene download failed: ${fetchErr}`);
-        composite = await makeDarkBackgroundWithImage(resized, left, top);
+        return `data:image/png;base64,${composite.toString('base64')}`;
+    } catch {
+        // Última opción: composite sobre fondo oscuro
+        const bg = await sharp({ create: { width: SIZE, height: SIZE, channels: 3, background: '#0f172a' } })
+            .png().toBuffer();
+        const composite = await sharp(bg)
+            .composite([{ input: resized, left, top }])
+            .png().toBuffer();
+        return `data:image/png;base64,${composite.toString('base64')}`;
     }
-
-    // V62: ya NO se llama a Flux img2img (ahorra $0.10/imagen). Devolver composit tal cual.
-    return `data:image/png;base64,${composite.toString('base64')}`;
 }
 
 // Helper: crea fondo degradado oscuro con la imagen compositada

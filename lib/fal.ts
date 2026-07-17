@@ -242,15 +242,17 @@ export async function generateBriaProductShot(
     const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
     const dataUri = imageBase64.startsWith('data:') ? imageBase64 : `data:image/png;base64,${imageBase64}`;
 
-    // Try data URI first; fallback to FAL storage if model rejects
+    // V65 PARAMS: placement_type "original" + padding mínimo = el producto mantiene
+    // su tamaño original, NO se infla. optimize_description:true permite a Bria
+    // reinterpretar el prompt para mejor integración. num_results:1 baja el costo.
     let resultRes = await fetch('https://fal.run/fal-ai/bria/product-shot', {
         method: 'POST',
         headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
             image_url: dataUri,
             scene_description: sceneDescription,
-            placement_type: "manual_padding",
-            padding: [300, 300, 300, 300],
+            placement_type: 'original',
+            padding: [50, 50, 50, 50],
             optimize_description: true,
             num_results: 1,
         }),
@@ -265,8 +267,8 @@ export async function generateBriaProductShot(
             body: JSON.stringify({
                 image_url: imageUrl,
                 scene_description: sceneDescription,
-                placement_type: "manual_padding",
-                padding: [300, 300, 300, 300],
+                placement_type: 'original',
+                padding: [50, 50, 50, 50],
                 optimize_description: true,
                 num_results: 1,
             }),

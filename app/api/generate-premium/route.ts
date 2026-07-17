@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import sharp from 'sharp';
-import { generateFluxInpaint, generateFluxImageToImage, generateFluxReduxImage, generateBriaBackgroundRemoval, generateFalImage, FalBalanceExhaustedError } from '@/lib/fal';
+import { generateFluxInpaint, generateFluxImageToImage, generateBriaBackgroundRemoval, generateBriaProductShot, generateFalImage, FalBalanceExhaustedError } from '@/lib/fal';
 
 // v41.9: Disable sharp cache to prevent memory saturation in serverless
 sharp.cache(false);
@@ -228,32 +228,34 @@ export async function POST(req: Request) {
         let augmentedPrompt: string;
         let version: string;
 
-        if (logoMode) {
-            // V64 LOGO MODE: Flux Redux — toma el logo como REFERENCIA visual
-            // y genera una nueva escena desde el prompt.
-            // Mantiene los COLORES y la ESENCIA del logo pero la composición la decide Flux.
-            // El logo ya no se queda "pegado" en el mismo tamaño/posición: Flux decide
-            // dónde poner el diseño dentro de la escena (en el pecho de un robot, en una pared, etc.).
-            // 1 sola llamada FAL = $0.10
-            console.log(`[V64] ⚡ Logo → escena vía Flux Redux (1 llamada, $0.10)...`);
-            const startV64 = Date.now();
+if (logoMode) {
+            // V65 LOGO MODE: Bria Product Shot — INTEGRACIÓN COHERENTE
+            // Bria Product Shot toma la imagen del usuario + scene_description y devuelve
+            // una escena donde el logo aparece naturalmente integrado (no como sticker).
+            // Con placeplacement_type="original" + padding 50px, el logo NO se infla.
+            // COSTE: $0.10/imagen (1 sola llamada).
+            console.log(`[V65] 🎬 Logo → Bria Product Shot (integración coherente, $0.10/logo)...`);
+            const startV65 = Date.now();
 
             try {
-                // Cargar logo como data URI para que Flux Redux lo lea
                 const logoB64 = `data:image/png;base64,${optimizedInput.toString('base64')}`;
-                const integrationPrompt = `${scene_prompt}. The logo design appears naturally within the scene, integrated with the same materials and lighting as the environment. Professional photography, 8k`;
-                finalImage = await generateFluxReduxImage(logoB64, integrationPrompt, 'square_hd');
+                const integrationPrompt = `${scene_prompt}. The logo design appears as a natural part of the scene — integrated with the same materials, lighting, shadows, and reflections as its surroundings.`;
+                const resultUrl = await generateBriaProductShot(logoB64, integrationPrompt);
+                // Bria devuelve HTTPS URL, hay que pasarla al cliente. Pero queremos mantener
+                // consistencia con el frontend que espera un data URI en algunos lugares.
+                // Devolvemos la URL igual — Proxy no es necesario porque fal.ai CDN es público
+                finalImage = resultUrl;
                 augmentedPrompt = integrationPrompt;
-                version = "v64-logo-redux";
-                console.log(`[V64] ⏱️ Total: ${((Date.now() - startV64)/1000).toFixed(1)}s`);
+                version = "v65-logo-bria-productshot";
+                console.log(`[V65] ⏱️ Total: ${((Date.now() - startV65)/1000).toFixed(1)}s`);
             } catch (logoErr: any) {
                 // Logo FAL falló: fallback directo (compositar logo en fondo elegante)
-                console.warn(`[V64] ⚠️ Logo FAL falló (${logoErr.message}). Fallback directo...`);
+                console.warn(`[V65] ⚠️ Logo Bria falló (${logoErr.message}). Fallback directo...`);
                 finalImage = await logoFallbackOnDarkBackground(optimizedInput);
                 augmentedPrompt = scene_prompt;
-                version = "v64-logo-fallback";
+                version = "v65-logo-fallback";
             }
-} else {
+        } else {
             // PRODUCT MODE: intenta pipeline inpaint+bake, fallback a composite directo si FAL falla
             try {
                 console.log(`[V60] 🎨 Ensamblando Composición Base y Máscara Inversa...`);
