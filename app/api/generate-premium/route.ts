@@ -196,7 +196,7 @@ export async function POST(req: Request) {
         }
         const isAdmin = creditCheck.plan === 'agency' && creditCheck.remaining === 999;
 
-        console.log(`[V69] ⚡ INICIANDO ESTUDIO DE INTEGRACIÓN PROFUNDA (INPAINT + BAKE)...`);
+        console.log(`[V70] ⚡ INICIANDO ESTUDIO DE INTEGRACIÓN PROFUNDA...`);
         const startTime = Date.now();
         
         let inputBuffer: Buffer;
@@ -204,50 +204,44 @@ export async function POST(req: Request) {
 
         // Intentar Bria para remover fondo (si hay balance de FAL)
         try {
-            console.log(`[V69] ✂️ Intentando eliminar fondo con Bria...`);
+            console.log(`[V70] ✂️ Intentando eliminar fondo con Bria...`);
             const transparentPngUrl = await generateBriaBackgroundRemoval(image_base64);
-            console.log(`[V69] 📥 Descargando silueta desde: ${transparentPngUrl}`);
+            console.log(`[V70] 📥 Descargando silueta desde: ${transparentPngUrl}`);
             const imageFetchResponse = await fetch(transparentPngUrl);
             const imageArrayBuffer = await imageFetchResponse.arrayBuffer();
             inputBuffer = Buffer.from(imageArrayBuffer);
             briaUsed = true;
-            console.log(`[V69] ✅ Bria OK, fondo eliminado`);
+            console.log(`[V70] ✅ Bria OK, fondo eliminado`);
         } catch (briaErr: any) {
-            // Bria falló (balance agotado o error de red) - usar imagen original sin procesar fondo
-            console.warn(`[V69] ⚠️ Bria falló (${briaErr.message}). Usando imagen original como input.`);
+            console.warn(`[V70] ⚠️ Bria falló (${briaErr.message}). Usando imagen original como input.`);
             const base64Data = image_base64.includes(',') ? image_base64.split(',')[1] : image_base64;
             inputBuffer = Buffer.from(base64Data, 'base64');
         }
 
         const optimizedInput = await sharp(inputBuffer).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).toBuffer();
 
-        // V69: DETECTAR LOGO vs PRODUCTO para elegir pipeline
+        // V70: DETECTAR LOGO vs PRODUCTO para elegir pipeline
         const logoMode = await isLikelyLogo(optimizedInput);
-        console.log(`[V69] 🏷️ Modo: ${logoMode ? 'LOGO (Inpainting)' : 'PRODUCTO (Inpaint + Bake)'}`);
+        console.log(`[V70] 🏷️ Modo: ${logoMode ? 'LOGO (Inpaint + Bake)' : 'PRODUCTO (Inpaint + Bake)'}`);
 
         let finalImage: string;
         let augmentedPrompt: string;
         let version: string;
 
 if (logoMode) {
-            // V69 LOGO MODE: Inpainting — el logo es la BASE, la escena se genera ALREDEDOR
-            // ANTES (V67): escena + composite + img2img → logo sobreimpreso como sticker
-            // ANTES (V65): Bria Product Shot → pegaba literal según prompt
-            // AHORA (V69): 1 sola llamada FAL con inverse mask
-            // 1. Logo como imagen base (centrado en lienzo gris)
-            // 2. Máscara inversa: negro sobre el logo (proteger), blanco alrededor (generar escena)
-            // 3. Flux inpainting genera la escena alrededor del logo respetando su forma
-            // COSTE: 1 llamada FAL = $0.10
-            const startV69 = Date.now();
-            console.log(`[V69] 🎬 Logo: Inpainting — escena generada alrededor del logo...`);
+            // V70 LOGO MODE: TWO-PASS — Inpainting + img2img bake
+            // PASO 1: Inpainting con inverse mask → genera escena alrededor del logo
+            // PASO 2: img2img a baja fuerza → fusiona sombras, reflejos, iluminación en TODO
+            // COSTE: 2 llamadas FAL = $0.20
+            const startV70 = Date.now();
+            console.log(`[V70] 🎬 Logo: TWO-PASS (inpaint + bake)...`);
 
             try {
-                // Paso 1: Preparar logo como imagen base (centrado en lienzo 1024x1024)
                 const logoMeta = await sharp(optimizedInput).metadata();
                 const lW = logoMeta.width || 512;
                 const lH = logoMeta.height || 512;
-                // Logo al 30% del canvas (visible pero no dominante para que la escena tenga protagonismo)
-                const targetLogoW = Math.round(1024 * 0.30);
+                // Logo al 22% del canvas — tamaño natural, no dominante
+                const targetLogoW = Math.round(1024 * 0.22);
                 const targetLogoH = Math.round(targetLogoW * (lH / lW));
                 const logoLeft = Math.round((1024 - targetLogoW) / 2);
                 const logoTop = Math.round((1024 - targetLogoH) / 2);
@@ -257,13 +251,14 @@ if (logoMode) {
                     .ensureAlpha()
                     .toBuffer();
 
-                // Base image: fondo gris neutro + logo centrado
+                // PASO 1A: Base image — gray background + centered logo
                 const baseBuffer = await sharp({ create: { width: 1024, height: 1024, channels: 3, background: '#808080' } })
                     .composite([{ input: resizedLogo, left: logoLeft, top: logoTop }])
-                    .jpeg({ quality: 95 })
+                    .png()
                     .toBuffer();
 
-                // Paso 2: Máscara inversa — proteger el logo, generar todo lo demás
+                // PASO 1B: Inverse mask — black over logo (protect), white elsewhere (generate)
+                // PNG for pixel-perfect precision (no JPEG artifacts)
                 const maskSilhouette = await sharp(resizedLogo)
                     .ensureAlpha()
                     .extractChannel(3)
@@ -273,81 +268,56 @@ if (logoMode) {
 
                 const maskBuffer = await sharp({ create: { width: 1024, height: 1024, channels: 3, background: '#FFFFFF' } })
                     .composite([{ input: maskSilhouette, left: logoLeft, top: logoTop }])
-                    .jpeg({ quality: 90 })
+                    .png()
                     .toBuffer();
 
-                const baseDataUri = `data:image/jpeg;base64,${baseBuffer.toString('base64')}`;
-                const maskDataUri = `data:image/jpeg;base64,${maskBuffer.toString('base64')}`;
+                const baseDataUri = `data:image/png;base64,${baseBuffer.toString('base64')}`;
+                const maskDataUri = `data:image/png;base64,${maskBuffer.toString('base64')}`;
 
-                // Paso 3: Flux inpainting — genera escena alrededor del logo
-                // V69: Improved prompt — emphasize logo as part of the scene, not on top
-                const inpaintPrompt = `${scene_prompt}, the logo in the center is a physical object placed in this environment, professional product photography, 8k, cinematic lighting, natural shadows and reflections cast by the central logo element, the scene surrounds and complements the logo, harmonious composition, photorealistic, NO TEXT, NO TYPOGRAPHY`;
-                finalImage = await generateFluxInpaint(baseDataUri, maskDataUri, inpaintPrompt, 0.85);
-                augmentedPrompt = inpaintPrompt;
-                version = "v69-logo-inpaint";
-                console.log(`[V69] ⏱️ Total: ${((Date.now() - startV69)/1000).toFixed(1)}s`);
+                // PASO 1C: Flux inpainting — genera escena alrededor del logo
+                const inpaintPrompt = `${scene_prompt}, professional photography, 8k, cinematic lighting, realistic shadows, photorealistic, NO TEXT, NO TYPOGRAPHY`;
+                console.log(`[V70] 🖌️ Step 1: Inpainting scene around logo...`);
+                const inpaintStart = Date.now();
+                const inpaintResult = await generateFluxInpaint(baseDataUri, maskDataUri, inpaintPrompt, 0.85);
+                console.log(`[V70] ⏱️ Inpaint: ${((Date.now() - inpaintStart)/1000).toFixed(1)}s`);
+
+                // PASO 2: img2img bake — fusión física GLOBAL (sombras, reflejos, iluminación)
+                // This is what the product mode already does and what was MISSING for logos
+                console.log(`[V70] 💡 Step 2: Baking lighting/shadows across entire image...`);
+                const bakeStart = Date.now();
+                const bakePrompt = `${scene_prompt}, the central logo casts realistic shadows and reflections on surrounding surfaces, environmental lighting wraps around the logo, physically accurate light interaction, cohesive atmosphere, photorealistic, masterpiece`;
+                finalImage = await generateFluxImageToImage(inpaintResult, bakePrompt, 0.30);
+                augmentedPrompt = bakePrompt;
+                version = "v70-logo-inpaint-bake";
+                console.log(`[V70] ⏱️ Bake: ${((Date.now() - bakeStart)/1000).toFixed(1)}s`);
+                console.log(`[V70] ⏱️ Total: ${((Date.now() - startV70)/1000).toFixed(1)}s`);
             } catch (logoErr: any) {
-                console.warn(`[V69] ⚠️ Logo inpaint falló (${logoErr.message}). Intentando fallback img2img...`);
-                // V69: Better fallback — use img2img instead of just dark background
-                try {
-                    const sceneResult = await generateFalImage(scene_prompt);
-                    if (sceneResult && sceneResult.imageUrl) {
-                        // Composite logo on scene, then img2img to blend
-                        const sceneBuf = await (await fetch(sceneResult.imageUrl, { signal: AbortSignal.timeout(15000) })).arrayBuffer();
-                        const sceneBuffer = Buffer.from(sceneBuf);
-                        const logoMeta = await sharp(optimizedInput).metadata();
-                        const lW = logoMeta.width || 512;
-                        const lH = logoMeta.height || 512;
-                        const targetLogoW = Math.round(1024 * 0.22);
-                        const targetLogoH = Math.round(targetLogoW * (lH / lW));
-                        const logoLeft = Math.round((1024 - targetLogoW) / 2);
-                        const logoTop = Math.round((1024 - targetLogoH) / 2);
-                        const resizedLogo = await sharp(optimizedInput)
-                            .resize(targetLogoW, targetLogoH, { fit: 'inside' })
-                            .ensureAlpha()
-                            .toBuffer();
-                        const composited = await sharp(sceneBuffer)
-                            .resize(1024, 1024, { fit: 'cover' })
-                            .composite([{ input: resizedLogo, left: logoLeft, top: logoTop }])
-                            .png()
-                            .toBuffer();
-                        const compositedDataUri = `data:image/png;base64,${composited.toString('base64')}`;
-                        // img2img at 0.35 strength to blend without destroying
-                        finalImage = await generateFluxImageToImage(compositedDataUri, `${scene_prompt}, harmonious integration, natural lighting, photorealistic`, 0.35);
-                        augmentedPrompt = scene_prompt;
-                        version = "v69-logo-img2img-fallback";
-                    } else {
-                        finalImage = await logoFallbackOnDarkBackground(optimizedInput);
-                        augmentedPrompt = scene_prompt;
-                        version = "v69-logo-dark-fallback";
-                    }
-                } catch {
-                    finalImage = await logoFallbackOnDarkBackground(optimizedInput);
-                    augmentedPrompt = scene_prompt;
-                    version = "v69-logo-dark-fallback";
-                }
+                console.warn(`[V70] ⚠️ Logo pipeline falló (${logoErr.message}). Fallback directo...`);
+                finalImage = await logoFallbackOnDarkBackground(optimizedInput);
+                augmentedPrompt = scene_prompt;
+                version = "v70-logo-dark-fallback";
             }
         } else {
-            // V69 PRODUCT MODE: intenta pipeline inpaint+bake, fallback a composite directo si FAL falla
+            // V70 PRODUCT MODE: intenta pipeline inpaint+bake, fallback a composite directo si FAL falla
             try {
-                console.log(`[V69] 🎨 Ensamblando Composición Base y Máscara Inversa...`);
+                console.log(`[V70] 🎨 Ensamblando Composición Base y Máscara Inversa...`);
                 const { baseImage, maskImage } = await createInverseMaskPayload(optimizedInput);
 
-                console.log(`[V69] 🖐️ ESTRUCTURA (Step 1): Construyendo entorno 3D perfecto...`);
+                console.log(`[V70] 🖐️ ESTRUCTURA (Step 1): Construyendo entorno 3D perfecto...`);
                 const inpaintStart = Date.now();
                 
                 augmentedPrompt = `${scene_prompt}, product photography, dynamic lighting, masterpiece, 8k resolution, NO TEXT, NO TYPOGRAPHY, NO LETTERS, NO WORDS ON IMAGE`;
                 
                 const structureImage = await generateFluxInpaint(baseImage, maskImage, augmentedPrompt, 1.0);
-                console.log(`[V69] ⏱️ Estructura Inpaint tardó: ${((Date.now() - inpaintStart)/1000).toFixed(1)}s`);
+                console.log(`[V70] ⏱️ Estructura Inpaint tardó: ${((Date.now() - inpaintStart)/1000).toFixed(1)}s`);
 
-                console.log(`[V69] 💡 HORNEADO FÍSICO (Step 2): Fusionando luz de la habitación sobre el producto...`);
+                console.log(`[V70] 💡 HORNEADO FÍSICO (Step 2): Fusionando luz de la habitación sobre el producto...`);
                 const bakeStart = Date.now();
                 
                 const strength = 0.30; 
                 finalImage = await generateFluxImageToImage(structureImage, augmentedPrompt, strength);
-                version = "v69-product-inpaint-bake";
-                console.log(`[V69] ⏱️ Horneado Físico tardó: ${((Date.now() - bakeStart)/1000).toFixed(1)}s`);
+                version = "v70-product-inpaint-bake";
+                console.log(`[V70] ⏱️ Horneado Físico tardó: ${((Date.now() - bakeStart)/1000).toFixed(1)}s`);
             } catch (productErr: any) {
                 // Si FAL falla (balance agotado o cualquier error), hacer fallback: composite directo en fondo elegante
                 console.warn(`[V69] ⚠️ Producto FAL falló (${productErr.message}). Fallback directo...`);
@@ -379,13 +349,13 @@ if (logoMode) {
 
                 augmentedPrompt = scene_prompt;
                 finalImage = `data:image/png;base64,${composite.toString('base64')}`;
-                version = "v69-product-fallback-no-fal";
-                console.log(`[V69] ⏱️ Fallback completado: ${((Date.now() - fallbackStart)/1000).toFixed(1)}s`);
+                version = "v70-product-fallback-no-fal";
+                console.log(`[V70] ⏱️ Fallback completado: ${((Date.now() - fallbackStart)/1000).toFixed(1)}s`);
             }
         }
 
         const totalTime = ((Date.now() - startTime)/1000).toFixed(1);
-        console.log(`[V69] ✅ COMPLETADO en ${totalTime}s.`);
+        console.log(`[V70] ✅ COMPLETADO en ${totalTime}s.`);
 
         return NextResponse.json({
             success: true,
