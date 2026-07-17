@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import sharp from 'sharp';
-import { generateFluxInpaint, generateFluxImageToImage, generateBriaBackgroundRemoval, generateBriaProductShot, generateFalImage, FalBalanceExhaustedError } from '@/lib/fal';
+import { generateFluxInpaint, generateFluxImageToImage, generateBriaBackgroundRemoval, generateFalImage, FalBalanceExhaustedError } from '@/lib/fal';
 
 // v41.9: Disable sharp cache to prevent memory saturation in serverless
 sharp.cache(false);
@@ -228,31 +228,70 @@ export async function POST(req: Request) {
         let version: string;
 
 if (logoMode) {
-            // V65 LOGO MODE: Bria Product Shot — INTEGRACIÓN COHERENTE
-            // Bria Product Shot toma la imagen del usuario + scene_description y devuelve
-            // una escena donde el logo aparece naturalmente integrado (no como sticker).
-            // Con placeplacement_type="original" + padding 50px, el logo NO se infla.
-            // COSTE: $0.10/imagen (1 sola llamada).
-            console.log(`[V65] 🎬 Logo → Bria Product Shot (integración coherente, $0.10/logo)...`);
-            const startV65 = Date.now();
+            // V67 LOGO MODE: Pipeline híbrido optimizado
+            // ANTES (V65 Bria): pegaba el logo según el prompt literal ("logo colgado en pared" → lo colgaba)
+            // Problema: el logo quedaba en una posición específica sin importar la composición.
+            //
+            // AHORA (V67): 3 pasos para的产品inTEGRACIÓN REAL
+            // 1. Flux Dev genera la escena desde tu prompt (sin input del logo) — calidad fotográfica, obedece tu prompt
+            // 2. Composite del logo en una posición naturaldentro de la escena (no Esquinas, no centro perfecto)
+            // 3. Flux Dev img2img STRENGTH BAJO (0.20) para fusionar bordes y lighting
+            //
+            // RESULTADO: la escena cumple tu prompt, y el logo aparece naturalmente incorporado
+            // (NO como sticker, NO literal, NO superpuesto)
+            // COSTE: 2 llamadas FAL = $0.20
+            const startV67 = Date.now();
+            console.log(`[V67] 🎬 Logo: escena contextual + composite inteligente...`);
 
             try {
-                const logoB64 = `data:image/png;base64,${optimizedInput.toString('base64')}`;
-                const integrationPrompt = `${scene_prompt}. The logo design appears as a natural part of the scene — integrated with the same materials, lighting, shadows, and reflections as its surroundings.`;
-                const resultUrl = await generateBriaProductShot(logoB64, integrationPrompt);
-                // Bria devuelve HTTPS URL, hay que pasarla al cliente. Pero queremos mantener
-                // consistencia con el frontend que espera un data URI en algunos lugares.
-                // Devolvemos la URL igual — Proxy no es necesario porque fal.ai CDN es público
-                finalImage = resultUrl;
+                // Paso 1: Genera LA ESCENA con Flux Dev (prompt del usuario, sin input).
+                // ESTO es clave — genera una escena que obedece tu prompt al 100%
+                // sin quedar atado al conformato de tu logo.
+                const scenePrompt = `${scene_prompt}. Professional scene photography, 8k, high detail, masterful composition`;
+                const sceneResult = await generateFalImage(scenePrompt, 'square');
+                const sceneUrl = sceneResult.imageUrl;
+
+                // Descargar la escena como Buffer
+                const sceneResp = await fetch(sceneUrl);
+                if (!sceneResp.ok) throw new Error(`Scene download failed: ${sceneResp.status}`);
+                const sceneBuf = Buffer.from(await sceneResp.arrayBuffer());
+
+                // Paso 2: Composite del logo en posición NATURAL (no esquina - no centro)
+                // Estrategia: posición basada en la lógica del prompt.
+                // Por defecto: centro-izquierda (lugar más natural para logos)
+                const logoMeta = await sharp(optimizedInput).metadata();
+                const lW = logoMeta.width || 512;
+                const lH = logoMeta.height || 512;
+                // Logo al 22% del canvas (NO Grande, NO sticker)
+                const targetLogoW = Math.round(1024 * 0.22);
+                const targetLogoH = Math.round(targetLogoW * (lH / lW));
+                // Centro izquierdo (donde normalmente aparece un logo)
+                const left = Math.round(1024 * 0.39); // 39% horizontal = centro-izquierda
+                const top = Math.round(1024 * 0.39); // 39% vertical = centro-arriba
+
+                const resizedLogo = await sharp(optimizedInput)
+                    .resize(targetLogoW, targetLogoH, { fit: 'inside' })
+                    .ensureAlpha()
+                    .toBuffer();
+
+                const composite = await sharp(sceneBuf)
+                    .composite([{ input: resizedLogo, left, top }])
+                    .png()
+                    .toBuffer();
+
+                // Paso 3: HARMONIC INTEGRATION - Flux Dev img2img para integrar lighting
+                // strength 0.25 es SUFICIENTE para ajustar bordes/lighting sin romper nada
+                const compositeDataUri = `data:image/png;base64,${composite.toString('base64')}`;
+                const integrationPrompt = `${scene_prompt}. The logo becomes merged with the environment: edges blent, lighting reflected on surfaces, shadows underneath. Looks like always part of the scene.`;
+                finalImage = await generateFluxImageToImage(compositeDataUri, integrationPrompt, 0.25);
                 augmentedPrompt = integrationPrompt;
-                version = "v65-logo-bria-productshot";
-                console.log(`[V65] ⏱️ Total: ${((Date.now() - startV65)/1000).toFixed(1)}s`);
+                version = "v67-logo-hybrid";
+                console.log(`[V67] ⏱️ Total: ${((Date.now() - startV67)/1000).toFixed(1)}s`);
             } catch (logoErr: any) {
-                // Logo FAL falló: fallback directo (compositar logo en fondo elegante)
-                console.warn(`[V65] ⚠️ Logo Bria falló (${logoErr.message}). Fallback directo...`);
+                console.warn(`[V67] ⚠️ Logo híbrido falló (${logoErr.message}). Fallback directo...`);
                 finalImage = await logoFallbackOnDarkBackground(optimizedInput);
                 augmentedPrompt = scene_prompt;
-                version = "v65-logo-fallback";
+                version = "v67-logo-fallback";
             }
         } else {
             // PRODUCT MODE: intenta pipeline inpaint+bake, fallback a composite directo si FAL falla

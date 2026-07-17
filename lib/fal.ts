@@ -135,6 +135,9 @@ export async function generateFalImage(
 
     if (!response.ok) {
         const err = await response.text();
+        if (response.status === 403 && err.includes('balance')) {
+            throw new FalBalanceExhaustedError();
+        }
         throw new Error(`Fal Flux error (${response.status}): ${err}`);
     }
 
