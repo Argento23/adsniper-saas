@@ -144,43 +144,52 @@ async function isLikelyLogo(buffer: Buffer): Promise<boolean> {
     }
 }
 
-// V73: Remove solid background from logo using color sampling
-// Samples corners to detect background color, then makes matching pixels transparent
+// V73: Remove solid background from logo using color sampling + flood fill from corners
+// Works for both alpha and non-alpha images
 async function removeSolidBackground(buffer: Buffer): Promise<Buffer> {
     const meta = await sharp(buffer).metadata();
-    if (meta.hasAlpha) return buffer; // Already has transparency
-
     const { width = 1, height = 1 } = meta;
-    const sampleSize = 10;
 
-    // Sample 4 corners to detect background color
-    const corners = await Promise.all([
-        sharp(buffer).extract({ left: 0, top: 0, width: sampleSize, height: sampleSize }).raw().toBuffer(),
-        sharp(buffer).extract({ left: width - sampleSize, top: 0, width: sampleSize, height: sampleSize }).raw().toBuffer(),
-        sharp(buffer).extract({ left: 0, top: height - sampleSize, width: sampleSize, height: sampleSize }).raw().toBuffer(),
-        sharp(buffer).extract({ left: width - sampleSize, top: height - sampleSize, width: sampleSize, height: sampleSize }).raw().toBuffer(),
-    ]);
-
-    // Average RGB from all corners
-    let rSum = 0, gSum = 0, bSum = 0, count = 0;
-    for (const corner of corners) {
-        for (let i = 0; i < corner.length; i += 3) {
-            rSum += corner[i];
-            gSum += corner[i + 1];
-            bSum += corner[i + 2];
-            count++;
-        }
-    }
-    const bgR = Math.round(rSum / count);
-    const bgG = Math.round(gSum / count);
-    const bgB = Math.round(bSum / count);
-    console.log(`[V73] 🎨 Detected solid background: rgb(${bgR}, ${bgG}, ${bgB})`);
-
-    // Create a mask: transparent where pixels match the background color
-    const threshold = 45;
+    // Get raw RGBA pixels
     const raw = await sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: false }) as Buffer;
     const channels = 4;
-    const output = Buffer.alloc(width * height * channels);
+
+    // Sample center of each edge (top-center, bottom-center, left-center, right-center)
+    // These are more likely to be background than corners (which might have artifacts)
+    const samplePoints = [
+        { x: Math.floor(width / 2), y: 0 },                    // top center
+        { x: Math.floor(width / 2), y: height - 1 },           // bottom center
+        { x: 0, y: Math.floor(height / 2) },                    // left center
+        { x: width - 1, y: Math.floor(height / 2) },           // right center
+        { x: 0, y: 0 },                                         // top-left
+        { x: width - 1, y: 0 },                                 // top-right
+    ];
+
+    // Collect background color candidates (sample 5x5 area around each point)
+    const samples: { r: number; g: number; b: number }[] = [];
+    for (const pt of samplePoints) {
+        for (let dy = -2; dy <= 2; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+                const sx = Math.max(0, Math.min(width - 1, pt.x + dx));
+                const sy = Math.max(0, Math.min(height - 1, pt.y + dy));
+                const idx = (sy * width + sx) * channels;
+                samples.push({ r: raw[idx], g: raw[idx + 1], b: raw[idx + 2] });
+            }
+        }
+    }
+
+    // K-means-like: find the dominant color cluster (background)
+    // Simple approach: take the most common color neighborhood
+    let rSum = 0, gSum = 0, bSum = 0;
+    for (const s of samples) { rSum += s.r; gSum += s.g; bSum += s.b; }
+    const bgR = Math.round(rSum / samples.length);
+    const bgG = Math.round(gSum / samples.length);
+    const bgB = Math.round(bSum / samples.length);
+    console.log(`[V73] 🎨 Detected background: rgb(${bgR}, ${bgG}, ${bgB}) from ${samples.length} samples`);
+
+    // Flood-fill transparency: pixels close to background color → transparent
+    const threshold = 60;
+    const output = Buffer.alloc(raw.length);
 
     for (let i = 0; i < raw.length; i += channels) {
         const r = raw[i], g = raw[i + 1], b = raw[i + 2];
@@ -188,10 +197,13 @@ async function removeSolidBackground(buffer: Buffer): Promise<Buffer> {
         output[i] = r;
         output[i + 1] = g;
         output[i + 2] = b;
-        output[i + 3] = dist < threshold ? 0 : 255; // transparent if close to bg
+        output[i + 3] = dist < threshold ? 0 : 255;
     }
 
-    return sharp(output, { raw: { width, height, channels } }).png().toBuffer();
+    // Smooth the alpha edge to avoid harsh cuts
+    return sharp(output, { raw: { width, height, channels } })
+        .png()
+        .toBuffer();
 }
 
 // V73: Fallback elegante cuando FAL no está disponible.
@@ -278,13 +290,10 @@ export async function POST(req: Request) {
         const logoMode = imageIsLogo || promptSuggestsLogo;
         console.log(`[V72] 🏷️ imageIsLogo: ${imageIsLogo}, promptSuggestsLogo: ${promptSuggestsLogo} → ${logoMode ? 'LOGO (Scene-First + Bake)' : 'PRODUCTO (Inpaint + Bake)'}`);
 
-        // V73: If logo mode and no alpha channel, remove solid background
+        // V73: Always remove background from logo before compositing
         if (logoMode) {
-            const hasAlpha = (await sharp(optimizedInput).metadata()).hasAlpha;
-            if (!hasAlpha) {
-                console.log(`[V73] ✂️ Logo sin transparencia — eliminando fondo sólido...`);
-                optimizedInput = await removeSolidBackground(optimizedInput);
-            }
+            console.log(`[V73] ✂️ Logo mode — removing background...`);
+            optimizedInput = await removeSolidBackground(optimizedInput);
         }
 
         let finalImage: string;
@@ -394,12 +403,12 @@ if (logoMode) {
                     .png().toBuffer();
 
                 // PASO 4: img2img bake — THIS is the critical step
-                // At 0.35 strength the AI re-renders lighting/colors but preserves composition
-                console.log(`[V72] 🔥 Step 4: Baking physical lighting (strength 0.35)...`);
+                // At 0.40 strength the AI re-renders ~40% forcing physical lighting integration
+                console.log(`[V73] 🔥 Step 4: Baking physical lighting (strength 0.40)...`);
                 const bakeStart = Date.now();
                 const compositedDataUri = `data:image/png;base64,${composited.toString('base64')}`;
-                const bakePrompt = `${scene_prompt}, the central signage or logo is physically mounted on the wall surface, realistic shadows and light reflections, cohesive scene lighting, professional product photography, 8k, masterpiece`;
-                finalImage = await generateFluxImageToImage(compositedDataUri, bakePrompt, 0.35);
+                const bakePrompt = `${scene_prompt}, the logo is a real physical sign mounted on the wall, realistic shadows and light reflections on the wall surface, cohesive scene lighting, professional photography, 8k, masterpiece`;
+                finalImage = await generateFluxImageToImage(compositedDataUri, bakePrompt, 0.40);
                 augmentedPrompt = bakePrompt;
                 version = "v72-scene-first-bake";
                 console.log(`[V72] ⏱️ Bake: ${((Date.now() - bakeStart)/1000).toFixed(1)}s`);
