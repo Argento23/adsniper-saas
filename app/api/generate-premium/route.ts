@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import sharp from 'sharp';
-import { generateFluxInpaint, generateFluxImageToImage, generateBriaBackgroundRemoval, generateFalImage, FalBalanceExhaustedError } from '@/lib/fal';
+import { generateFluxInpaint, generateFluxImageToImage, generateBriaBackgroundRemoval, generateBriaProductShot, generateFalImage, FalBalanceExhaustedError } from '@/lib/fal';
 
 // v41.9: Disable sharp cache to prevent memory saturation in serverless
 sharp.cache(false);
@@ -212,7 +212,7 @@ export async function POST(req: Request) {
         const { userId } = await auth();
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-        const { image_base64, scene_prompt } = await req.json();
+        const { image_base64, scene_prompt, mode = 'auto' } = await req.json();
         if (!image_base64) return NextResponse.json({ error: 'Falta la imagen' }, { status: 400 });
         if (!scene_prompt) return NextResponse.json({ error: 'Falta el prompt de la escena' }, { status: 400 });
 
@@ -253,17 +253,24 @@ export async function POST(req: Request) {
 
         let optimizedInput = await sharp(inputBuffer).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).toBuffer();
 
-        // V72: DETECTAR LOGO vs PRODUCTO para elegir pipeline
-        // Si la imagen tiene alpha transparente → probablemente logo
-        // Si el prompt menciona logo/neon/sign/brand/Signage → forzar modo logo
+        // V75: Detect intended mode (product vs logo)
+        // - 'mode' from user: 'product' | 'logo' | 'auto'
+        // - auto: detect from image alpha + prompt keywords
         const imageIsLogo = await isLikelyLogo(optimizedInput);
         const promptSuggestsLogo = /logo|neon|sign|brand|signage|icon|emblem|badge|symbol/i.test(scene_prompt);
-        const logoMode = imageIsLogo || promptSuggestsLogo;
-        console.log(`[V72] 🏷️ imageIsLogo: ${imageIsLogo}, promptSuggestsLogo: ${promptSuggestsLogo} → ${logoMode ? 'LOGO (Scene-First + Bake)' : 'PRODUCTO (Inpaint + Bake)'}`);
+        let effectiveMode: 'product' | 'logo';
+        if (mode === 'product') {
+            effectiveMode = 'product';
+        } else if (mode === 'logo') {
+            effectiveMode = 'logo';
+        } else { // auto
+            effectiveMode = (imageIsLogo || promptSuggestsLogo) ? 'logo' : 'product';
+        }
+        console.log(`[V75] 🎯 User mode: ${mode}, imageIsLogo: ${imageIsLogo}, promptSuggestsLogo: ${promptSuggestsLogo} → ${effectiveMode.toUpperCase()}`);
 
-        // V73: Always remove background from logo before compositing
-        if (logoMode) {
-            console.log(`[V73] ✂️ Logo mode — removing background...`);
+        // V74: For logos, remove background before compositing
+        if (effectiveMode === 'logo') {
+            console.log(`[V74] ✂️ Logo mode — removing background...`);
             optimizedInput = await removeSolidBackground(optimizedInput);
         }
 
@@ -271,12 +278,66 @@ export async function POST(req: Request) {
         let augmentedPrompt: string;
         let version: string;
 
-if (logoMode) {
-            // V72: SCENE-FIRST logo pipeline with proper integration
-            // 1. Generate clean scene (no logo)
-            // 2. Analyze scene lighting direction
-            // 3. Composite logo with directional shadow + ambient glow
-            // 4. img2img at 0.30 to physically fuse lighting/colors
+if (effectiveMode === 'product') {
+            // V75 PRODUCT MODE: Bria Product Shot (designed for product placement)
+            // Bria places the product LITERALLY in the scene with its own physics.
+            // This is the CORRECT tool for physical products.
+            // COSTE: $0.10 Bria + optional $0.10 bake = $0.10-0.20
+            const startV75 = Date.now();
+            console.log(`[V75] 📦 PRODUCT MODE: Bria Product Shot (designed for products)...`);
+
+            try {
+                // PASO 1: Bria Product Shot — designed for product-in-scene
+                console.log(`[V75] 🎬 Bria Product Shot con escena: "${scene_prompt.substring(0, 50)}..."`);
+                const briaStart = Date.now();
+                // Use the ORIGINAL image (with background) for Bria — Bria does its own background detection
+                const briaResultUrl = await generateBriaProductShot(image_base64, scene_prompt);
+                console.log(`[V75] ⏱️ Bria: ${((Date.now() - briaStart) / 1000).toFixed(1)}s`);
+
+                // Download Bria result
+                const briaDlResp = await fetch(briaResultUrl, { signal: AbortSignal.timeout(30000) });
+                if (!briaDlResp.ok) throw new Error(`Bria download failed: ${briaDlResp.status}`);
+                const briaResultBuf = Buffer.from(await briaDlResp.arrayBuffer());
+
+                // PASO 2: Optional img2img bake to harmonize lighting (low strength)
+                // This adds subtle shadow/lighting cohesion without destroying the product
+                console.log(`[V75] 💡 Optional: harmonize lighting via img2img 0.15...`);
+                const bakeStart = Date.now();
+                const briaDataUri = `data:image/png;base64,${briaResultBuf.toString('base64')}`;
+                const harmonizePrompt = `${scene_prompt}, cohesive natural lighting, professional product photography, photorealistic, 8k, masterpiece`;
+                finalImage = await generateFluxImageToImage(briaDataUri, harmonizePrompt, 0.15);
+                augmentedPrompt = harmonizePrompt;
+                version = "v75-bria-product-shot";
+                console.log(`[V75] ⏱️ Bake: ${((Date.now() - bakeStart) / 1000).toFixed(1)}s`);
+                console.log(`[V75] ⏱️ Total: ${((Date.now() - startV75) / 1000).toFixed(1)}s`);
+            } catch (productErr: any) {
+                console.warn(`[V75] ⚠️ Product pipeline falló (${productErr.message}). Fallback composite...`);
+                // Fallback: just composite product on dark background
+                const prodMeta = await sharp(optimizedInput).metadata();
+                const pW = prodMeta.width || 512;
+                const pH = prodMeta.height || 512;
+                const targetW = Math.round(1024 * 0.45);
+                const targetH = Math.round(targetW * (pH / pW));
+                const left = Math.round((1024 - targetW) / 2);
+                const top = Math.round((1024 - targetH) / 2);
+                const resized = await sharp(optimizedInput)
+                    .resize(targetW, targetH, { fit: 'inside' })
+                    .ensureAlpha()
+                    .toBuffer();
+                const bgBuffer = await sharp({
+                    create: { width: 1024, height: 1024, channels: 3, background: '#0f172a' }
+                }).png().toBuffer();
+                const composite = await sharp(bgBuffer)
+                    .composite([{ input: resized, left, top }])
+                    .png()
+                    .toBuffer();
+                finalImage = `data:image/png;base64,${composite.toString('base64')}`;
+                augmentedPrompt = scene_prompt;
+                version = "v75-product-fallback";
+            }
+        } else {
+            // V75 LOGO MODE: V72 scene-first pipeline (preserves logo without distortion)
+            // Logos need compositing because Bria would distort them by treating as a 3D object
             const startV72 = Date.now();
             console.log(`[V72] 🎬 Logo: SCENE-FIRST + DIRECTIONAL EFFECTS + BAKE`);
 
@@ -385,70 +446,15 @@ if (logoMode) {
                 console.log(`[V72] ⏱️ Bake: ${((Date.now() - bakeStart)/1000).toFixed(1)}s`);
                 console.log(`[V72] ⏱️ Total: ${((Date.now() - startV72)/1000).toFixed(1)}s`);
             } catch (logoErr: any) {
-                console.warn(`[V72] ⚠️ Pipeline falló (${logoErr.message}). Fallback dark bg...`);
+                console.warn(`[V75] ⚠️ Logo pipeline falló (${logoErr.message}). Fallback dark bg...`);
                 finalImage = await logoFallbackOnDarkBackground(optimizedInput);
                 augmentedPrompt = scene_prompt;
-                version = "v72-logo-dark-fallback";
-            }
-        } else {
-            // V72 PRODUCT MODE: intenta pipeline inpaint+bake, fallback a composite directo si FAL falla
-            try {
-                console.log(`[V72] 🎨 Ensamblando Composición Base y Máscara Inversa...`);
-                const { baseImage, maskImage } = await createInverseMaskPayload(optimizedInput);
-
-                console.log(`[V72] 🖐️ ESTRUCTURA (Step 1): Construyendo entorno 3D perfecto...`);
-                const inpaintStart = Date.now();
-                
-                augmentedPrompt = `${scene_prompt}, product photography, dynamic lighting, masterpiece, 8k resolution, NO TEXT, NO TYPOGRAPHY, NO LETTERS, NO WORDS ON IMAGE`;
-                
-                const structureImage = await generateFluxInpaint(baseImage, maskImage, augmentedPrompt, 1.0);
-                console.log(`[V72] ⏱️ Estructura Inpaint tardó: ${((Date.now() - inpaintStart)/1000).toFixed(1)}s`);
-
-                console.log(`[V72] 💡 HORNEADO FÍSICO (Step 2): Fusionando luz de la habitación sobre el producto...`);
-                const bakeStart = Date.now();
-                
-                const strength = 0.30; 
-                finalImage = await generateFluxImageToImage(structureImage, augmentedPrompt, strength);
-                version = "v72-product-inpaint-bake";
-                console.log(`[V72] ⏱️ Horneado Físico tardó: ${((Date.now() - bakeStart)/1000).toFixed(1)}s`);
-            } catch (productErr: any) {
-                // Si FAL falla (balance agotado o cualquier error), hacer fallback: composite directo en fondo elegante
-                console.warn(`[V71] ⚠️ Producto FAL falló (${productErr.message}). Fallback directo...`);
-                const fallbackStart = Date.now();
-
-                const prodMeta = await sharp(optimizedInput).metadata();
-                const pW = prodMeta.width || 512;
-                const pH = prodMeta.height || 512;
-                const targetW = Math.round(1024 * 0.32);
-                const targetH = Math.round(targetW * (pH / pW));
-                const left = Math.round((1024 - targetW) / 2);
-                const top = Math.round(1024 * 0.52);
-
-                const resized = await sharp(optimizedInput)
-                    .resize(targetW, targetH, { fit: 'inside' })
-                    .ensureAlpha()
-                    .toBuffer();
-
-                const bgBuffer = await sharp({
-                    create: { width: 1024, height: 1024, channels: 3, background: '#0f172a' }
-                })
-                    .png()
-                    .toBuffer();
-
-                const composite = await sharp(bgBuffer)
-                    .composite([{ input: resized, left, top }])
-                    .png()
-                    .toBuffer();
-
-                augmentedPrompt = scene_prompt;
-                finalImage = `data:image/png;base64,${composite.toString('base64')}`;
-                version = "v72-product-fallback-no-fal";
-                console.log(`[V72] ⏱️ Fallback completado: ${((Date.now() - fallbackStart)/1000).toFixed(1)}s`);
+                version = "v75-logo-dark-fallback";
             }
         }
 
         const totalTime = ((Date.now() - startTime)/1000).toFixed(1);
-        console.log(`[V72] ✅ COMPLETADO en ${totalTime}s.`);
+        console.log(`[V75] ✅ COMPLETADO en ${totalTime}s. Mode: ${effectiveMode}, Version: ${version}`);
 
         return NextResponse.json({
             success: true,

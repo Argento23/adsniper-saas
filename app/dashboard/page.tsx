@@ -768,6 +768,7 @@ export default function Dashboard() {
     const [loadingStatus, setLoadingStatus] = useState('');
     const [activeTab, setActiveTab] = useState<'ads' | 'scripts'>('ads');
     const [applyLogo, setApplyLogo] = useState(true);
+    const [studioMode, setStudioMode] = useState<'auto' | 'product' | 'logo'>('product');
     const [applyText, setApplyText] = useState(true);
 
     // Admin Helper
@@ -894,7 +895,8 @@ export default function Dashboard() {
                 body: JSON.stringify({
                     image_base64: manualImageBase64,
                     scene_prompt: manualVisual,
-                    product_name: brand?.name || "premium product"
+                    product_name: brand?.name || "premium product",
+                    mode: studioMode
                 }),
             });
 
@@ -1318,6 +1320,32 @@ export default function Dashboard() {
                                                     className="w-full bg-slate-950 border border-purple-500/30 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:border-purple-400 outline-none transition-colors"
                                                 />
                                             </div>
+
+                                            {/* V75: MODE TOGGLE — Producto vs Logo */}
+                                            <div className="mt-3 flex items-center gap-2 bg-slate-950/50 rounded-xl p-1 border border-purple-500/20">
+                                                {(['product', 'logo', 'auto'] as const).map((m) => (
+                                                    <button
+                                                        key={m}
+                                                        onClick={() => setStudioMode(m)}
+                                                        className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${studioMode === m
+                                                            ? 'bg-purple-500 text-white shadow-lg shadow-purple-900/40'
+                                                            : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                                                            }`}
+                                                        title={
+                                                            m === 'product' ? 'Para fotos de productos físicos (recomendado)'
+                                                                : m === 'logo' ? 'Para logos/letreros/colgar en la escena'
+                                                                    : 'Detección automática'
+                                                        }
+                                                    >
+                                                        {m === 'product' ? '📦 Producto' : m === 'logo' ? '🏷️ Logo' : '✨ Auto'}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <p className="text-[10px] text-slate-500 mt-1.5 ml-1">
+                                                {studioMode === 'product' && '💡 Usa Bria Product Shot — diseñado para fotos de productos físicos'}
+                                                {studioMode === 'logo' && '💡 Usa scene-first — genera escena y monta el logo con efectos'}
+                                                {studioMode === 'auto' && '💡 Detecta según transparencia de la imagen + keywords del prompt'}
+                                            </p>
                                         </div>
                                     )}
 
