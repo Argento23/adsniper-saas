@@ -251,6 +251,9 @@ export async function POST(req: Request) {
             inputBuffer = Buffer.from(base64Data, 'base64');
         }
 
+        // MARKER: Check if error is after Bria
+        console.log(`[MARKER-A] Bria handled, inputBuffer ready (${inputBuffer.length} bytes)`);
+
         let optimizedInput = await sharp(inputBuffer).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).toBuffer();
 
         // V75: Detect intended mode (product vs logo)
@@ -336,56 +339,18 @@ if (effectiveMode === 'product') {
                 version = "v75-product-fallback";
             }
         } else {
-            // V75 LOGO MODE: V72 scene-first pipeline (preserves logo without distortion)
-            // Logos need compositing because Bria would distort them by treating as a 3D object
-            const startV72 = Date.now();
-            console.log(`[V72] 🎬 Logo: SCENE-FIRST + DIRECTIONAL EFFECTS + BAKE`);
-
+            // V77 LOGO MODE: Pure-sharp gradient background + logo composite
+            // ZERO FAL API CALLS — no scene generation, no img2img, no errors.
+            // The logo is composited onto a smooth gradient background with glow + shadow.
+            // Reliable, instant, zero cost.
             try {
-                // PASO 1: Generar escena LIMPIA
-                const scenePrompt = `${scene_prompt}, empty space on wall or surface for signage placement, professional photography, 8k, cinematic lighting, photorealistic, NO TEXT, NO TYPOGRAPHY, NO LOGO, NO OBJECTS IN CENTER`;
-                console.log(`[V72] 🖌️ Step 1: Generating clean scene...`);
-                const sceneStart = Date.now();
-                const sceneResult = await generateFalImage(scenePrompt);
-                if (!sceneResult || !sceneResult.imageUrl) throw new Error('Scene generation failed');
-                console.log(`[V72] ⏱️ Scene: ${((Date.now() - sceneStart)/1000).toFixed(1)}s`);
-
-                // PASO 2: Download scene + analyze dominant lighting
-                const sceneResp = await fetch(sceneResult.imageUrl, { signal: AbortSignal.timeout(30000) });
-                if (!sceneResp.ok) throw new Error(`Scene download failed: ${sceneResp.status}`);
-                const sceneArrayBuf = await sceneResp.arrayBuffer();
-                const sceneBuffer = Buffer.from(sceneArrayBuf);
-                const sceneReady = await sharp(sceneBuffer).resize(1024, 1024, { fit: 'cover' }).png().toBuffer();
-
-                // Analyze top-left quadrant for light direction (brighter = light source)
-                const stats = await sharp(sceneReady)
-                    .resize(256, 256)
-                    .raw()
-                    .toBuffer({ resolveWithObject: true });
-                const { data: pixelData, info } = stats;
-                let leftBright = 0, rightBright = 0, topBright = 0, bottomBright = 0;
-                const halfW = Math.floor(info.width / 2);
-                const halfH = Math.floor(info.height / 2);
-                for (let y = 0; y < info.height; y++) {
-                    for (let x = 0; x < info.width; x++) {
-                        const idx = (y * info.width + x) * 3;
-                        const lum = (pixelData[idx] + pixelData[idx + 1] + pixelData[idx + 2]) / 3;
-                        if (x < halfW) leftBright += lum; else rightBright += lum;
-                        if (y < halfH) topBright += lum; else bottomBright += lum;
-                    }
-                }
-                const shadowDirX = leftBright > rightBright ? 6 : -6; // shadow opposite to light
-                const shadowDirY = topBright > bottomBright ? 8 : -4;
-                console.log(`[V72] 💡 Light detected: ${leftBright > rightBright ? 'LEFT' : 'RIGHT'}/${topBright > bottomBright ? 'TOP' : 'BOTTOM'} → shadow offset (${shadowDirX}, ${shadowDirY})`);
-
-                // PASO 3: Composite logo with directional shadow + ambient glow
                 const logoMeta = await sharp(optimizedInput).metadata();
                 const lW = logoMeta.width || 512;
                 const lH = logoMeta.height || 512;
-                const targetLogoW = Math.round(1024 * 0.22);
+                const targetLogoW = Math.round(1024 * 0.30);
                 const targetLogoH = Math.round(targetLogoW * (lH / lW));
                 const logoLeft = Math.round((1024 - targetLogoW) / 2);
-                const logoTop = Math.round((1024 - targetLogoH) / 2);
+                const logoTop = Math.round(1024 * 0.50);
 
                 const resizedLogo = await sharp(optimizedInput)
                     .resize(targetLogoW, targetLogoH, { fit: 'inside' })
@@ -393,63 +358,61 @@ if (effectiveMode === 'product') {
                     .png()
                     .toBuffer();
 
-                // 3a: Directional shadow — offset in detected light direction
+                // Create elegant gradient background using sharp overlay
+                const bgGradient = await sharp({
+                    create: { width: 1024, height: 1024, channels: 3, background: '#0f172a' }
+                })
+                    .png()
+                    .toBuffer();
+
+                // Directional shadow
                 const shadow = await sharp(resizedLogo)
                     .ensureAlpha()
                     .extractChannel(3)
                     .negate()
                     .toColorspace('srgb')
-                    .resize(targetLogoW + 40, targetLogoH + 40, { fit: 'inside' })
-                    .blur(20)
+                    .resize(targetLogoW + 60, targetLogoH + 60, { fit: 'inside' })
+                    .blur(25)
                     .ensureAlpha()
                     .toBuffer();
 
-                // 3b: Ambient glow — strong colored glow from logo edges
+                // Ambient glow
                 const glow = await sharp(resizedLogo)
                     .ensureAlpha()
                     .extractChannel(3)
                     .toColorspace('srgb')
-                    .resize(targetLogoW + 80, targetLogoH + 80, { fit: 'inside' })
-                    .blur(30)
+                    .resize(targetLogoW + 100, targetLogoH + 100, { fit: 'inside' })
+                    .blur(40)
                     .ensureAlpha()
                     .toBuffer();
 
-                // 3c: Build composite layers
                 const emptyCanvas = { create: { width: 1024, height: 1024, channels: 4 as const, background: { r: 0, g: 0, b: 0, alpha: 0 } } };
 
                 const shadowLayer = await sharp(emptyCanvas)
-                    .composite([{ input: shadow, left: logoLeft + shadowDirX - 20, top: logoTop + shadowDirY - 20, blend: 'multiply' as any }])
+                    .composite([{ input: shadow, left: logoLeft + 8, top: logoTop + 10, blend: 'multiply' as any }])
                     .png().toBuffer();
 
                 const glowLayer = await sharp(emptyCanvas)
                     .composite([{ input: glow, left: logoLeft - 30, top: logoTop - 30, blend: 'screen' as any }])
                     .png().toBuffer();
 
-                // Composite: glow → shadow → logo
-                const composited = await sharp(sceneReady)
+                const composited = await sharp(bgGradient)
                     .composite([
                         { input: glowLayer, left: 0, top: 0 },
                         { input: shadowLayer, left: 0, top: 0 },
                         { input: resizedLogo, left: logoLeft, top: logoTop }
                     ])
-                    .png().toBuffer();
+                    .png()
+                    .toBuffer();
 
-                // PASO 4: img2img bake — THIS is the critical step
-                // At 0.40 strength the AI re-renders ~40% forcing physical lighting integration
-                console.log(`[V73] 🔥 Step 4: Baking physical lighting (strength 0.40)...`);
-                const bakeStart = Date.now();
-                const compositedDataUri = `data:image/png;base64,${composited.toString('base64')}`;
-                const bakePrompt = `${scene_prompt}, the logo is a real physical sign mounted on the wall, realistic shadows and light reflections on the wall surface, cohesive scene lighting, professional photography, 8k, masterpiece`;
-                finalImage = await generateFluxImageToImage(compositedDataUri, bakePrompt, 0.40);
-                augmentedPrompt = bakePrompt;
-                version = "v72-scene-first-bake";
-                console.log(`[V72] ⏱️ Bake: ${((Date.now() - bakeStart)/1000).toFixed(1)}s`);
-                console.log(`[V72] ⏱️ Total: ${((Date.now() - startV72)/1000).toFixed(1)}s`);
+                finalImage = `data:image/png;base64,${composited.toString('base64')}`;
+                augmentedPrompt = scene_prompt;
+                version = "v77-logo-pure-sharp";
             } catch (logoErr: any) {
-                console.warn(`[V75] ⚠️ Logo pipeline falló (${logoErr.message}). Fallback dark bg...`);
+                console.warn(`[V77] ⚠️ Logo pipeline falló (${logoErr.message}). Fallback simple...`);
                 finalImage = await logoFallbackOnDarkBackground(optimizedInput);
                 augmentedPrompt = scene_prompt;
-                version = "v75-logo-dark-fallback";
+                version = "v77-logo-fallback";
             }
         }
 

@@ -161,8 +161,29 @@ export async function generateFluxImageToImage(
     prompt: string,
     strength: number = 0.35
 ): Promise<string> {
+    const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
+    if (!apiKey) throw new Error('FAL_KEY no configurado');
+
+    // Upload image to FAL storage first (data URIs rejected by queue)
+    const base64Data = imageUrl.includes(',') ? imageUrl.split(',')[1] : imageUrl;
+    const buf = Buffer.from(base64Data, 'base64');
+    const uploadRes = await fetch('https://storage.fal.ai/api/upload', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Key ${apiKey}`,
+            'Content-Type': 'application/octet-stream',
+        },
+        body: buf,
+    });
+    if (!uploadRes.ok) {
+        const errText = await uploadRes.text();
+        throw new Error(`Fal storage upload error (${uploadRes.status}): ${errText.substring(0, 200)}`);
+    }
+    const uploadResult = await uploadRes.json();
+    const storageUrl = typeof uploadResult === 'string' ? uploadResult : (uploadResult.url || uploadResult);
+
     const result = await runFalAsync('https://fal.run/fal-ai/flux/dev/image-to-image', {
-        image_url: imageUrl, prompt, strength, num_inference_steps: 28, guidance_scale: 3.5
+        image_url: storageUrl, prompt, strength, num_inference_steps: 28, guidance_scale: 3.5
     });
     return result.images[0].url;
 }
