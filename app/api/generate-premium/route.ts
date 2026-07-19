@@ -144,9 +144,8 @@ async function isLikelyLogo(buffer: Buffer): Promise<boolean> {
     }
 }
 
-// V74: BRUTE FORCE background removal — remove any pixel with all RGB > 240
-// This is the simplest possible approach that GUARANTEES white backgrounds are removed.
-// Logout is bright RGB across image → those become transparent.
+// V81: SMART background removal — preserves existing transparency, and removes
+// both solid white and solid black borders cleanly without breaking alpha channels.
 async function removeSolidBackground(buffer: Buffer): Promise<Buffer> {
     const meta = await sharp(buffer).metadata();
     const { width = 1, height = 1 } = meta;
@@ -157,23 +156,34 @@ async function removeSolidBackground(buffer: Buffer): Promise<Buffer> {
 
     let transparentCount = 0;
     let opaqueCount = 0;
-    const threshold = 240;
 
     for (let i = 0; i < raw.length; i += channels) {
         const r = raw[i], g = raw[i + 1], b = raw[i + 2];
         const a = raw[i + 3];
-        // Only remove pixels with alpha > 200 that are near-white background.
-        // Anti-aliased pixels with low alpha survive (preserve smooth edges).
-        if (a > 200 && r > threshold && g > threshold && b > threshold) {
+        
+        // 1. If pixel is already transparent, keep it perfectly transparent
+        if (a < 5) {
+            output[i + 3] = 0;
+            transparentCount++;
+            continue;
+        }
+
+        // 2. Remove solid white backgrounds
+        const isWhite = r > 238 && g > 238 && b > 238;
+
+        // 3. Remove solid black backgrounds
+        const isBlack = r < 25 && g < 25 && b < 25;
+
+        if (isWhite || isBlack) {
             output[i + 3] = 0; // transparent
             transparentCount++;
         } else {
-            output[i + 3] = Math.max(a, 200); // preserve logo, smooth AA edges
+            output[i + 3] = a; // keep original alpha perfectly intact
             opaqueCount++;
         }
     }
 
-    console.log(`[V74] ✂️ Removed ${transparentCount} bg pixels, kept ${opaqueCount} logo pixels (${(transparentCount / (transparentCount + opaqueCount) * 100).toFixed(1)}% transparent)`);
+    console.log(`[V81] ✂️ Background Cleaned: Removed ${transparentCount} bg pixels, kept ${opaqueCount} logo pixels`);
     return sharp(output, { raw: { width, height, channels } }).png().toBuffer();
 }
 
