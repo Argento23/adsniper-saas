@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import sharp from 'sharp';
-import { generateFluxInpaint, generateFluxImageToImage, generateBriaBackgroundRemoval, generateBriaProductShot, generateFalImage, FalBalanceExhaustedError } from '@/lib/fal';
+import { generateFluxInpaint, generateFluxImageToImage, generateBriaBackgroundRemoval, generateBriaProductShot, generateFalImage, FalBalanceExhaustedError, pollFalResult } from '@/lib/fal';
 
 // v41.9: Disable sharp cache to prevent memory saturation in serverless
 sharp.cache(false);
@@ -282,39 +282,33 @@ export async function POST(req: Request) {
         let version: string;
 
 if (effectiveMode === 'product') {
-            // V75 PRODUCT MODE: Bria Product Shot (designed for product placement)
-            // Bria places the product LITERALLY in the scene with its own physics.
-            // This is the CORRECT tool for physical products.
-            // COSTE: $0.10 Bria + optional $0.10 bake = $0.10-0.20
-            const startV75 = Date.now();
-            console.log(`[V75] 📦 PRODUCT MODE: Bria Product Shot (designed for products)...`);
+            // V81 PRODUCT MODE: Ultra-premium Flux General Inpainting (Agency Grade)
+            // Keeps the product 100% pixel-perfect and sharp, while generating a gorgeous,
+            // photorealistic, ultra-high-quality scene around it matching the scene prompt.
+            // COSTE: ~$0.05 (FAL Flux Inpaint) — Far higher quality than cartoonish Bria.
+            const startV81 = Date.now();
+            console.log(`[V81] 📦 PRODUCT MODE: Flux Inpainting...`);
 
             try {
-                // PASO 1: Bria Product Shot — designed for product-in-scene
-                console.log(`[V75] 🎬 Bria Product Shot con escena: "${scene_prompt.substring(0, 50)}..."`);
-                const briaStart = Date.now();
-                // Use the ORIGINAL image (with background) for Bria — Bria does its own background detection
-                const briaResultUrl = await generateBriaProductShot(image_base64, scene_prompt);
-                console.log(`[V75] ⏱️ Bria: ${((Date.now() - briaStart) / 1000).toFixed(1)}s`);
+                // Get base64 product image buffer (original)
+                const base64Data = image_base64.includes(',') ? image_base64.split(',')[1] : image_base64;
+                const productBuffer = Buffer.from(base64Data, 'base64');
 
-                // Download Bria result
-                const briaDlResp = await fetch(briaResultUrl, { signal: AbortSignal.timeout(30000) });
-                if (!briaDlResp.ok) throw new Error(`Bria download failed: ${briaDlResp.status}`);
-                const briaResultBuf = Buffer.from(await briaDlResp.arrayBuffer());
+                // Generate the base image and inverse mask at 1024x1024
+                console.log(`[V81] Creating inverse mask to protect product...`);
+                const { baseImage, maskImage } = await createInverseMaskPayload(productBuffer);
 
-                // PASO 2: Optional img2img bake to harmonize lighting (low strength)
-                // This adds subtle shadow/lighting cohesion without destroying the product
-                console.log(`[V75] 💡 Optional: harmonize lighting via img2img 0.15...`);
-                const bakeStart = Date.now();
-                const briaDataUri = `data:image/png;base64,${briaResultBuf.toString('base64')}`;
-                const harmonizePrompt = `${scene_prompt}, cohesive natural lighting, professional product photography, photorealistic, 8k, masterpiece`;
-                finalImage = await generateFluxImageToImage(briaDataUri, harmonizePrompt, 0.15);
-                augmentedPrompt = harmonizePrompt;
-                version = "v75-bria-product-shot";
-                console.log(`[V75] ⏱️ Bake: ${((Date.now() - bakeStart) / 1000).toFixed(1)}s`);
-                console.log(`[V75] ⏱️ Total: ${((Date.now() - startV75) / 1000).toFixed(1)}s`);
+                // Run Flux Inpaint on FAL
+                console.log(`[V81] Calling Flux Inpainting with prompt: "${scene_prompt}"`);
+                const inpaintStart = Date.now();
+                finalImage = await generateFluxInpaint(baseImage, maskImage, scene_prompt, 0.95);
+                console.log(`[V81] ⏱️ Flux Inpaint: ${((Date.now() - inpaintStart) / 1000).toFixed(1)}s`);
+                
+                augmentedPrompt = scene_prompt;
+                version = "v81-flux-inpaint";
+                console.log(`[V81] ⏱️ Total Product Process: ${((Date.now() - startV81) / 1000).toFixed(1)}s`);
             } catch (productErr: any) {
-                console.warn(`[V75] ⚠️ Product pipeline falló (${productErr.message}). Fallback composite...`);
+                console.warn(`[V81] ⚠️ Product Inpaint failed (${productErr.message}). Fallback to composite.`);
                 // Fallback: just composite product on dark background
                 const prodMeta = await sharp(optimizedInput).metadata();
                 const pW = prodMeta.width || 512;
@@ -336,30 +330,63 @@ if (effectiveMode === 'product') {
                     .toBuffer();
                 finalImage = `data:image/png;base64,${composite.toString('base64')}`;
                 augmentedPrompt = scene_prompt;
-                version = "v75-product-fallback";
+                version = "v81-product-fallback";
             }
         } else {
-            // V80 LOGO MODE: Two paths
-            //   - sceneLogo=true: Pass logo to Bria Product Shot → logo becomes the "subject" of a scene
-            //     desc ("brand logo on a billboard", "logo on a coffee mug", etc.).
-            //     COSTE: $0.10 Bria + optional $0.10 bake = $0.10-0.20
+            // V81 LOGO MODE: Premium, ultra-sharp 2-step pipeline
+            //   - sceneLogo=true: Generate stunning high-end scene using Flux Dev (FAL),
+            //     then Sharp-composite the logo perfectly on top to maintain 100% vector-like precision.
+            //     COSTE: ~$0.05 (FAL Flux Dev) — Gorgeous results, zero cartoon artifacts.
             //   - sceneLogo=false: V78 bulletproof sharp pipeline (single composite pass).
             //     ZERO FAL API CALLS. Logo on dark blue background.
             if (sceneLogo) {
-                console.log(`[V80] 🎬 Logo Scene Integration requested (Bria)...`);
+                console.log(`[V81] 🎬 Logo Scene Integration requested (Flux Dev + Sharp)...`);
                 try {
-                    const briaLogoUrl = await generateBriaProductShot(image_base64, scene_prompt);
-                    const logoDlResp = await fetch(briaLogoUrl, { signal: AbortSignal.timeout(30000) });
-                    if (!logoDlResp.ok) throw new Error(`Bria logo scene download failed: ${logoDlResp.status}`);
-                    const logoBuf = Buffer.from(await logoDlResp.arrayBuffer());
+                    // Step 1: Generate high-end background scene matching prompt
+                    const scenePromptWithAesthetic = `${scene_prompt}, clean empty center space for brand placement, high resolution, professional photography, photorealistic, 8k, masterpiece, beautiful lighting`;
+                    console.log(`[V81] Generating gorgeous background: "${scenePromptWithAesthetic}"`);
+                    
+                    const falResult = await generateFalImage(scenePromptWithAesthetic);
+                    if (!falResult || !falResult.imageUrl) {
+                        throw new Error("Flux Dev returned empty image URL");
+                    }
+                    console.log(`[V81] Background generated: ${falResult.imageUrl}`);
 
-                    const logoDataUri = `data:image/png;base64,${logoBuf.toString('base64')}`;
-                    const logoHarmonize = `${scene_prompt}, cohesive natural lighting, professional product photography, photorealistic, 8k, masterpiece`;
-                    finalImage = await generateFluxImageToImage(logoDataUri, logoHarmonize, 0.15);
-                    augmentedPrompt = logoHarmonize;
-                    version = "v80-logo-scene-bria";
+                    // Step 2: Download generated background
+                    const sceneDlResp = await fetch(falResult.imageUrl, { signal: AbortSignal.timeout(30000) });
+                    if (!sceneDlResp.ok) throw new Error(`Background download failed: ${sceneDlResp.status}`);
+                    const sceneBuf = Buffer.from(await sceneDlResp.arrayBuffer());
+
+                    // Step 3: Resize and composite logo on top
+                    const logoMeta = await sharp(optimizedInput).metadata();
+                    const lW = logoMeta.width || 512;
+                    const lH = logoMeta.height || 512;
+                    
+                    // Logo fits comfortably at 34% width
+                    const targetLogoW = Math.round(1024 * 0.34);
+                    const targetLogoH = Math.round(targetLogoW * (lH / lW));
+                    const logoLeft = Math.round((1024 - targetLogoW) / 2);
+                    const logoTop = Math.round((1024 - targetLogoH) / 2);
+
+                    const resizedLogo = await sharp(optimizedInput)
+                        .resize(targetLogoW, targetLogoH, { fit: 'inside' })
+                        .ensureAlpha()
+                        .png()
+                        .toBuffer();
+
+                    // Composite on generated scene
+                    const composited = await sharp(sceneBuf)
+                        .resize(1024, 1024, { fit: 'cover' })
+                        .composite([{ input: resizedLogo, left: logoLeft, top: logoTop }])
+                        .png()
+                        .toBuffer();
+
+                    finalImage = `data:image/png;base64,${composited.toString('base64')}`;
+                    augmentedPrompt = scenePromptWithAesthetic;
+                    version = "v81-logo-scene-flux";
+                    console.log(`[V81] ✅ Logo Scene Composite Completed successfully`);
                 } catch (logoSceneErr: any) {
-                    console.warn(`[V80] ⚠️ Logo scene failed (${logoSceneErr.message}). Falling back to sharp composite.`);
+                    console.warn(`[V81] ⚠️ Logo scene failed (${logoSceneErr.message}). Falling back to sharp composite.`);
                     try {
                         const logoMeta = await sharp(optimizedInput).metadata();
                         const lW = logoMeta.width || 512;
@@ -373,11 +400,11 @@ if (effectiveMode === 'product') {
                             .composite([{ input: rL, left: lL, top: lT }]).png().toBuffer();
                         finalImage = `data:image/png;base64,${c.toString('base64')}`;
                         augmentedPrompt = scene_prompt;
-                        version = "v80-logo-scene-fallback";
+                        version = "v81-logo-scene-fallback";
                     } catch {
                         finalImage = `data:image/png;base64,${optimizedInput.toString('base64')}`;
                         augmentedPrompt = scene_prompt;
-                        version = "v80-logo-raw";
+                        version = "v81-logo-raw";
                     }
                 }
             } else {
