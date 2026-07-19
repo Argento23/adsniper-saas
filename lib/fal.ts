@@ -164,23 +164,7 @@ export async function generateFluxImageToImage(
     const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
     if (!apiKey) throw new Error('FAL_KEY no configurado');
 
-    // Upload image to FAL storage first (data URIs rejected by queue)
-    const base64Data = imageUrl.includes(',') ? imageUrl.split(',')[1] : imageUrl;
-    const buf = Buffer.from(base64Data, 'base64');
-    const uploadRes = await fetch('https://storage.fal.ai/api/upload', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Key ${apiKey}`,
-            'Content-Type': 'application/octet-stream',
-        },
-        body: buf,
-    });
-    if (!uploadRes.ok) {
-        const errText = await uploadRes.text();
-        throw new Error(`Fal storage upload error (${uploadRes.status}): ${errText.substring(0, 200)}`);
-    }
-    const uploadResult = await uploadRes.json();
-    const storageUrl = typeof uploadResult === 'string' ? uploadResult : (uploadResult.url || uploadResult);
+    const storageUrl = await uploadToFalStorage(imageUrl, apiKey);
 
     const result = await runFalAsync('https://fal.run/fal-ai/flux/dev/image-to-image', {
         image_url: storageUrl, prompt, strength, num_inference_steps: 28, guidance_scale: 3.5
@@ -205,27 +189,15 @@ export async function generateFluxInpaint(
 }
 
 // v45: Native Bria E-Commerce Product Shot Integration
+// v79: Uses @fal-ai/client SDK instead of defunct https://storage.fal.ai/api/upload
 async function uploadToFalStorage(imageBase64: string, apiKey: string): Promise<string> {
-    // Convierte base64 a Buffer y sube a FAL storage
     const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
     const buf = Buffer.from(base64Data, 'base64');
-
-    const uploadRes = await fetch('https://storage.fal.ai/api/upload', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Key ${apiKey}`,
-            'Content-Type': 'application/octet-stream',
-        },
-        body: buf,
-    });
-    if (!uploadRes.ok) {
-        const errText = await uploadRes.text();
-        throw new Error(`Fal storage upload error (${uploadRes.status}): ${errText.substring(0, 200)}`);
-    }
-    const uploadResult = await uploadRes.json();
-    // FAL returns { url: "https://..."} or just the URL string
-    if (typeof uploadResult === 'string') return uploadResult;
-    return uploadResult.url || uploadResult;
+    const blob = new Blob([buf], { type: 'image/png' });
+    const { fal } = await import('@fal-ai/client');
+    fal.config({ credentials: apiKey });
+    const result: any = await fal.storage.upload(blob);
+    return typeof result === 'string' ? result : result.url;
 }
 
 export async function generateBriaBackgroundRemoval(
@@ -244,6 +216,7 @@ export async function generateBriaBackgroundRemoval(
     });
 
     if (!resultRes.ok) {
+        if (!apiKey) throw new Error('FAL_KEY no configurado');
         console.warn(`[Fal] Data URI rejected (${resultRes.status}), uploading to FAL storage...`);
         const imageUrl = await uploadToFalStorage(imageBase64, apiKey);
         resultRes = await fetch('https://fal.run/fal-ai/bria/background/remove', {
@@ -287,6 +260,7 @@ export async function generateBriaProductShot(
     });
 
     if (!resultRes.ok) {
+        if (!apiKey) throw new Error('FAL_KEY no configurado');
         console.warn(`[Fal] Data URI rejected (${resultRes.status}), uploading to FAL storage...`);
         const imageUrl = await uploadToFalStorage(imageBase64, apiKey);
         resultRes = await fetch('https://fal.run/fal-ai/bria/product-shot', {
