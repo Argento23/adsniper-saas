@@ -769,6 +769,7 @@ export default function Dashboard() {
     const [activeTab, setActiveTab] = useState<'ads' | 'scripts'>('ads');
     const [applyLogo, setApplyLogo] = useState(true);
     const [studioMode, setStudioMode] = useState<'auto' | 'product' | 'logo'>('product');
+    const [sceneLogo, setSceneLogo] = useState(false);
     const [applyText, setApplyText] = useState(true);
 
     // Admin Helper
@@ -896,7 +897,8 @@ export default function Dashboard() {
                     image_base64: manualImageBase64,
                     scene_prompt: manualVisual,
                     product_name: brand?.name || "premium product",
-                    mode: studioMode
+                    mode: studioMode,
+                    sceneLogo: studioMode === 'logo' ? sceneLogo : false
                 }),
             });
 
@@ -1346,6 +1348,27 @@ export default function Dashboard() {
                                                 {studioMode === 'logo' && '💡 Usa scene-first — genera escena y monta el logo con efectos'}
                                                 {studioMode === 'auto' && '💡 Detecta según transparencia de la imagen + keywords del prompt'}
                                             </p>
+
+                                            {/* V80: LOGO SCENE INTEGRATION TOGGLE — only shown in logo mode */}
+                                            {studioMode === 'logo' && (
+                                                <label className="mt-2 flex items-center justify-between bg-slate-950/30 rounded-lg px-3 py-2 border border-emerald-500/20 cursor-pointer hover:border-emerald-400/50 transition-colors ml-1">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
+                                                            <span className={sceneLogo ? "text-emerald-400" : "text-slate-600"}>🎬</span>
+                                                            Integrar logo en escena
+                                                        </span>
+                                                        <span className="text-[10px] text-slate-500 mt-0.5">
+                                                            {sceneLogo ? `FAL activo (~0.20 c/img) — logo integrado en escena real` : 'Solo sharp composite (gratis) — fondo azul oscuro'}
+                                                        </span>
+                                                    </div>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={sceneLogo}
+                                                        onChange={(e) => setSceneLogo(e.target.checked)}
+                                                        className="ml-3 w-4 h-4 accent-emerald-500 cursor-pointer"
+                                                    />
+                                                </label>
+                                            )}
                                         </div>
                                     )}
 

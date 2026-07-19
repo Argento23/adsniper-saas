@@ -212,7 +212,7 @@ export async function POST(req: Request) {
         const { userId } = await auth();
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-        const { image_base64, scene_prompt, mode = 'auto' } = await req.json();
+        const { image_base64, scene_prompt, mode = 'auto', sceneLogo = false } = await req.json();
         if (!image_base64) return NextResponse.json({ error: 'Falta la imagen' }, { status: 400 });
         if (!scene_prompt) return NextResponse.json({ error: 'Falta el prompt de la escena' }, { status: 400 });
 
@@ -339,50 +339,77 @@ if (effectiveMode === 'product') {
                 version = "v75-product-fallback";
             }
         } else {
-            // V78 LOGO MODE: Bulletproof sharp pipeline (single composite pass)
-            // ZERO FAL API CALLS. Creates dark blue BG and composites logo with white glow halo.
-            try {
-                const logoMeta = await sharp(optimizedInput).metadata();
-                const lW = logoMeta.width || 512;
-                const lH = logoMeta.height || 512;
-                const targetLogoW = Math.round(1024 * 0.35);
-                const targetLogoH = Math.round(targetLogoW * (lH / lW));
-                const logoLeft = Math.round((1024 - targetLogoW) / 2);
-                const logoTop = Math.round((1024 - targetLogoH) / 2);
-
-                const resizedLogo = await sharp(optimizedInput)
-                    .resize(targetLogoW, targetLogoH, { fit: 'inside' })
-                    .ensureAlpha()
-                    .png()
-                    .toBuffer();
-
-                console.log(`[V78] Logo resized to ${targetLogoW}x${targetLogoH}, position (${logoLeft}, ${logoTop})`);
-
-                // Create the final composition: dark blue background with logo on top
-                const composited = await sharp({
-                    create: { width: 1024, height: 1024, channels: 4, background: { r: 15, g: 23, b: 42, alpha: 1 } }
-                })
-                    .composite([{ input: resizedLogo, left: logoLeft, top: logoTop }])
-                    .png()
-                    .toBuffer();
-
-                console.log(`[V78] ✅ Composit success, buffer size: ${composited.length}`);
-
-                finalImage = `data:image/png;base64,${composited.toString('base64')}`;
-                augmentedPrompt = scene_prompt;
-                version = "v78-logo-bulletproof";
-            } catch (logoErr: any) {
-                console.warn(`[V78] ⚠️ Logo pipeline falló (${logoErr.message}). Fallback simple...`);
-                // Bulletproof fallback: just encode the original logo as data URI
+            // V80 LOGO MODE: Two paths
+            //   - sceneLogo=true: Pass logo to Bria Product Shot → logo becomes the "subject" of a scene
+            //     desc ("brand logo on a billboard", "logo on a coffee mug", etc.).
+            //     COSTE: $0.10 Bria + optional $0.10 bake = $0.10-0.20
+            //   - sceneLogo=false: V78 bulletproof sharp pipeline (single composite pass).
+            //     ZERO FAL API CALLS. Logo on dark blue background.
+            if (sceneLogo) {
+                console.log(`[V80] 🎬 Logo Scene Integration requested (Bria)...`);
                 try {
-                    const rawLogoB64 = `data:image/png;base64,${optimizedInput.toString('base64')}`;
-                    finalImage = rawLogoB64;
+                    const briaLogoUrl = await generateBriaProductShot(image_base64, scene_prompt);
+                    const logoDlResp = await fetch(briaLogoUrl, { signal: AbortSignal.timeout(30000) });
+                    if (!logoDlResp.ok) throw new Error(`Bria logo scene download failed: ${logoDlResp.status}`);
+                    const logoBuf = Buffer.from(await logoDlResp.arrayBuffer());
+
+                    const logoDataUri = `data:image/png;base64,${logoBuf.toString('base64')}`;
+                    const logoHarmonize = `${scene_prompt}, cohesive natural lighting, professional product photography, photorealistic, 8k, masterpiece`;
+                    finalImage = await generateFluxImageToImage(logoDataUri, logoHarmonize, 0.15);
+                    augmentedPrompt = logoHarmonize;
+                    version = "v80-logo-scene-bria";
+                } catch (logoSceneErr: any) {
+                    console.warn(`[V80] ⚠️ Logo scene failed (${logoSceneErr.message}). Falling back to sharp composite.`);
+                    try {
+                        const logoMeta = await sharp(optimizedInput).metadata();
+                        const lW = logoMeta.width || 512;
+                        const lH = logoMeta.height || 512;
+                        const tW = Math.round(1024 * 0.35);
+                        const tH = Math.round(tW * (lH / lW));
+                        const lL = Math.round((1024 - tW) / 2);
+                        const lT = Math.round((1024 - tH) / 2);
+                        const rL = await sharp(optimizedInput).resize(tW, tH, { fit: 'inside' }).ensureAlpha().png().toBuffer();
+                        const c = await sharp({ create: { width: 1024, height: 1024, channels: 4, background: { r: 15, g: 23, b: 42, alpha: 1 } } })
+                            .composite([{ input: rL, left: lL, top: lT }]).png().toBuffer();
+                        finalImage = `data:image/png;base64,${c.toString('base64')}`;
+                        augmentedPrompt = scene_prompt;
+                        version = "v80-logo-scene-fallback";
+                    } catch {
+                        finalImage = `data:image/png;base64,${optimizedInput.toString('base64')}`;
+                        augmentedPrompt = scene_prompt;
+                        version = "v80-logo-raw";
+                    }
+                }
+            } else {
+                // V78 BULLETPROOF (zero FAL cost)
+                try {
+                    const logoMeta = await sharp(optimizedInput).metadata();
+                    const lW = logoMeta.width || 512;
+                    const lH = logoMeta.height || 512;
+                    const tW = Math.round(1024 * 0.35);
+                    const tH = Math.round(tW * (lH / lW));
+                    const lL = Math.round((1024 - tW) / 2);
+                    const lT = Math.round((1024 - tH) / 2);
+                    const rL = await sharp(optimizedInput).resize(tW, tH, { fit: 'inside' }).ensureAlpha().png().toBuffer();
+                    console.log(`[V78] Logo resized to ${tW}x${tH}, position (${lL}, ${lT})`);
+                    const c = await sharp({ create: { width: 1024, height: 1024, channels: 4, background: { r: 15, g: 23, b: 42, alpha: 1 } } })
+                        .composite([{ input: rL, left: lL, top: lT }]).png().toBuffer();
+                    console.log(`[V78] ✅ Composit success, buffer size: ${c.length}`);
+                    finalImage = `data:image/png;base64,${c.toString('base64')}`;
                     augmentedPrompt = scene_prompt;
-                    version = "v78-logo-raw-fallback";
-                } catch {
-                    finalImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
-                    augmentedPrompt = scene_prompt;
-                    version = "v78-logo-empty";
+                    version = "v78-logo-bulletproof";
+                } catch (logoErr: any) {
+                    console.warn(`[V78] ⚠️ Logo pipeline falló (${logoErr.message}). Fallback simple...`);
+                    try {
+                        const rawLogoB64 = `data:image/png;base64,${optimizedInput.toString('base64')}`;
+                        finalImage = rawLogoB64;
+                        augmentedPrompt = scene_prompt;
+                        version = "v78-logo-raw-fallback";
+                    } catch {
+                        finalImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+                        augmentedPrompt = scene_prompt;
+                        version = "v78-logo-empty";
+                    }
                 }
             }
         }
