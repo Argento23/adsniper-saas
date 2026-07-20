@@ -1,4 +1,6 @@
 
+'use client';
+
 import Link from 'next/link';
 import { FaArrowRight, FaRobot, FaBullseye, FaBolt, FaChartLine, FaCheckCircle, FaShieldAlt, FaPlay } from 'react-icons/fa';
 

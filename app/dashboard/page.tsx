@@ -78,7 +78,7 @@ const MOCK_ADS = [
 const FALLBACK_IMAGE = "https://placehold.co/800x800/101827/ffffff.png?text=Ad+Image"; // Simple, reliable placeholder
 
 // --- AD CARD COMPONENT (Fixes Shared State Bug) ---
-const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, brand, videosRemaining, onVideoGenerated, applyLogo, applyText }: { ad: any, index: number, premiumCredits: number, onPremiumVideoGenerated: (url: string) => void, isAdmin: boolean, brand: any, videosRemaining: number, onVideoGenerated: (remaining: number) => void, applyLogo: boolean, applyText: boolean }) => {
+const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, brand, videosRemaining, onVideoGenerated, applyLogo, applyText, plan, onUpgradeRequired }: { ad: any, index: number, premiumCredits: number, onPremiumVideoGenerated: (url: string) => void, isAdmin: boolean, brand: any, videosRemaining: number, onVideoGenerated: (remaining: number) => void, applyLogo: boolean, applyText: boolean, plan: string, onUpgradeRequired: () => void }) => {
     const { user } = useUser();
     const isAdminUser = isAdmin || user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase().trim() === 'gustavodornhofer@gmail.com');
     const [imgSrc, setImgSrc] = useState(ad.generated_image_url || ad.product_image_fallback || FALLBACK_IMAGE);
@@ -99,6 +99,12 @@ const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, b
     }, [ad]);
 
     const handleGenerateVideo = async () => {
+        const isPremium = plan === 'studio' || plan === 'Infinity' || isAdminUser;
+        if (!isPremium) {
+            onUpgradeRequired();
+            return;
+        }
+
         if (videosRemaining <= 0 && !isAdminUser) {
             alert("Has alcanzado tu límite de videos. Mejorá tu plan para generar más videos.");
             return;
@@ -140,6 +146,12 @@ const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, b
     };
 
     const handleGeneratePremiumVideo = async () => {
+        const isPremium = plan === 'studio' || plan === 'Infinity' || isAdminUser;
+        if (!isPremium) {
+            onUpgradeRequired();
+            return;
+        }
+
         if (premiumCredits <= 0 && !isAdminUser) {
             alert("Necesitás créditos Studio Pro para generar videos premium ultra-reales.");
             return;
@@ -638,15 +650,17 @@ const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, b
                                 <div className="flex gap-2 flex-1">
                                     <button
                                         onClick={handleGenerateVideo}
-                                        disabled={generatingVideo || generatingPremiumVideo || hasError || imgSrc.includes('placehold.co') || (videosRemaining <= 0 && !isAdminUser)}
-                                        title={isAdminUser ? 'Admin: video ilimitado' : `${videosRemaining} videos restantes`}
-                                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${(generatingVideo || generatingPremiumVideo || hasError || imgSrc.includes('placehold.co') || (videosRemaining <= 0 && !isAdminUser))
+                                        disabled={generatingVideo || generatingPremiumVideo || hasError || imgSrc.includes('placehold.co') || ((plan === 'studio' || plan === 'Infinity' || isAdminUser) && videosRemaining <= 0 && !isAdminUser)}
+                                        title={isAdminUser ? 'Admin: video ilimitado' : (plan === 'studio' || plan === 'Infinity') ? `${videosRemaining} videos restantes` : 'Requiere plan Premium'}
+                                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${(generatingVideo || generatingPremiumVideo || hasError || imgSrc.includes('placehold.co') || ((plan === 'studio' || plan === 'Infinity' || isAdminUser) && videosRemaining <= 0 && !isAdminUser))
                                             ? 'bg-slate-700 text-slate-500 cursor-not-allowed opacity-50'
-                                            : 'bg-slate-800 text-white hover:bg-slate-700'
+                                            : (plan === 'studio' || plan === 'Infinity' || isAdminUser)
+                                                ? 'bg-slate-800 text-white hover:bg-slate-700'
+                                                : 'bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 text-emerald-400 hover:brightness-110 shadow-lg shadow-emerald-500/10'
                                             }`}
                                     >
                                         {generatingVideo ? <FaSpinner className="animate-spin" /> : <FaVideo />}
-                                        {generatingVideo ? 'Generando...' : 'Animar Ad 🎬'}
+                                        {generatingVideo ? 'Generando...' : (plan === 'studio' || plan === 'Infinity' || isAdminUser) ? 'Animar Ad 🎬' : 'Animar con Premium 🔒'}
                                     </button>
 
                                     {isStudioAd && (
@@ -1072,7 +1086,7 @@ export default function Dashboard() {
                             <FaVideo className="w-3 h-3" /> 🚀 PUBLICAR ADS
                         </button>
 
-                        {credits === 0 && plan === 'free' && !isLocalAdmin && (
+                        {(plan === 'free' || plan === 'pro') && !isLocalAdmin && (
                             <button
                                 onClick={() => setShowUpgrade(true)}
                                 className="hidden md:flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-lg hover:brightness-110 transition-all"
@@ -1127,31 +1141,31 @@ export default function Dashboard() {
                                             <FaPen className="w-3 h-3" /> Modo Manual
                                         </button>
                                         <button
-                                            onClick={() => {
-                                                const isAdmin = user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase().trim() === 'gustavodornhofer@gmail.com');
-                                                if (premiumCredits <= 0 && !isAdmin && plan !== 'Infinity') {
-                                                    setShowUpgrade(true);
-                                                } else {
-                                                    setInputMode('studio');
-                                                }
-                                            }}
-                                            className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all relative overflow-hidden ${inputMode === 'studio' ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-900/50' : 'text-purple-300/60 hover:text-purple-300'}`}
-                                        >
-                                            <FaFire className="w-3 h-3 text-orange-400" /> Studio Pro
-                                            {(plan === 'Infinity' || (user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase().trim() === 'gustavodornhofer@gmail.com'))) ? (
-                                                <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-bl-lg">
-                                                    Admin
-                                                </span>
-                                            ) : premiumCredits > 0 ? (
-                                                <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-bl-lg">
-                                                    {premiumCredits}
-                                                </span>
-                                            ) : (
-                                                <span className="absolute top-0 right-0 bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-bl-lg">
-                                                    Locked
-                                                </span>
-                                            )}
-                                        </button>
+                                             onClick={() => {
+                                                 const isAdmin = user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase().trim() === 'gustavodornhofer@gmail.com') || plan === 'Infinity';
+                                                 if (plan !== 'studio' && !isAdmin) {
+                                                     setShowUpgrade(true);
+                                                 } else {
+                                                     setInputMode('studio');
+                                                 }
+                                             }}
+                                             className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all relative overflow-hidden ${inputMode === 'studio' ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-900/50' : 'text-purple-300/60 hover:text-purple-300'}`}
+                                         >
+                                             <FaFire className="w-3 h-3 text-orange-400" /> Studio Pro
+                                             {(plan === 'Infinity' || (user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase().trim() === 'gustavodornhofer@gmail.com'))) ? (
+                                                 <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-bl-lg">
+                                                     Admin
+                                                 </span>
+                                             ) : plan === 'studio' ? (
+                                                 <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-bl-lg">
+                                                     {premiumCredits}
+                                                 </span>
+                                             ) : (
+                                                 <span className="absolute top-0 right-0 bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-bl-lg">
+                                                     Locked
+                                                 </span>
+                                             )}
+                                         </button>
                                     </div>
                                 </div>
 
@@ -1518,6 +1532,8 @@ export default function Dashboard() {
                                         applyLogo={applyLogo}
                                         applyText={applyText}
                                         user={user}
+                                        plan={plan}
+                                        onUpgradeRequired={() => setShowUpgrade(true)}
                                     />
                                 ))}
                             </div>
