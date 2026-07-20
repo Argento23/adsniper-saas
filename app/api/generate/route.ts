@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { generateFalImage, generateFluxImageToImage, generateBriaProductShot } from '@/lib/fal';
 import { checkAndTrackUsage } from '@/lib/usageTracker';
-import { consumeCredits } from '@/lib/credits';
+import { consumeCredits, getRecommendedProvider } from '@/lib/credits';
 import sharp from 'sharp';
 
 export const dynamic = 'force-dynamic';
@@ -695,9 +695,13 @@ export async function POST(request: Request) {
         }
 
         // V66: SISTEMA DE CRÉDITOS UNIFICADO.
-        // El coste por generación es 1 crédito (cada ad cuenta como 1).
-        // Si count=3, cuesta 3 créditos. Si admiin, bypass.
-        const creditCheck = await consumeCredits(userId, 1, 'image');
+        // El coste varía según el proveedor que use el plan del usuario:
+        //   Pollinations (free) → 1 crédito
+        //   Bria (pro)         → 2 créditos
+        //   Bria Inpaint (studio+) → 3 créditos
+        const provider = await getRecommendedProvider(userId);
+        const imageCost = provider === 'pollinations' ? 1 : provider === 'bria' ? 2 : 3;
+        const creditCheck = await consumeCredits(userId, imageCost, 'image');
         if (!creditCheck.canProceed) {
             return NextResponse.json({
                 error: 'NO_CREDITS',

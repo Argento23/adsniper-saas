@@ -155,33 +155,33 @@ export default function Home() {
 
           <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
 
-            {/* Free Tier */}
-            <div className="p-8 rounded-3xl bg-slate-900/30 border border-white/5 flex flex-col">
-              <h3 className="text-xl font-bold text-slate-400 mb-2">Starter</h3>
-              <div className="text-4xl font-bold mb-6">$0</div>
-              <ul className="space-y-4 mb-8 flex-1 text-slate-300 text-sm">
-                <li className="flex items-center gap-2"><FaCheckCircle className="text-slate-600" /> 3 Free AI Credits</li>
-                <li className="flex items-center gap-2"><FaCheckCircle className="text-slate-600" /> Basic Ad Copy</li>
-                <li className="flex items-center gap-2"><FaCheckCircle className="text-slate-600" /> Standard Images</li>
-              </ul>
+             {/* Free Tier */}
+             <div className="p-8 rounded-3xl bg-slate-900/30 border border-white/5 flex flex-col">
+               <h3 className="text-xl font-bold text-slate-400 mb-2">Starter</h3>
+               <div className="text-4xl font-bold mb-6">$0</div>
+               <ul className="space-y-4 mb-8 flex-1 text-slate-300 text-sm">
+                 <li className="flex items-center gap-2"><FaCheckCircle className="text-slate-600" /> 3 Free AI Credits</li>
+                 <li className="flex items-center gap-2"><FaCheckCircle className="text-slate-600" /> Basic Ad Copy</li>
+                 <li className="flex items-center gap-2"><FaCheckCircle className="text-slate-600" /> Standard Images</li>
+               </ul>
               <Link href="/dashboard" className="w-full py-3 rounded-xl border border-white/10 hover:bg-white/5 text-center font-bold transition-all">
                 Try for Free
               </Link>
             </div>
 
-            {/* Pro Subscription (Featured) */}
-            <div className="p-8 rounded-3xl bg-slate-900 border border-emerald-500/50 relative flex flex-col transform md:-translate-y-4 shadow-2xl shadow-emerald-500/10">
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-emerald-500 text-black text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Most Popular</div>
-              <h3 className="text-xl font-bold text-emerald-400 mb-2">Pro Monthly</h3>
-              <div className="text-4xl font-bold mb-1">$29<span className="text-lg text-slate-500 font-normal">/mo</span></div>
-              <p className="text-xs text-slate-500 mb-6">Or $29.900 ARS</p>
+             {/* Pro Subscription (Featured) */}
+             <div className="p-8 rounded-3xl bg-slate-900 border border-emerald-500/50 relative flex flex-col transform md:-translate-y-4 shadow-2xl shadow-emerald-500/10">
+               <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-emerald-500 text-black text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Most Popular</div>
+               <h3 className="text-xl font-bold text-emerald-400 mb-2">Pro Monthly</h3>
+               <div className="text-4xl font-bold mb-1">$29<span className="text-lg text-slate-500 font-normal">/mo</span></div>
+               <p className="text-xs text-slate-500 mb-6">Or $29.900 ARS</p>
 
-              <ul className="space-y-4 mb-8 flex-1 text-slate-200 text-sm">
-                <li className="flex items-center gap-2"><FaCheckCircle className="text-emerald-500" /> <strong>Unlimited</strong> Credits</li>
-                <li className="flex items-center gap-2"><FaCheckCircle className="text-emerald-500" /> Premium Flux.1 Images</li>
-                <li className="flex items-center gap-2"><FaCheckCircle className="text-emerald-500" /> Viral TikTok Scripts</li>
-                <li className="flex items-center gap-2"><FaCheckCircle className="text-emerald-500" /> Priority Support</li>
-              </ul>
+               <ul className="space-y-4 mb-8 flex-1 text-slate-200 text-sm">
+                 <li className="flex items-center gap-2"><FaCheckCircle className="text-emerald-500" /> <strong>150 Premium</strong> Credits</li>
+                 <li className="flex items-center gap-2"><FaCheckCircle className="text-emerald-500" /> Premium Flux.1 Images</li>
+                 <li className="flex items-center gap-2"><FaCheckCircle className="text-emerald-500" /> Viral TikTok Scripts</li>
+                 <li className="flex items-center gap-2"><FaCheckCircle className="text-emerald-500" /> Priority Support</li>
+               </ul>
               <div className="space-y-3">
                 <a href="https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=068cba02015840e3b78121a6a1c6559f" target="_blank" rel="noopener noreferrer" className="block w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:brightness-110 text-white text-center font-bold transition-all shadow-lg shadow-emerald-500/20">
                   Suscribirse con MercadoPago
@@ -199,14 +199,14 @@ export default function Home() {
                 <FaRobot /> Premium AI
               </div>
               <h3 className="text-xl font-bold text-purple-400 mb-2">Studio Pro</h3>
-              <div className="text-4xl font-bold mb-1">$49<span className="text-lg text-slate-500 font-normal">/mo</span></div>
-              <p className="text-xs text-slate-500 mb-6">Or $49.000 ARS</p>
+              <div className="text-4xl font-bold mb-1">$59<span className="text-lg text-slate-500 font-normal">/mo</span></div>
+              <p className="text-xs text-slate-500 mb-6">Or $59.000 ARS</p>
 
               <ul className="space-y-4 mb-8 flex-1 text-slate-200 text-sm relative z-10">
                 <li className="flex items-center gap-2"><FaCheckCircle className="text-purple-500" /> Everything in Pro</li>
-                <li className="flex items-center gap-2"><FaCheckCircle className="text-purple-500" /> <strong>100 Studio Credits/mo</strong></li>
+                <li className="flex items-center gap-2"><FaCheckCircle className="text-purple-500" /> <strong>500 Studio Credits/mo</strong></li>
                 <li className="flex items-center gap-2"><FaCheckCircle className="text-purple-500" /> 8K Product Inpainting (Fal.ai)</li>
-                <li className="flex items-center gap-2"><FaCheckCircle className="text-purple-500" /> Professional 8K Scenery</li>
+                <li className="flex items-center gap-2"><FaCheckCircle className="text-purple-500" /> HD AI Videos (50 credits/each)</li>
               </ul>
               <div className="space-y-3 relative z-10">
                 <a href="https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=46da776618c14cfe9c0ff45a84fb2724" target="_blank" rel="noopener noreferrer" className="block w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 text-white text-center font-bold transition-all shadow-lg shadow-purple-900/50">

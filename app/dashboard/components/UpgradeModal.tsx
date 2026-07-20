@@ -49,10 +49,10 @@ export default function UpgradeModal({ isOpen, onClose, mpSubscriptionLink, ppLi
                             <p className="text-3xl font-bold text-white mt-1">$0</p>
                         </div>
                         <ul className="space-y-3 text-sm text-slate-400 flex-1">
-                            <li className="flex items-center gap-2">
-                                <FaCheckCircle className="text-slate-600 shrink-0 w-3 h-3" />
-                                3 Free AI Credits
-                            </li>
+                             <li className="flex items-center gap-2">
+                                 <FaCheckCircle className="text-slate-600 shrink-0 w-3 h-3" />
+                                 3 Free AI Credits
+                             </li>
                             <li className="flex items-center gap-2">
                                 <FaCheckCircle className="text-slate-600 shrink-0 w-3 h-3" />
                                 Basic Ad Copy
@@ -91,7 +91,7 @@ export default function UpgradeModal({ isOpen, onClose, mpSubscriptionLink, ppLi
                         <ul className="space-y-3 text-sm text-slate-300 flex-1">
                             <li className="flex items-center gap-2">
                                 <FaCheckCircle className="text-emerald-500 shrink-0 w-3 h-3" />
-                                <strong className="text-white">Unlimited</strong>&nbsp;Credits
+                                <strong className="text-white">150 Premium</strong>&nbsp;Credits
                             </li>
                             <li className="flex items-center gap-2">
                                 <FaImage className="text-emerald-500 shrink-0 w-3 h-3" />
@@ -142,10 +142,10 @@ export default function UpgradeModal({ isOpen, onClose, mpSubscriptionLink, ppLi
                                 <FaRobot className="w-3 h-3" /> Studio Pro
                             </p>
                             <div className="flex items-baseline gap-2 mt-1">
-                                <p className="text-3xl font-bold text-white">$49</p>
-                                <span className="text-sm text-slate-400">/mo</span>
-                            </div>
-                            <p className="text-[11px] text-slate-500 mt-0.5">Or $49.000 ARS</p>
+                                <p className="text-3xl font-bold text-white">$59</p>
+                                 <span className="text-sm text-slate-400">/mo</span>
+                             </div>
+                             <p className="text-[11px] text-slate-500 mt-0.5">Or $59.000 ARS</p>
                         </div>
                         <ul className="space-y-3 text-sm text-slate-300 flex-1">
                             <li className="flex items-center gap-2">
@@ -154,7 +154,7 @@ export default function UpgradeModal({ isOpen, onClose, mpSubscriptionLink, ppLi
                             </li>
                             <li className="flex items-center gap-2">
                                 <FaCheckCircle className="text-purple-500 shrink-0 w-3 h-3" />
-                                <strong className="text-white">100 Studio Credits</strong>
+                                <strong className="text-white">500 Studio Credits</strong>
                             </li>
                             <li className="flex items-center gap-2 text-purple-200">
                                 <FaImage className="text-purple-400 shrink-0 w-3 h-3" />
@@ -183,7 +183,7 @@ export default function UpgradeModal({ isOpen, onClose, mpSubscriptionLink, ppLi
                                     rel="noopener noreferrer"
                                     className="block w-full py-2.5 rounded-xl bg-purple-900/15 border border-purple-500/30 text-purple-300 text-sm font-bold text-center hover:bg-purple-900/25 transition-all"
                                 >
-                                    Pay with PayPal ($49/mo)
+                                    Pay with PayPal ($59/mo)
                                 </a>
                             )}
                         </div>

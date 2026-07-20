@@ -819,13 +819,11 @@ export default function Dashboard() {
                 setCredits(isAdmin ? 9999 : data.credits);
                 setPlan(isAdmin ? 'Infinity' : data.plan);
             }
-            if (data.videosRemaining !== undefined) {
-                setVideosRemaining(isAdmin ? 9999 : data.videosRemaining);
-                setVideoLimit(isAdmin ? 9999 : (data.videoLimit || 0));
-            }
-            if (data.premiumStudioCredits !== undefined) {
-                setPremiumCredits(isAdmin ? 9999 : data.premiumStudioCredits);
-            }
+
+            // Unified system: data.remaining = remaining credits from pool
+            const remaining = data.remaining ?? data.credits ?? 0;
+            setPremiumCredits(isAdmin ? 9999 : remaining);
+            setVideosRemaining(isAdmin ? 9999 : Math.floor(remaining / 50));
         } catch (err) {
             console.error("Error fetching credits:", err);
         }
@@ -1045,6 +1043,11 @@ export default function Dashboard() {
                                     <span className="text-[10px] text-slate-500 font-medium">
                                         <FaBolt className="inline w-2 h-2 mr-1 text-yellow-500" />
                                         {plan === 'Infinity' ? 'Unlimited' : `${credits} Créditos`}
+                                        {plan !== 'Infinity' && (
+                                            <span className="ml-1 text-[9px] text-slate-600">
+                                                ({plan === 'free' ? '1' : plan === 'pro' ? '2' : '3'}cr/imagen · 50cr/video)
+                                            </span>
+                                        )}
                                     </span>
                                 )}
                             </div>

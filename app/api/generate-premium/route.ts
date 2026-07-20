@@ -10,10 +10,10 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 300; 
 
 // V66: Credit consumption delegated to lib/credits.ts (system-wide).
-// Studio Pro requires plan 'studio' or 'agency'. Cost: 1 credit per image.
+// Studio Pro requires plan 'studio' or 'agency'. Cost: 3 credits per image (Flux Inpaint).
 const ADMIN_EMAIL = 'gustavodornhofer@gmail.com';
 
-async function consumePremiumCredit(userId: string, cost: number = 1) {
+async function consumePremiumCredit(userId: string, cost: number = 3) {
     const ck = await import('@/lib/credits');
     return await ck.consumeCredits(userId, cost, 'image');
 }
@@ -226,7 +226,7 @@ export async function POST(req: Request) {
         if (!image_base64) return NextResponse.json({ error: 'Falta la imagen' }, { status: 400 });
         if (!scene_prompt) return NextResponse.json({ error: 'Falta el prompt de la escena' }, { status: 400 });
 
-        const creditCheck = await consumePremiumCredit(userId, 1);
+        const creditCheck = await consumePremiumCredit(userId);
         if (!creditCheck.canProceed) {
             return NextResponse.json({
                 error: 'NO_PREMIUM_CREDITS',

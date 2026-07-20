@@ -42,7 +42,7 @@ export interface CreditCheckResult {
 const DEFAULT_PLANS: Record<PlanName, PlanConfig> = {
     free: {
         name: 'free',
-        monthlyCredits: parseInt(process.env.PLAN_FREE_CREDITS || '15'),
+        monthlyCredits: parseInt(process.env.PLAN_FREE_CREDITS || '3'),
         videoCreditCost: 0,
         imageProviders: ['pollinations'],
         allowsVideo: false,
@@ -133,7 +133,7 @@ function getNextMonthStart(): Date {
 export async function consumeCredits(
     userId: string,
     cost: number = 1,
-    _type: 'image' | 'video' = 'image'
+    type_: 'image' | 'video' = 'image'
 ): Promise<CreditCheckResult> {
     // Admin bypass
     if (await isAdminOrInfinity(userId)) {
@@ -142,6 +142,18 @@ export async function consumeCredits(
 
     const plan = await getUserPlan(userId);
     const planConfig = DEFAULT_PLANS[plan];
+
+    // Block video for plans that don't allow it
+    if (type_ === 'video' && !planConfig.allowsVideo) {
+        return {
+            canProceed: false,
+            plan,
+            remaining: 0,
+            limit: planConfig.monthlyCredits,
+            resetDate: getNextMonthStart(),
+            reason: `Tu plan ${plan} no incluye generación de video. Mejorá a Studio (${planConfig.marketprice === 0 ? '$59/mes' : '$' + planConfig.marketprice + '/más'}) para crear videos.`
+        };
+    }
 
     const user = await clerkClient.users.getUser(userId);
     const meta = (user.publicMetadata as any) || {};
