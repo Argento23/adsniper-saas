@@ -514,7 +514,7 @@ const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, b
                                 {generatingPremiumVideo ? 'Renderizando Hollywood...' : 'Creando Movimiento...'}
                             </p>
                             <p className="text-slate-400 text-[10px] mt-1 px-8 text-center">
-                                {generatingPremiumVideo ? 'Kling AI está animando cada píxel (hasta 60s)' : 'Esto puede tardar hasta 30 segundos'}
+                                            {generatingPremiumVideo ? 'IA está renderizando tu video (hasta 60s)' : 'Esto puede tardar hasta 30 segundos'}
                             </p>
                         </div>
                     )}
@@ -1347,7 +1347,7 @@ export default function Dashboard() {
                                                 ))}
                                             </div>
                                             <p className="text-[10px] text-slate-500 mt-1.5 ml-1">
-                                                {studioMode === 'product' && '💡 Usa Bria Product Shot — diseñado para fotos de productos físicos'}
+                                                {studioMode === 'product' && '💡 Producto en escena — ideal para fotos de productos físicos'}
                                                 {studioMode === 'logo' && '💡 Usa scene-first — genera escena y monta el logo con efectos'}
                                                 {studioMode === 'auto' && '💡 Detecta según transparencia de la imagen + keywords del prompt'}
                                             </p>
@@ -1361,7 +1361,7 @@ export default function Dashboard() {
                                                             Integrar logo en escena
                                                         </span>
                                                         <span className="text-[10px] text-slate-500 mt-0.5">
-                                                            {sceneLogo ? `FAL activo (~0.20 c/img) — logo integrado en escena real` : 'Solo sharp composite (gratis) — fondo azul oscuro'}
+                                                            {sceneLogo ? `IA integrando logo en escena real` : 'Composición automática — fondo oscuro'}
                                                         </span>
                                                     </div>
                                                     <input
@@ -1460,7 +1460,7 @@ export default function Dashboard() {
                                                 className={`flex-1 text-slate-950 font-bold px-8 py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 whitespace-nowrap h-[56px] disabled:opacity-50 disabled:cursor-not-allowed ${inputMode === 'studio' ? 'bg-gradient-to-r from-purple-500 to-indigo-500 text-white hover:opacity-90 shadow-[0_0_20px_rgba(168,85,247,0.3)]' : 'bg-white hover:bg-emerald-400'}`}
                                             >
                                                 {loading ? (
-                                                    <> <FaSpinner className="animate-spin w-5 h-5" /> {loadingStatus || (inputMode === 'studio' ? 'Enviando a fal.ai...' : 'Creando...')} </>
+                                                    <> <FaSpinner className="animate-spin w-5 h-5" /> {loadingStatus || (inputMode === 'studio' ? 'Generando con IA...' : 'Creando...')} </>
                                                 ) : (
                                                     <> <FaStar className={`w-5 h-5 ${inputMode === 'studio' ? 'text-orange-400' : 'text-emerald-600 md:text-inherit'}`} /> {inputMode === 'studio' ? 'GENERAR STUDIO 8K' : (inputMode === 'manual' ? 'CREAR ADS' : 'GENERAR')} </>
                                                 )}

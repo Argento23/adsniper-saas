@@ -26,7 +26,7 @@ export default function Privacy() {
                     <p>Utilizamos tus datos para:</p>
                     <ul className="list-disc pl-5 space-y-2">
                         <li>Proveer y mantener el servicio AdSíntesis.</li>
-                        <li>Procesar las generaciones con proveedores de IA (Groq, Pollinations). <strong>Nota:</strong> No enviamos tus datos personales a estos proveedores, solo el contenido del prompt.</li>
+                        <li>Procesar las generaciones con proveedores de IA. <strong>Nota:</strong> No enviamos tus datos personales a estos proveedores, solo el contenido del prompt.</li>
                         <li>Mejorar nuestros modelos y experiencia de usuario.</li>
                     </ul>
                 </section>

@@ -95,7 +95,7 @@ export default function UpgradeModal({ isOpen, onClose, mpSubscriptionLink, ppLi
                             </li>
                             <li className="flex items-center gap-2">
                                 <FaImage className="text-emerald-500 shrink-0 w-3 h-3" />
-                                Premium Flux.1 Images
+                                Premium HD Images
                             </li>
                             <li className="flex items-center gap-2">
                                 <FaVideo className="text-emerald-500 shrink-0 w-3 h-3" />
@@ -162,7 +162,7 @@ export default function UpgradeModal({ isOpen, onClose, mpSubscriptionLink, ppLi
                             </li>
                             <li className="flex items-center gap-2">
                                 <FaStar className="text-purple-500 shrink-0 w-3 h-3" />
-                                Advanced Llama 3 Prompts
+                                Advanced AI Prompts
                             </li>
                         </ul>
                         <div className="mt-5 space-y-2">

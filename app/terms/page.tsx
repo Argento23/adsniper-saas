@@ -30,7 +30,7 @@ export default function Terms() {
                 {/* --- SECCIÓN 2 --- */}
                 <section className="space-y-3">
                     <h2 className="text-xl font-bold text-white border-b border-slate-800 pb-2">2. Descripción del Servicio</h2>
-                    <p>{appName} es una plataforma SaaS de generación de contenido publicitario mediante Inteligencia Artificial (incluyendo modelos de Groq, Llama 3, Flux.1, Replicate y otros). Permite generar textos, imágenes y videos para uso comercial.</p>
+                    <p>{appName} es una plataforma SaaS de generación de contenido publicitario mediante Inteligencia Artificial. Permite generar textos, imágenes y videos para uso comercial.</p>
                     <div className="bg-yellow-950/30 border border-yellow-700/40 p-4 rounded-xl">
                         <p className="font-bold text-yellow-400 mb-2">⚠️ Descargo de Responsabilidad sobre Contenido de IA</p>
                         <p className="text-sm">El contenido es generado por algoritmos automatizados y puede contener imprecisiones, errores o similitudes no deseadas con obras de terceros. <strong className="text-white">Vos sos el único responsable</strong> de revisar, editar, aprobar y publicar cualquier contenido antes de su uso. {companyName} no garantiza ningún resultado comercial específico.</p>
@@ -119,7 +119,7 @@ export default function Terms() {
                     <h3 className="font-bold text-white mt-4">8.3 Compartimos datos con:</h3>
                     <ul className="list-disc pl-5 space-y-1 text-sm">
                         <li><strong className="text-white">Clerk.com:</strong> gestión de autenticación y sesiones de usuario.</li>
-                        <li><strong className="text-white">Groq / Replicate / Fal.ai:</strong> procesamiento de generación de IA (sin datos personales identificables).</li>
+                        <li><strong className="text-white">Proveedores de IA:</strong> procesamiento de generación de IA (sin datos personales identificables).</li>
                         <li><strong className="text-white">MercadoPago / PayPal:</strong> procesamiento de pagos.</li>
                         <li><strong className="text-white">No vendemos</strong> tus datos personales a terceros bajo ninguna circunstancia.</li>
                     </ul>
