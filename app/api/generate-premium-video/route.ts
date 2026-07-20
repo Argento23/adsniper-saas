@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { generateFalKlingVideo } from '@/lib/fal';
+import { consumeCredits } from '@/lib/credits';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,21 +18,14 @@ async function consumePremiumCredit(userId: string): Promise<{ canProceed: boole
     console.log(`[Premium Video API] Detected Emails: ${emails.join(', ')}`);
     console.log(`[Premium Video API] Admin Match: ${isAdmin}`);
 
-    // ADMIN SHIELD: Skip credit deduction entirely for admin
-    if (isAdmin) {
-        console.log(`[Premium Video API] ADMIN SHIELD ACTIVE - No credits deducted`);
-        return { canProceed: true, isAdmin, meta, clerk };
-    }
-
-    if (meta.plan === 'Infinity') return { canProceed: true, isAdmin, meta, clerk };
-
-    const credits = meta.premiumStudioCredits !== undefined ? Number(meta.premiumStudioCredits) : 0;
-    if (credits <= 0) return { canProceed: false, isAdmin, meta, clerk };
-
-    await clerk.users.updateUserMetadata(userId, {
-        publicMetadata: { ...meta, premiumStudioCredits: credits - 1 }
-    });
-    return { canProceed: true, isAdmin, meta, clerk };
+    // Call unified credit system with a cost of 50 credits for premium video
+    const check = await consumeCredits(userId, 50, 'video');
+    return { 
+        canProceed: check.canProceed, 
+        isAdmin, 
+        meta, 
+        clerk 
+    };
 }
 
 async function enhanceVideoPrompt(userContext: string): Promise<string> {
