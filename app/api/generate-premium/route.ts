@@ -239,32 +239,14 @@ export async function POST(req: Request) {
         }
         const isAdmin = creditCheck.plan === 'agency' && creditCheck.remaining === 999;
 
-        console.log(`[V72] ⚡ INICIANDO ESTUDIO DE INTEGRACIÓN PROFUNDA...`);
+console.log(`[V83] ⚡ STUDIO INPAINTING PIPELINE...`);
         const startTime = Date.now();
         
-        let inputBuffer: Buffer;
-        let briaUsed = false;
-
-        // Intentar Bria para remover fondo (si hay balance de FAL)
-        try {
-            console.log(`[V72] ✂️ Intentando eliminar fondo con Bria...`);
-            const transparentPngUrl = await generateBriaBackgroundRemoval(image_base64);
-            console.log(`[V72] 📥 Descargando silueta desde: ${transparentPngUrl}`);
-            const imageFetchResponse = await fetch(transparentPngUrl);
-            const imageArrayBuffer = await imageFetchResponse.arrayBuffer();
-            inputBuffer = Buffer.from(imageArrayBuffer);
-            briaUsed = true;
-            console.log(`[V72] ✅ Bria OK, fondo eliminado`);
-        } catch (briaErr: any) {
-            console.warn(`[V72] ⚠️ Bria falló (${briaErr.message}). Usando imagen original como input.`);
-            const base64Data = image_base64.includes(',') ? image_base64.split(',')[1] : image_base64;
-            inputBuffer = Buffer.from(base64Data, 'base64');
-        }
-
-        // MARKER: Check if error is after Bria
-        console.log(`[MARKER-A] Bria handled, inputBuffer ready (${inputBuffer.length} bytes)`);
-
-        let optimizedInput = await sharp(inputBuffer).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).toBuffer();
+        // V83: NO more early Bria background removal — the Inpaint pipeline handles everything
+        // Skip directly to mode detection using original image
+        const base64Data = image_base64.includes(',') ? image_base64.split(',')[1] : image_base64;
+        const originalBuffer = Buffer.from(base64Data, 'base64');
+        let optimizedInput = await sharp(originalBuffer).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).toBuffer();
 
         // V75: Detect intended mode (product vs logo)
         // - 'mode' from user: 'product' | 'logo' | 'auto'
@@ -292,161 +274,114 @@ export async function POST(req: Request) {
         let version: string;
 
 if (effectiveMode === 'product') {
-            // V81 PRODUCT MODE: Ultra-premium Flux General Inpainting (Agency Grade)
-            // Keeps the product 100% pixel-perfect and sharp, while generating a gorgeous,
-            // photorealistic, ultra-high-quality scene around it matching the scene prompt.
-            // COSTE: ~$0.05 (FAL Flux Inpaint) — Far higher quality than cartoonish Bria.
-            const startV81 = Date.now();
-            console.log(`[V81] 📦 PRODUCT MODE: Flux Inpainting...`);
+            // V83 PRODUCT MODE: Flux Inpaint — real 3D scene integration with natural shadows/reflections
+            // Keeps the product pixel-perfect, AI generates scene around it with proper lighting & depth.
+            const startV83 = Date.now();
+            console.log(`[V83] 📦 PRODUCT MODE: Flux Inpaint (3D integration)...`);
 
             try {
-                // Get base64 product image buffer (original)
-                const base64Data = image_base64.includes(',') ? image_base64.split(',')[1] : image_base64;
-                const productBuffer = Buffer.from(base64Data, 'base64');
+                // Use optimizedInput (already resized to 1024x1024) as the product
+                console.log(`[V83] Creating inverse mask for product...`);
+                const { baseImage, maskImage } = await createInverseMaskPayload(optimizedInput);
 
-                // Generate the base image and inverse mask at 1024x1024
-                console.log(`[V81] Creating inverse mask to protect product...`);
-                const { baseImage, maskImage } = await createInverseMaskPayload(productBuffer);
-
-                // Run Flux Inpaint on FAL
-                console.log(`[V81] Calling Flux Inpainting with prompt: "${scene_prompt}"`);
+                // Inpaint: AI generates the full scene, keeping product exact shape/colors
+                console.log(`[V83] Calling Flux Inpaint with scene prompt: "${scene_prompt.substring(0, 60)}..."`);
                 const inpaintStart = Date.now();
                 finalImage = await generateFluxInpaint(baseImage, maskImage, scene_prompt, 0.95);
-                console.log(`[V81] ⏱️ Flux Inpaint: ${((Date.now() - inpaintStart) / 1000).toFixed(1)}s`);
-                
+                const inpaintUrl = finalImage;
+                console.log(`[V83] ⏱️ Inpaint completed in ${((Date.now() - inpaintStart) / 1000).toFixed(1)}s`);
+
+                // Download and re-encode as data URI for response
+                const dlResp = await fetch(inpaintUrl, { signal: AbortSignal.timeout(30000) });
+                if (!dlResp.ok) throw new Error(`Inpaint download failed: ${dlResp.status}`);
+                const dlBuf = Buffer.from(await dlResp.arrayBuffer());
+                finalImage = `data:image/png;base64,${dlBuf.toString('base64')}`;
+
                 augmentedPrompt = scene_prompt;
-                version = "v81-flux-inpaint";
-                console.log(`[V81] ⏱️ Total Product Process: ${((Date.now() - startV81) / 1000).toFixed(1)}s`);
+                version = "v83-product-inpaint";
+                console.log(`[V83] ✅ Product integration complete: ${((Date.now() - startV83) / 1000).toFixed(1)}s total`);
             } catch (productErr: any) {
-                console.warn(`[V81] ⚠️ Product Inpaint failed (${productErr.message}). Fallback to composite.`);
-                // Fallback: just composite product on dark background
+                console.warn(`[V83] ⚠️ Product Inpaint failed (${productErr.message}). Falling back to dark composite.`);
+                // Last resort fallback: product centered on dark background
                 const prodMeta = await sharp(optimizedInput).metadata();
                 const pW = prodMeta.width || 512;
                 const pH = prodMeta.height || 512;
-                const targetW = Math.round(1024 * 0.45);
+                const targetW = Math.round(1024 * 0.40);
                 const targetH = Math.round(targetW * (pH / pW));
                 const left = Math.round((1024 - targetW) / 2);
                 const top = Math.round((1024 - targetH) / 2);
-                const resized = await sharp(optimizedInput)
-                    .resize(targetW, targetH, { fit: 'inside' })
-                    .ensureAlpha()
-                    .toBuffer();
-                const bgBuffer = await sharp({
-                    create: { width: 1024, height: 1024, channels: 3, background: '#0f172a' }
-                }).png().toBuffer();
-                const composite = await sharp(bgBuffer)
-                    .composite([{ input: resized, left, top }])
-                    .png()
-                    .toBuffer();
-                finalImage = `data:image/png;base64,${composite.toString('base64')}`;
+                const resized = await sharp(optimizedInput).resize(targetW, targetH, { fit: 'inside' }).ensureAlpha().toBuffer();
+                const bgBuffer = await sharp({ create: { width: 1024, height: 1024, channels: 4, background: { r: 15, g: 23, b: 42, alpha: 1 } } })
+                    .composite([{ input: resized, left, top }]).png().toBuffer();
+                finalImage = `data:image/png;base64,${bgBuffer.toString('base64')}`;
                 augmentedPrompt = scene_prompt;
-                version = "v81-product-fallback";
+                version = "v83-product-fallback";
             }
         } else {
-            // V81 LOGO MODE: Premium, ultra-sharp 2-step pipeline
-            //   - sceneLogo=true: Generate stunning high-end scene using Flux Dev (FAL),
-            //     then Sharp-composite the logo perfectly on top to maintain 100% vector-like precision.
-            //     COSTE: ~$0.05 (FAL Flux Dev) — Gorgeous results, zero cartoon artifacts.
-            //   - sceneLogo=false: V78 bulletproof sharp pipeline (single composite pass).
-            //     ZERO FAL API CALLS. Logo on dark blue background.
+            // V83 LOGO MODE: Flux Inpaint for real 3D integration (no more flat Sharp composite)
+            // sceneLogo=true: AI generates scene with logo naturally integrated (shadows, reflections, depth)
+            // sceneLogo=false: Dark blue background with centered logo (free, zero API cost)
             if (sceneLogo) {
-                console.log(`[V81] 🎬 Logo Scene Integration requested (Flux Dev + Sharp)...`);
+                console.log(`[V83] 🎬 LOGO SCENE MODE: Flux Inpaint (real 3D integration)...`);
                 try {
-                    // Step 1: Generate high-end background scene matching prompt
-                    const scenePromptWithAesthetic = `${scene_prompt}, clean empty center space for brand placement, high resolution, professional photography, photorealistic, 8k, masterpiece, beautiful lighting`;
-                    console.log(`[V81] Generating gorgeous background: "${scenePromptWithAesthetic}"`);
-                    
-                    const falResult = await generateFalImage(scenePromptWithAesthetic);
-                    if (!falResult || !falResult.imageUrl) {
-                        throw new Error("Flux Dev returned empty image URL");
-                    }
-                    console.log(`[V81] Background generated: ${falResult.imageUrl}`);
+                    // Create inverse mask: logo protected (black), rest is scene area (white)
+                    console.log(`[V83] Creating inverse mask for logo...`);
+                    const { baseImage, maskImage } = await createInverseMaskPayload(optimizedInput);
 
-                    // Step 2: Download generated background
-                    const sceneDlResp = await fetch(falResult.imageUrl, { signal: AbortSignal.timeout(30000) });
-                    if (!sceneDlResp.ok) throw new Error(`Background download failed: ${sceneDlResp.status}`);
-                    const sceneBuf = Buffer.from(await sceneDlResp.arrayBuffer());
+                    // Build scene prompt: make sure it's about placing the logo in a real scene
+                    const scenePrompt = `${scene_prompt}, professional photography, photorealistic, 8k, masterpiece, high detail`;
 
-                    // Step 3: Resize and composite logo on top
+                    // Inpaint: AI generates scene with logo naturally embedded (real shadows, reflections)
+                    console.log(`[V83] Calling Flux Inpaint with scene prompt: "${scenePrompt.substring(0, 60)}..."`);
+                    const inpaintStart = Date.now();
+                    const inpaintUrl = await generateFluxInpaint(baseImage, maskImage, scenePrompt, 0.95);
+                    console.log(`[V83] ⏱️ Inpaint completed in ${((Date.now() - inpaintStart) / 1000).toFixed(1)}s`);
+
+                    // Download and return as data URI
+                    const dlResp = await fetch(inpaintUrl, { signal: AbortSignal.timeout(30000) });
+                    if (!dlResp.ok) throw new Error(`Inpaint download failed: ${dlResp.status}`);
+                    const dlBuf = Buffer.from(await dlResp.arrayBuffer());
+                    finalImage = `data:image/png;base64,${dlBuf.toString('base64')}`;
+
+                    augmentedPrompt = scenePrompt;
+                    version = "v83-logo-inpaint";
+                    console.log(`[V83] ✅ Logo scene integration complete`);
+                } catch (logoErr: any) {
+                    console.warn(`[V83] ⚠️ Logo scene Inpaint failed (${logoErr.message}). Falling back to dark composite.`);
                     const logoMeta = await sharp(optimizedInput).metadata();
                     const lW = logoMeta.width || 512;
                     const lH = logoMeta.height || 512;
-                    
-                    // Logo fits comfortably at 34% width
-                    const targetLogoW = Math.round(1024 * 0.34);
-                    const targetLogoH = Math.round(targetLogoW * (lH / lW));
-                    const logoLeft = Math.round((1024 - targetLogoW) / 2);
-                    const logoTop = Math.round((1024 - targetLogoH) / 2);
-
-                    const resizedLogo = await sharp(optimizedInput)
-                        .resize(targetLogoW, targetLogoH, { fit: 'inside' })
-                        .ensureAlpha()
-                        .png()
-                        .toBuffer();
-
-                    // Composite on generated scene
-                    const composited = await sharp(sceneBuf)
-                        .resize(1024, 1024, { fit: 'cover' })
-                        .composite([{ input: resizedLogo, left: logoLeft, top: logoTop }])
-                        .png()
-                        .toBuffer();
-
-                    finalImage = `data:image/png;base64,${composited.toString('base64')}`;
-                    augmentedPrompt = scenePromptWithAesthetic;
-                    version = "v81-logo-scene-flux";
-                    console.log(`[V81] ✅ Logo Scene Composite Completed successfully`);
-                } catch (logoSceneErr: any) {
-                    console.warn(`[V81] ⚠️ Logo scene failed (${logoSceneErr.message}). Falling back to sharp composite.`);
-                    try {
-                        const logoMeta = await sharp(optimizedInput).metadata();
-                        const lW = logoMeta.width || 512;
-                        const lH = logoMeta.height || 512;
-                        const tW = Math.round(1024 * 0.35);
-                        const tH = Math.round(tW * (lH / lW));
-                        const lL = Math.round((1024 - tW) / 2);
-                        const lT = Math.round((1024 - tH) / 2);
-                        const rL = await sharp(optimizedInput).resize(tW, tH, { fit: 'inside' }).ensureAlpha().png().toBuffer();
-                        const c = await sharp({ create: { width: 1024, height: 1024, channels: 4, background: { r: 15, g: 23, b: 42, alpha: 1 } } })
-                            .composite([{ input: rL, left: lL, top: lT }]).png().toBuffer();
-                        finalImage = `data:image/png;base64,${c.toString('base64')}`;
-                        augmentedPrompt = scene_prompt;
-                        version = "v81-logo-scene-fallback";
-                    } catch {
-                        finalImage = `data:image/png;base64,${optimizedInput.toString('base64')}`;
-                        augmentedPrompt = scene_prompt;
-                        version = "v81-logo-raw";
-                    }
-                }
-            } else {
-                // V78 BULLETPROOF (zero FAL cost)
-                try {
-                    const logoMeta = await sharp(optimizedInput).metadata();
-                    const lW = logoMeta.width || 512;
-                    const lH = logoMeta.height || 512;
-                    const tW = Math.round(1024 * 0.35);
+                    const tW = Math.round(1024 * 0.30);
                     const tH = Math.round(tW * (lH / lW));
                     const lL = Math.round((1024 - tW) / 2);
                     const lT = Math.round((1024 - tH) / 2);
                     const rL = await sharp(optimizedInput).resize(tW, tH, { fit: 'inside' }).ensureAlpha().png().toBuffer();
-                    console.log(`[V78] Logo resized to ${tW}x${tH}, position (${lL}, ${lT})`);
                     const c = await sharp({ create: { width: 1024, height: 1024, channels: 4, background: { r: 15, g: 23, b: 42, alpha: 1 } } })
                         .composite([{ input: rL, left: lL, top: lT }]).png().toBuffer();
-                    console.log(`[V78] ✅ Composit success, buffer size: ${c.length}`);
                     finalImage = `data:image/png;base64,${c.toString('base64')}`;
                     augmentedPrompt = scene_prompt;
-                    version = "v78-logo-bulletproof";
-                } catch (logoErr: any) {
-                    console.warn(`[V78] ⚠️ Logo pipeline falló (${logoErr.message}). Fallback simple...`);
-                    try {
-                        const rawLogoB64 = `data:image/png;base64,${optimizedInput.toString('base64')}`;
-                        finalImage = rawLogoB64;
-                        augmentedPrompt = scene_prompt;
-                        version = "v78-logo-raw-fallback";
-                    } catch {
-                        finalImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
-                        augmentedPrompt = scene_prompt;
-                        version = "v78-logo-empty";
-                    }
+                    version = "v83-logo-fallback";
+                }
+            } else {
+                // V83 FREE MODE: Logo centered on dark blue background, zero FAL cost
+                try {
+                    const logoMeta = await sharp(optimizedInput).metadata();
+                    const lW = logoMeta.width || 512;
+                    const lH = logoMeta.height || 512;
+                    const tW = Math.round(1024 * 0.30);
+                    const tH = Math.round(tW * (lH / lW));
+                    const lL = Math.round((1024 - tW) / 2);
+                    const lT = Math.round((1024 - tH) / 2);
+                    const rL = await sharp(optimizedInput).resize(tW, tH, { fit: 'inside' }).ensureAlpha().png().toBuffer();
+                    const c = await sharp({ create: { width: 1024, height: 1024, channels: 4, background: { r: 15, g: 23, b: 42, alpha: 1 } } })
+                        .composite([{ input: rL, left: lL, top: lT }]).png().toBuffer();
+                    finalImage = `data:image/png;base64,${c.toString('base64')}`;
+                    augmentedPrompt = scene_prompt;
+                    version = "v83-logo-free";
+                } catch {
+                    finalImage = `data:image/png;base64,${optimizedInput.toString('base64')}`;
+                    augmentedPrompt = scene_prompt;
+                    version = "v83-logo-raw";
                 }
             }
         }
