@@ -884,12 +884,14 @@ export default function Dashboard() {
         setView('generator');
     };
     const generateStudioAds = async () => {
-        if (!manualImageBase64 || !manualVisual) {
-            alert("Sube una imagen cruda y describe la escena 8K.");
+        const isStudioAllowed = plan === 'studio' || plan === 'agency' || isLocalAdmin;
+        if (!isStudioAllowed) {
+            setShowUpgrade(true);
             return;
         }
-        if (premiumCredits <= 0 && !isLocalAdmin) {
-            setShowUpgrade(true);
+
+        if (!manualImageBase64 || !manualVisual) {
+            alert("Sube una imagen cruda y describe la escena 8K.");
             return;
         }
 
