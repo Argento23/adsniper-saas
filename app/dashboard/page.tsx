@@ -99,7 +99,7 @@ const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, b
     }, [ad]);
 
     const handleGenerateVideo = async () => {
-        const isPremium = plan === 'studio' || plan === 'Infinity' || isAdminUser;
+        const isPremium = plan === 'studio' || plan === 'agency' || plan === 'Infinity' || isAdminUser;
         if (!isPremium) {
             onUpgradeRequired();
             return;
@@ -146,7 +146,7 @@ const AdCard = ({ ad, index, premiumCredits, onPremiumVideoGenerated, isAdmin, b
     };
 
     const handleGeneratePremiumVideo = async () => {
-        const isPremium = plan === 'studio' || plan === 'Infinity' || isAdminUser;
+        const isPremium = plan === 'studio' || plan === 'agency' || plan === 'Infinity' || isAdminUser;
         if (!isPremium) {
             onUpgradeRequired();
             return;
@@ -1141,31 +1141,31 @@ export default function Dashboard() {
                                             <FaPen className="w-3 h-3" /> Modo Manual
                                         </button>
                                         <button
-                                             onClick={() => {
-                                                 const isAdmin = user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase().trim() === 'gustavodornhofer@gmail.com') || plan === 'Infinity';
-                                                 if (plan !== 'studio' && !isAdmin) {
-                                                     setShowUpgrade(true);
-                                                 } else {
-                                                     setInputMode('studio');
-                                                 }
-                                             }}
-                                             className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all relative overflow-hidden ${inputMode === 'studio' ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-900/50' : 'text-purple-300/60 hover:text-purple-300'}`}
-                                         >
-                                             <FaFire className="w-3 h-3 text-orange-400" /> Studio Pro
-                                             {(plan === 'Infinity' || (user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase().trim() === 'gustavodornhofer@gmail.com'))) ? (
-                                                 <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-bl-lg">
-                                                     Admin
-                                                 </span>
-                                             ) : plan === 'studio' ? (
-                                                 <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-bl-lg">
-                                                     {premiumCredits}
-                                                 </span>
-                                             ) : (
-                                                 <span className="absolute top-0 right-0 bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-bl-lg">
-                                                     Locked
-                                                 </span>
-                                             )}
-                                         </button>
+                                            onClick={() => {
+                                                const isAdmin = user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase().trim() === 'gustavodornhofer@gmail.com') || plan === 'Infinity';
+                                                if (plan !== 'studio' && plan !== 'agency' && !isAdmin) {
+                                                    setShowUpgrade(true);
+                                                } else {
+                                                    setInputMode('studio');
+                                                }
+                                            }}
+                                            className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all relative overflow-hidden ${inputMode === 'studio' ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-900/50' : 'text-purple-300/60 hover:text-purple-300'}`}
+                                        >
+                                            <FaFire className="w-3 h-3 text-orange-400" /> Studio Pro
+                                            {(plan === 'Infinity' || (user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase().trim() === 'gustavodornhofer@gmail.com'))) ? (
+                                                <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-bl-lg">
+                                                    Admin
+                                                </span>
+                                            ) : (plan === 'studio' || plan === 'agency') ? (
+                                                <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-bl-lg">
+                                                    {premiumCredits}
+                                                </span>
+                                            ) : (
+                                                <span className="absolute top-0 right-0 bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-bl-lg">
+                                                    Locked
+                                                </span>
+                                            )}
+                                        </button>
                                     </div>
                                 </div>
 
