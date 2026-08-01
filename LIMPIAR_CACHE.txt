@@ -1,0 +1,90 @@
+═══════════════════════════════════════════════════════════
+         🎯 SOLUCIÓN: LIMPIAR CACHÉ DEL NAVEGADOR
+═══════════════════════════════════════════════════════════
+
+✅ CONFIRMADO: Los archivos están correctamente en GitHub
+✅ CONFIRMADO: Vercel deployó correctamente  
+❌ PROBLEMA: Tu navegador tiene la versión vieja en caché
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPCIÓN 1: MODO INCÓGNITO (MÁS RÁPIDO) ⚡
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Abre una ventana de INCÓGNITO:
+   - Chrome/Edge: Ctrl + Shift + N
+   - Firefox: Ctrl + Shift + P
+
+2. Ve a: https://studio.generarise.space/dashboard
+
+3. Genera ads → Deberías ver los cambios ✅
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPCIÓN 2: LIMPIAR CACHÉ COMPLETO 🧹
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+EN CHROME/EDGE:
+1. Ctrl + Shift + Delete
+2. Seleccionar "Todo"  
+3. Marcar "Caché" y "Cookies"
+4. Click "Borrar datos"
+5. Recargar: https://studio.generarise.space/dashboard
+
+EN FIREFOX:
+1. Ctrl + Shift + Delete
+2. Rango: "Todo"
+3. Marcar "Caché" y "Cookies"  
+4. Click "Limpiar ahora"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPCIÓN 3: HARD RELOAD EN LA PÁGINA 🔄
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Ve a: https://studio.generarise.space/dashboard
+2. Presiona: Ctrl + Shift + R (varias veces)
+3. Si no funciona, también presiona: Ctrl + F5
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VERIFICAR QUE FUNCIONÓ ✅
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Después de limpiar caché, genera ads y verifica:
+
+✅ Headlines tienen emojis:
+   "🔥 Zapatillas Runner Pro: El Cambio Que Esperabas"
+   
+✅ Primary text es persuasivo (80-120 palabras)
+
+✅ Video scripts usan descripción real:
+   "Mira esto: zapatillas deportivas de alto rendimiento..."
+   NO: "transformar tu rutina"
+
+✅ Imágenes se muestran (pueden tardar unos segundos)
+
+✅ Modal funciona al hacer click en 🔍
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SI SIGUE SIN FUNCIONAR DESPUÉS DE LIMPIAR CACHÉ:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Abre DevTools (F12)
+2. Ve a la pestaña "Network"
+3. Marca "Disable cache" ✅
+4. Recarga la página
+5. Genera ads
+6. Revisa logs en "Console"
+
+DEBERÍAS VER:
+✅ "Specific Llama 3 ads generated: X"
+
+NO DEBERÍAS VER:
+❌ "n8n DISABLED - HARD RESET"
+❌ "DEBUG: LOCAL FALLBACK TRIGGERED"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CONFIRMACIÓN FINAL:
+
+Los cambios están 100% deployados en Vercel. El problema
+es solo caché del navegador. Modo incógnito lo probará.
+
+═══════════════════════════════════════════════════════════
