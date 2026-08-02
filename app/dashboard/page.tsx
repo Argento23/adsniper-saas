@@ -391,6 +391,7 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
                                 {generatingVideo ? 'Generando...' : 'Animar Ad 🎬'}
                             </button>
                         );
+                    })()}
                 </div>
                 {videoUrl && (
                     <div className="flex flex-col items-center gap-2">
