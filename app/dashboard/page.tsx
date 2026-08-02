@@ -475,6 +475,7 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<'ads' | 'scripts'>('ads');
     const [applyLogo, setApplyLogo] = useState(true);
+    const [customImageText, setCustomImageText] = useState('');
 
     // Admin Helper
     const userEmails = user?.emailAddresses?.map((e: any) => e.emailAddress.toLowerCase().trim()) || [];
@@ -582,7 +583,9 @@ export default function Dashboard() {
                 body: JSON.stringify({
                     image_base64: manualImageBase64,
                     scene_prompt: manualVisual,
-                    brand
+                    brand,
+                    applyLogo,
+                    headlineText: customImageText
                 }),
             });
 
@@ -637,7 +640,9 @@ export default function Dashboard() {
                     manual_image_base64: inputMode === 'manual' ? manualImageBase64 : undefined,
                     language: language,
                     count: count, // Pass count to backend
-                    brand // Pass the brand identity to the API
+                    brand, // Pass the brand identity to the API
+                    applyLogo,
+                    headlineText: customImageText
                 }),
             });
 
@@ -997,6 +1002,19 @@ export default function Dashboard() {
                                                     onChange={(e) => setManualVisual(e.target.value)}
                                                     placeholder="Ej: Apoyado en una roca cubierta de musgo en un bosque lluvioso..."
                                                     className="w-full bg-slate-950 border border-purple-500/30 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:border-purple-400 outline-none transition-colors"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="text-xs font-bold text-slate-300 uppercase ml-2 mb-1 block flex items-center gap-2">
+                                                    ✏️ 3. Texto Superpuesto en Imagen (Opcional)
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={customImageText}
+                                                    onChange={(e) => setCustomImageText(e.target.value)}
+                                                    placeholder="Ej: 50% OFF, Oferta Especial, Tu Slogan..."
+                                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white placeholder:text-slate-600 focus:border-emerald-500 outline-none transition-colors"
                                                 />
                                             </div>
                                         </div>

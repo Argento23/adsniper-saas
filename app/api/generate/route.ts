@@ -540,7 +540,7 @@ function generateFallbackScripts(productName: string, desc: string, lang: string
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { productUrl, manual_title, manual_description, manual_image_prompt, manual_image_base64, brand, count = 3, language = 'es' } = body;
+        const { productUrl, manual_title, manual_description, manual_image_prompt, manual_image_base64, brand, count = 3, language = 'es', applyLogo = true, headlineText } = body;
 
         const { userId } = await auth();
         if (!userId) {
@@ -737,13 +737,14 @@ export async function POST(request: Request) {
                     return `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
                 })();
 
-                // 6. REALISTIC LOGO & PRODUCT COMPOSITING
+                // 6. REALISTIC LOGO & TEXT COMPOSITING
                 const finalImageUrl = await compositeProductAndLogo({
                     sceneImage: baseGeneratedUrl,
-                    productImageBase64: briaIntegrated ? null : (manual_image_base64 || null),
                     logoUrlOrBase64: brand?.logo_url,
                     brandName: brand?.name,
-                    primaryColor: brand?.primary_color
+                    primaryColor: brand?.primary_color,
+                    headlineText: headlineText || null,
+                    applyLogo: applyLogo !== false
                 });
 
                 processedAds.push({ ...ad, generated_image_url: finalImageUrl, product_image_fallback: scrapedImage });
