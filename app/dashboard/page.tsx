@@ -477,7 +477,10 @@ export default function Dashboard() {
     const [applyLogo, setApplyLogo] = useState(true);
 
     // Admin Helper
-    const isLocalAdmin = user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com') || plan === 'Infinity';
+    const userEmails = user?.emailAddresses?.map((e: any) => e.emailAddress.toLowerCase().trim()) || [];
+    const isLocalAdmin = userEmails.includes('gustavodornhofer@gmail.com') ||
+        user?.primaryEmailAddress?.emailAddress?.toLowerCase().trim() === 'gustavodornhofer@gmail.com' ||
+        plan === 'Infinity';
 
     // Data State
     const [ads, setAds] = useState<any[]>([]);
@@ -486,25 +489,37 @@ export default function Dashboard() {
     const [productTitle, setProductTitle] = useState('');
     const [error, setError] = useState('');
 
-    // Removed shared imageError state
-    // const [imageError, setImageError] = useState(false); 
+    // Ensure admin gets 9999 credits as soon as user object loads
+    useEffect(() => {
+        if (user) {
+            const emails = user.emailAddresses?.map((e: any) => e.emailAddress.toLowerCase().trim()) || [];
+            if (emails.includes('gustavodornhofer@gmail.com') || user.primaryEmailAddress?.emailAddress?.toLowerCase().trim() === 'gustavodornhofer@gmail.com') {
+                setCredits(9999);
+                setPremiumCredits(9999);
+                setVideosRemaining(9999);
+                setVideoLimit(9999);
+                setPlan('Infinity');
+                setShowUpgrade(false);
+            }
+        }
+    }, [user]);
 
     // Initial Load - Brand & Credits
     useEffect(() => {
-        console.log('ðŸš€ Dashboard: Initializing...');
+        console.log('🚀 Dashboard: Initializing...');
 
         // Load Brand
         try {
             const savedBrand = localStorage.getItem('AdSíntesisBrand');
             if (savedBrand) {
-                console.log('ðŸ“¦ Dashboard: Brand found in storage');
+                console.log('📦 Dashboard: Brand found in storage');
                 setBrand(JSON.parse(savedBrand));
                 setView('generator');
             } else {
-                console.log('â“ Dashboard: No brand found, showing setup');
+                console.log('❓ Dashboard: No brand found, showing setup');
             }
         } catch (err) {
-            console.error('âŒ Dashboard: Error loading brand from storage:', err);
+            console.error('❌ Dashboard: Error loading brand from storage:', err);
             setView('setup');
         }
 
@@ -518,22 +533,22 @@ export default function Dashboard() {
             const res = await fetch('/api/credits');
             const data = await res.json();
             console.log('📊 Dashboard: Credits Data Received:', data);
-            // Check if user is admin locally as well
-            const userEmails = user?.emailAddresses?.map((e: any) => e.emailAddress.toLowerCase()) || [];
-            const isLocalAdmin = userEmails.includes('gustavodornhofer@gmail.com');
+            
+            const userEmails = user?.emailAddresses?.map((e: any) => e.emailAddress.toLowerCase().trim()) || [];
+            const isAdminUser = userEmails.includes('gustavodornhofer@gmail.com') || isLocalAdmin;
 
-            if (data.credits !== undefined) {
-                setCredits(isLocalAdmin ? 9999 : data.credits);
-                setPlan(isLocalAdmin ? 'Infinity' : data.plan);
-            }
-            if (data.videosRemaining !== undefined) {
-                setVideosRemaining(isLocalAdmin ? 9999 : data.videosRemaining);
-                setVideoLimit(isLocalAdmin ? 9999 : (data.videoLimit || 0));
-            }
-            if (data.premiumStudioCredits !== undefined) {
-                const userEmails = user?.emailAddresses?.map((e: any) => e.emailAddress.toLowerCase()) || [];
-                const isLocalAdmin = userEmails.includes('gustavodornhofer@gmail.com');
-                setPremiumCredits(isLocalAdmin ? 9999 : data.premiumStudioCredits);
+            if (isAdminUser) {
+                setCredits(9999);
+                setPremiumCredits(9999);
+                setVideosRemaining(9999);
+                setVideoLimit(9999);
+                setPlan('Infinity');
+            } else {
+                if (data.credits !== undefined) setCredits(data.credits);
+                if (data.plan) setPlan(data.plan);
+                if (data.videosRemaining !== undefined) setVideosRemaining(data.videosRemaining);
+                if (data.videoLimit !== undefined) setVideoLimit(data.videoLimit);
+                if (data.premiumStudioCredits !== undefined) setPremiumCredits(data.premiumStudioCredits);
             }
         } catch (err) {
             console.error("Error fetching credits:", err);
@@ -541,7 +556,7 @@ export default function Dashboard() {
     };
 
     const handleBrandSave = (data: any) => {
-        console.log('âœ… Dashboard: Brand saved');
+        console.log('✅ Dashboard: Brand saved');
         setBrand(data);
         setView('generator');
     };
@@ -550,7 +565,7 @@ export default function Dashboard() {
             alert("Sube una imagen cruda y describe la escena 8K.");
             return;
         }
-        if (premiumCredits <= 0) {
+        if (premiumCredits <= 0 && !isLocalAdmin) {
             setShowUpgrade(true);
             return;
         }
@@ -573,7 +588,7 @@ export default function Dashboard() {
 
             const data = await res.json();
 
-            if (res.status === 403 && data.error === 'NO_PREMIUM_CREDITS') {
+            if (res.status === 403 && data.error === 'NO_PREMIUM_CREDITS' && !isLocalAdmin) {
                 setShowUpgrade(true);
                 throw new Error("Sin créditos Studio Pro disponibles.");
             } else if (!res.ok) {

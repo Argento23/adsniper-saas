@@ -7,14 +7,30 @@ export interface UsageResult {
     resetDate: Date;
 }
 
+const ADMIN_EMAIL = 'gustavodornhofer@gmail.com';
+
 export async function checkAndTrackUsage(
     userId: string,
     incrementBy: number = 1
 ): Promise<UsageResult> {
-    const user = await clerkClient.users.getUser(userId);
+    const clerk = await clerkClient();
+    const user = await clerk.users.getUser(userId);
 
     const metadata = user.publicMetadata as any;
     const plan = metadata.plan || 'free';
+    const emails = user.emailAddresses.map(e => e.emailAddress.toLowerCase().trim());
+    const isAdmin = emails.includes(ADMIN_EMAIL) || plan === 'Infinity';
+
+    if (isAdmin) {
+        console.log(`👑 UsageTracker: Admin bypass for ${ADMIN_EMAIL}`);
+        return {
+            canProceed: true,
+            remaining: 9999,
+            limit: 9999,
+            resetDate: getNextMonthStart()
+        };
+    }
+
     const limit = getPlanLimit(plan);
 
     // Check if month changed
@@ -38,7 +54,7 @@ export async function checkAndTrackUsage(
     }
 
     // Update usage
-    await clerkClient.users.updateUserMetadata(userId, {
+    await clerk.users.updateUserMetadata(userId, {
         publicMetadata: {
             ...metadata,
             currentMonthUsage: currentUsage + incrementBy,
