@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { auth, clerkClient } from '@clerk/nextjs/server';
+import { auth } from '@clerk/nextjs/server';
+import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
 import { generateReplicateImage } from '@/lib/replicate';
 import { generateFalImage, generateBriaProductShot } from '@/lib/fal';
 import { compositeProductAndLogo } from '@/lib/composer';
@@ -551,21 +552,15 @@ export async function POST(request: Request) {
         let clerkUser: any = null;
 
         try {
-            // FIX DEFINITIVO PARA VERCEL Y CLERK BETA 46: 
-            // Intentar usar clerkClient si existe, pero si crashea por undefined object, no frenar la app.
-            if (typeof clerkClient !== 'undefined' && clerkClient.users) {
-                clerkUser = await clerkClient.users.getUser(userId);
-                if (clerkUser) {
-                    credits = typeof clerkUser.publicMetadata?.credits === 'number' ? clerkUser.publicMetadata.credits : 3;
-                    const userEmail = clerkUser.emailAddresses[0]?.emailAddress?.toLowerCase().trim();
-                    isAdmin = userEmail === 'gustavodornhofer@gmail.com';
-                    console.log(`[Generate API] User: ${userEmail}, isAdmin: ${isAdmin}`);
-                }
-            } else {
-                console.warn("⚠️ Clerk Client users object is undefined in this Beta. Falling back to default limits.");
+            clerkUser = await getClerkUser(userId);
+            if (clerkUser) {
+                credits = typeof clerkUser.publicMetadata?.credits === 'number' ? clerkUser.publicMetadata.credits : 3;
+                const emails = clerkUser.emailAddresses?.map((e: any) => e.emailAddress.toLowerCase().trim()) || [];
+                isAdmin = emails.includes('gustavodornhofer@gmail.com') || clerkUser.publicMetadata?.plan === 'Infinity';
+                console.log(`[Generate API] User: ${userId}, Emails: ${emails.join(', ')}, isAdmin: ${isAdmin}`);
             }
         } catch (clerkError) {
-            console.error("⚠️ Clerk fetch error ignored to prevent crash:", clerkError);
+            console.error("⚠️ Clerk fetch error ignored:", clerkError);
         }
 
         if (credits <= 0 && !isAdmin) {
@@ -761,8 +756,8 @@ export async function POST(request: Request) {
         if (!isAdmin) {
             remainingCredits = credits - 1;
             try {
-                if (typeof clerkClient !== 'undefined' && clerkClient.users && clerkUser) {
-                    await clerkClient.users.updateUserMetadata(userId, {
+                if (clerkUser) {
+                    await updateClerkMetadata(userId, {
                         publicMetadata: {
                             ...clerkUser.publicMetadata,
                             credits: remainingCredits
@@ -770,7 +765,7 @@ export async function POST(request: Request) {
                     });
                 }
             } catch (updateError) {
-                console.error("⚠️ Fallo al actualizar créditos en Clerk, ignorando para no romper la generación:", updateError);
+                console.error("⚠️ Fallo al actualizar créditos en Clerk:", updateError);
             }
         }
 

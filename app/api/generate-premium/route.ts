@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { auth, clerkClient } from '@clerk/nextjs/server';
+import { auth } from '@clerk/nextjs/server';
+import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
 import { generateBriaProductShot, generateFalImage } from '@/lib/fal';
 import { compositeProductAndLogo } from '@/lib/composer';
 
@@ -7,20 +8,23 @@ export const dynamic = 'force-dynamic';
 
 const ADMIN_EMAIL = 'gustavodornhofer@gmail.com';
 
-async function consumePremiumCredit(userId: string): Promise<{ canProceed: boolean; isAdmin: boolean; meta: any; clerk: any }> {
-    const clerk = await clerkClient();
-    const user = await clerk.users.getUser(userId);
-    const meta = user.publicMetadata as any;
-    const emails = user.emailAddresses.map(e => e.emailAddress.toLowerCase().trim());
-    const isAdmin = emails.includes(ADMIN_EMAIL);
-    console.log(`[Premium API] Emails: ${emails.join(', ')}, isAdmin: ${isAdmin}`);
-    if (meta.plan === 'Infinity' || isAdmin) return { canProceed: true, isAdmin, meta, clerk };
+async function consumePremiumCredit(userId: string): Promise<{ canProceed: boolean; isAdmin: boolean; meta: any }> {
+    const user = await getClerkUser(userId);
+    const meta = (user?.publicMetadata as any) || {};
+    const emails = user?.emailAddresses?.map((e: any) => e.emailAddress.toLowerCase().trim()) || [];
+    const isAdmin = emails.includes(ADMIN_EMAIL) || meta.plan === 'Infinity';
+
+    console.log(`[Premium API] User: ${userId}, Emails: ${emails.join(', ')}, isAdmin: ${isAdmin}`);
+
+    if (isAdmin) return { canProceed: true, isAdmin: true, meta };
+
     const credits = meta.premiumStudioCredits !== undefined ? Number(meta.premiumStudioCredits) : 0;
-    if (credits <= 0) return { canProceed: false, isAdmin, meta, clerk };
-    await clerk.users.updateUserMetadata(userId, {
+    if (credits <= 0) return { canProceed: false, isAdmin: false, meta };
+
+    await updateClerkMetadata(userId, {
         publicMetadata: { ...meta, premiumStudioCredits: credits - 1 }
     });
-    return { canProceed: true, isAdmin, meta, clerk };
+    return { canProceed: true, isAdmin: false, meta };
 }
 
 // GROQ PROMPT ENHANCER — Preserves people + scene context

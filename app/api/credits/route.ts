@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { auth, clerkClient } from '@clerk/nextjs/server';
+import { auth } from '@clerk/nextjs/server';
+import { getClerkUser } from '@/lib/clerkHelper';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,30 +22,12 @@ export async function GET() {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        // Clerk v5 beta: clerkClient is a function, must be called first
-        const clerk = await clerkClient();
-        const user = await clerk.users.getUser(userId);
-        const metadata = user.publicMetadata as any;
-
-        // Simple credit system: starts at 3, deducted per generation
-        const credits = typeof metadata.credits === 'number' ? metadata.credits : 3;
-        const plan = metadata.plan || 'free';
-
-        // Video tracking (monthly reset)
-        const now = new Date();
-        const lastVideoReset = metadata.lastVideoResetDate
-            ? new Date(metadata.lastVideoResetDate)
-            : new Date(0);
-        const shouldResetVideos = now.getMonth() !== lastVideoReset.getMonth() ||
-            now.getFullYear() !== lastVideoReset.getFullYear();
-
-        const videoLimit = VIDEO_LIMITS[plan] || 0;
-        const videosUsed = shouldResetVideos ? 0 : (metadata.videosUsedThisMonth || 0);
-        const videosRemaining = Math.max(0, videoLimit - videosUsed);
+        const user = await getClerkUser(userId);
+        const metadata = (user?.publicMetadata as any) || {};
 
         // Admin check
-        const emails = user.emailAddresses.map(e => e.emailAddress.toLowerCase().trim());
-        const isAdmin = emails.includes(ADMIN_EMAIL);
+        const emails = user?.emailAddresses?.map((e: any) => e.emailAddress.toLowerCase().trim()) || [];
+        const isAdmin = emails.includes(ADMIN_EMAIL) || metadata.plan === 'Infinity';
 
         console.log(`[Credits API] Emails: ${emails.join(', ')} | isAdmin: ${isAdmin}`);
 

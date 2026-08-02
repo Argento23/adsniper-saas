@@ -1,4 +1,4 @@
-import { clerkClient } from '@clerk/nextjs/server';
+import { getClerkUser, updateClerkMetadata } from './clerkHelper';
 
 export interface UsageResult {
     canProceed: boolean;
@@ -13,12 +13,10 @@ export async function checkAndTrackUsage(
     userId: string,
     incrementBy: number = 1
 ): Promise<UsageResult> {
-    const clerk = await clerkClient();
-    const user = await clerk.users.getUser(userId);
-
-    const metadata = user.publicMetadata as any;
+    const user = await getClerkUser(userId);
+    const metadata = (user?.publicMetadata as any) || {};
     const plan = metadata.plan || 'free';
-    const emails = user.emailAddresses.map(e => e.emailAddress.toLowerCase().trim());
+    const emails = user?.emailAddresses?.map((e: any) => e.emailAddress.toLowerCase().trim()) || [];
     const isAdmin = emails.includes(ADMIN_EMAIL) || plan === 'Infinity';
 
     if (isAdmin) {
@@ -54,7 +52,7 @@ export async function checkAndTrackUsage(
     }
 
     // Update usage
-    await clerk.users.updateUserMetadata(userId, {
+    await updateClerkMetadata(userId, {
         publicMetadata: {
             ...metadata,
             currentMonthUsage: currentUsage + incrementBy,

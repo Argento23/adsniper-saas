@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { auth, clerkClient } from '@clerk/nextjs/server';
+import { auth } from '@clerk/nextjs/server';
+import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
 import { generateReplicateVideo } from '@/lib/replicate';
 
 export const dynamic = 'force-dynamic';
@@ -29,14 +30,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Image URL is required' }, { status: 400 });
         }
 
-        // Clerk v5: clerkClient must be called as a function
-        const clerk = await clerkClient();
-        const user = await clerk.users.getUser(userId);
-        const metadata = user.publicMetadata as any;
+        const user = await getClerkUser(userId);
+        const metadata = (user?.publicMetadata as any) || {};
         const plan = metadata.plan || 'free';
 
         // Admin bypass
-        const isAdmin = user.emailAddresses.some(e => e.emailAddress.toLowerCase().trim() === ADMIN_EMAIL);
+        const emails = user?.emailAddresses?.map((e: any) => e.emailAddress.toLowerCase().trim()) || [];
+        const isAdmin = emails.includes(ADMIN_EMAIL) || plan === 'Infinity';
 
         // Get video limit for plan
         const videoLimit = VIDEO_LIMITS[plan] || 0;
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
 
         // Track usage (admin skips tracking)
         if (!isAdmin) {
-            await clerk.users.updateUserMetadata(userId, {
+            await updateClerkMetadata(userId, {
                 publicMetadata: {
                     ...metadata,
                     videosUsedThisMonth: videosUsed + 1,

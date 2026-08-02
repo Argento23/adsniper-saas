@@ -1,37 +1,31 @@
 import { NextResponse } from 'next/server';
-import { auth, clerkClient } from '@clerk/nextjs/server';
+import { auth } from '@clerk/nextjs/server';
+import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
 import { generateFalKlingVideo } from '@/lib/fal';
 
 export const dynamic = 'force-dynamic';
 
 const ADMIN_EMAIL = 'gustavodornhofer@gmail.com';
 
-async function consumePremiumCredit(userId: string): Promise<{ canProceed: boolean; isAdmin: boolean; meta: any; clerk: any }> {
-    const clerk = clerkClient;
-    const user = await clerk.users.getUser(userId);
-    const meta = user.publicMetadata as any;
-    const emails = user.emailAddresses.map((e: any) => e.emailAddress.toLowerCase().trim());
-    const isAdmin = emails.some(email => email === ADMIN_EMAIL.toLowerCase().trim());
-    
-    console.log(`[Premium Video API] User ID: ${userId}`);
-    console.log(`[Premium Video API] Detected Emails: ${emails.join(', ')}`);
-    console.log(`[Premium Video API] Admin Match: ${isAdmin}`);
+async function consumePremiumCredit(userId: string): Promise<{ canProceed: boolean; isAdmin: boolean; meta: any }> {
+    const user = await getClerkUser(userId);
+    const meta = (user?.publicMetadata as any) || {};
+    const emails = user?.emailAddresses?.map((e: any) => e.emailAddress.toLowerCase().trim()) || [];
+    const isAdmin = emails.includes(ADMIN_EMAIL) || meta.plan === 'Infinity';
 
-    // ADMIN SHIELD: Skip credit deduction entirely for admin
+    console.log(`[Premium Video API] User ID: ${userId}, Emails: ${emails.join(', ')}, Admin Match: ${isAdmin}`);
+
     if (isAdmin) {
-        console.log(`[Premium Video API] ADMIN SHIELD ACTIVE - No credits deducted`);
-        return { canProceed: true, isAdmin, meta, clerk };
+        return { canProceed: true, isAdmin: true, meta };
     }
 
-    if (meta.plan === 'Infinity') return { canProceed: true, isAdmin, meta, clerk };
-
     const credits = meta.premiumStudioCredits !== undefined ? Number(meta.premiumStudioCredits) : 0;
-    if (credits <= 0) return { canProceed: false, isAdmin, meta, clerk };
+    if (credits <= 0) return { canProceed: false, isAdmin: false, meta };
 
-    await clerk.users.updateUserMetadata(userId, {
+    await updateClerkMetadata(userId, {
         publicMetadata: { ...meta, premiumStudioCredits: credits - 1 }
     });
-    return { canProceed: true, isAdmin, meta, clerk };
+    return { canProceed: true, isAdmin: false, meta };
 }
 
 async function enhanceVideoPrompt(userContext: string): Promise<string> {
