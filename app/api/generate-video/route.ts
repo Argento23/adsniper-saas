@@ -23,7 +23,7 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { imageUrl } = body;
+        const { imageUrl, prompt } = body;
 
         if (!imageUrl) {
             return NextResponse.json({ error: 'Image URL is required' }, { status: 400 });
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
 
         console.log(`🎬 API: Generating video for user ${userId} (${plan} plan, admin: ${isAdmin})`);
 
-        const videoUrl = await generateReplicateVideo(imageUrl);
+        const videoUrl = await generateReplicateVideo(imageUrl, prompt || "Smooth cinematic motion, professional product showcase, subtle camera movement, high quality 4K");
 
         // Track usage (admin skips tracking)
         if (!isAdmin) {

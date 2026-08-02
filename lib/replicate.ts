@@ -115,6 +115,7 @@ export async function generateReplicateImage(
 // Video generation using Wan 2.5 image-to-video (modern, reliable)
 export async function generateReplicateVideo(
     imageUrl: string,
+    prompt: string = "Smooth cinematic motion, professional product showcase, subtle camera movement, high quality 4K",
     isRetry: boolean = false
 ): Promise<string> {
     const apiKey = process.env.REPLICATE_API_KEY || process.env.REPLICATE_API_TOKEN;
@@ -136,7 +137,7 @@ export async function generateReplicateVideo(
             body: JSON.stringify({
                 input: {
                     image: imageUrl,
-                    prompt: "Smooth cinematic motion, professional product showcase, subtle camera movement, high quality 4K",
+                    prompt: prompt,
                     max_frames: 81,
                     enable_safety_checker: true
                 }

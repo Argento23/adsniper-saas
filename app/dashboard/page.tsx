@@ -85,6 +85,8 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
     const [hasError, setHasError] = useState(false);
     const [copied, setCopied] = useState(false);
     const [showImageModal, setShowImageModal] = useState(false);
+    const [showVideoPromptModal, setShowVideoPromptModal] = useState(false);
+    const [customVideoPrompt, setCustomVideoPrompt] = useState(ad.headline ? `Camera moves smoothly around product showcasing ${ad.headline}, 4k ultra-realistic` : 'Smooth cinematic camera movement, professional product showcase');
 
     useEffect(() => {
         const newSrc = ad.generated_image_url || ad.product_image_fallback || productImage || FALLBACK_IMAGE;
@@ -93,12 +95,29 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
         setHasError(false);
     }, [ad, productImage]);
 
+    const downloadImage = async () => {
+        try {
+            const resp = await fetch(imgSrc);
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `AdSíntesis-Ad-${Date.now()}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch {
+            window.open(imgSrc, '_blank');
+        }
+    };
+
     const handleGenerateVideo = async () => {
-        // Admin Bypass for video generation
-        const isAdmin = user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com');
+        const isAdmin = user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com') ||
+            user?.primaryEmailAddress?.emailAddress?.toLowerCase() === 'gustavodornhofer@gmail.com';
 
         if (videosRemaining <= 0 && !isAdmin) {
-            alert("Has alcanzado tu lÃ­mite de videos. MejorÃ¡ tu plan para generar mÃ¡s videos.");
+            alert("Has alcanzado tu límite de videos. Mejorá tu plan para generar más videos.");
             return;
         }
 
@@ -108,15 +127,19 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
         }
 
         setGeneratingVideo(true);
+        setShowVideoPromptModal(false);
         try {
             const resp = await fetch('/api/generate-video', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ imageUrl: imgSrc })
+                body: JSON.stringify({
+                    imageUrl: imgSrc,
+                    prompt: customVideoPrompt
+                })
             });
             const data = await resp.json();
 
-            if (resp.status === 403) {
+            if (resp.status === 403 && !isAdmin) {
                 alert(data.message || "Se requiere un plan Pro o superior para generar videos.");
                 return;
             }
@@ -260,24 +283,54 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
                         className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
                         onClick={() => setShowImageModal(false)}
                     >
-                        <div className="relative max-w-6xl max-h-[90vh] w-full h-full flex flex-col">
-                            <div className="absolute top-4 right-4 z-10">
+                        <div className="relative max-w-5xl max-h-[90vh] w-full h-full flex flex-col items-center justify-center">
+                            <div className="absolute top-4 right-4 z-10 flex gap-2">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); downloadImage(); }}
+                                    className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-4 py-2 text-xs font-bold backdrop-blur-md shadow-lg flex items-center gap-2 transition-all"
+                                >
+                                    <FaCloudUploadAlt className="w-4 h-4 rotate-180" /> Descargar Imagen
+                                </button>
                                 <button
                                     onClick={() => setShowImageModal(false)}
                                     className="bg-white/10 hover:bg-white/20 text-white rounded-full p-3 backdrop-blur-md border border-white/20 transition-all"
                                 >
-                                    âœ•
+                                    ✕
                                 </button>
                             </div>
                             <div className="flex-1 flex items-center justify-center overflow-hidden relative" onClick={(e) => e.stopPropagation()}>
-                                {/* Contenedor cuadrado para mantener la proporción de superposición idéntica a la tarjeta */}
-                                <div className="relative max-w-full max-h-full aspect-square flex items-center justify-center bg-black rounded-lg shadow-2xl overflow-hidden">
+                                <div className="relative max-w-full max-h-full aspect-square flex items-center justify-center bg-black rounded-xl shadow-2xl overflow-hidden border border-slate-800">
                                     <img
                                         src={ad.generated_image_url || imgSrc}
                                         alt="Fondo Generado"
                                         className="w-full h-full object-contain"
                                     />
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Video Motion Prompt Modal */}
+                {showVideoPromptModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setShowVideoPromptModal(false)}>
+                        <div className="bg-slate-900 border border-purple-500/30 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                <FaVideo className="text-purple-400" /> Movimiento de Video AI
+                            </h3>
+                            <p className="text-xs text-slate-400">Describe el movimiento de cámara o la animación deseada para este anuncio:</p>
+                            <textarea
+                                value={customVideoPrompt}
+                                onChange={(e) => setCustomVideoPrompt(e.target.value)}
+                                rows={3}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-purple-500 outline-none resize-none"
+                                placeholder="Ej: Zoom in suave, luces de neón parpadeantes, movimiento cinematográfico 4K..."
+                            />
+                            <div className="flex justify-end gap-2">
+                                <button onClick={() => setShowVideoPromptModal(false)} className="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white">Cancelar</button>
+                                <button onClick={handleGenerateVideo} className="bg-purple-600 hover:bg-purple-500 text-white px-5 py-2 rounded-lg text-xs font-bold shadow-lg flex items-center gap-2">
+                                    <FaVideo /> Generar Video 🎬
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -304,23 +357,32 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
 
             {/* Actions Below Phone */}
             <div className="mt-4 flex flex-col gap-2 items-center">
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 justify-center">
                     <button
                         onClick={copyToClipboard}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${copied ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${copied ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
                     >
-                        {copied ? <FaCheck className="w-4 h-4" /> : <FaRegCopy className="w-4 h-4" />}
+                        {copied ? <FaCheck className="w-3.5 h-3.5" /> : <FaRegCopy className="w-3.5 h-3.5" />}
                         {copied ? 'Copiado!' : 'Copiar Texto'}
                     </button>
+
+                    <button
+                        onClick={downloadImage}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all border border-slate-700"
+                    >
+                        <FaCloudUploadAlt className="w-3.5 h-3.5 rotate-180 text-emerald-400" /> Descargar Imagen 📸
+                    </button>
+
                     {!videoUrl && (() => {
-                        const isAdminUser = user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com');
+                        const isAdminUser = user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com') ||
+                            user?.primaryEmailAddress?.emailAddress?.toLowerCase() === 'gustavodornhofer@gmail.com';
                         const videoDisabled = generatingVideo || hasError || imgSrc.includes('placehold.co') || (videosRemaining <= 0 && !isAdminUser);
                         return (
                             <button
-                                onClick={handleGenerateVideo}
+                                onClick={() => setShowVideoPromptModal(true)}
                                 disabled={videoDisabled}
                                 title={isAdminUser ? 'Admin: video ilimitado' : `${videosRemaining} videos restantes`}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${videoDisabled
+                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${videoDisabled
                                     ? 'bg-slate-700 text-slate-500 cursor-not-allowed opacity-50'
                                     : 'bg-purple-700 text-white hover:bg-purple-600 shadow-lg shadow-purple-900/20'
                                     }`}
@@ -329,7 +391,6 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
                                 {generatingVideo ? 'Generando...' : 'Animar Ad 🎬'}
                             </button>
                         );
-                    })()}
                 </div>
                 {videoUrl && (
                     <div className="flex flex-col items-center gap-2">

@@ -7,6 +7,7 @@ interface CompositeOptions {
     logoPosition?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
     brandName?: string;
     primaryColor?: string;
+    headlineText?: string | null;
 }
 
 async function fetchImageBuffer(src: string): Promise<Buffer> {
@@ -24,7 +25,7 @@ async function fetchImageBuffer(src: string): Promise<Buffer> {
 }
 
 /**
- * Composites brand logo and/or product photo onto a generated scene background realistically.
+ * Composites brand logo, product photo, and optional ad text overlay onto a generated scene background realistically.
  * Returns PNG Data URI.
  */
 export async function compositeProductAndLogo({
@@ -33,7 +34,8 @@ export async function compositeProductAndLogo({
     logoUrlOrBase64,
     logoPosition = 'bottom-right',
     brandName,
-    primaryColor = '#10b981'
+    primaryColor = '#10b981',
+    headlineText
 }: CompositeOptions): Promise<string> {
     try {
         const sceneBuffer = typeof sceneImage === 'string' ? await fetchImageBuffer(sceneImage) : sceneImage;
@@ -47,49 +49,49 @@ export async function compositeProductAndLogo({
         if (productImageBase64 && productImageBase64.length > 50) {
             try {
                 const productBuffer = await fetchImageBuffer(productImageBase64);
-                // Resize product to fit nicely in center-bottom of scene (~420x420)
+                // Proportional product resize (~380x380)
                 const resizedProduct = await sharp(productBuffer)
-                    .resize(420, 420, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+                    .resize(380, 380, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
                     .toBuffer();
 
-                // Generate a soft ambient drop-shadow under product
+                // Soft ambient drop-shadow under product
                 const shadowSvg = `
-                <svg width="460" height="460">
-                    <ellipse cx="230" cy="400" rx="170" ry="25" fill="black" opacity="0.35" filter="blur(15px)" />
+                <svg width="420" height="420">
+                    <ellipse cx="210" cy="370" rx="150" ry="20" fill="black" opacity="0.3" filter="blur(12px)" />
                 </svg>`;
 
                 overlays.push({
                     input: Buffer.from(shadowSvg),
-                    top: 290,
-                    left: 282
+                    top: 320,
+                    left: 302
                 });
 
                 overlays.push({
                     input: resizedProduct,
-                    top: 300,
-                    left: 302
+                    top: 320,
+                    left: 322
                 });
             } catch (e) {
-                console.warn('[Composer] Warning: Could not composite raw product photo, skipping:', e);
+                console.warn('[Composer] Could not composite raw product photo:', e);
             }
         }
 
-        // 2. Composite Brand Logo
+        // 2. Composite Brand Logo (Proportional, Sleek & Discrete - 64x64 max, no giant box)
         let logoProcessed = false;
         if (logoUrlOrBase64 && logoUrlOrBase64.length > 10) {
             try {
                 const rawLogoBuffer = await fetchImageBuffer(logoUrlOrBase64);
-                // Resize logo to ~120x120
+                // Discrete proportional logo: 64x64
                 const resizedLogo = await sharp(rawLogoBuffer)
-                    .resize(120, 120, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+                    .resize(64, 64, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
                     .toBuffer();
 
-                // Create sleek glassmorphic badge SVG for logo
-                const badgeWidth = 150;
-                const badgeHeight = 150;
+                // Subtle transparent shadow ring badge (80x80 container)
+                const badgeWidth = 80;
+                const badgeHeight = 80;
                 const badgeSvg = `
                 <svg width="${badgeWidth}" height="${badgeHeight}">
-                    <rect x="0" y="0" width="${badgeWidth}" height="${badgeHeight}" rx="24" fill="rgba(15, 23, 42, 0.75)" stroke="rgba(255, 255, 255, 0.25)" stroke-width="2" />
+                    <rect x="0" y="0" width="${badgeWidth}" height="${badgeHeight}" rx="16" fill="rgba(15, 23, 42, 0.45)" stroke="rgba(255, 255, 255, 0.2)" stroke-width="1.5" />
                 </svg>`;
 
                 const badgeBuffer = await sharp(Buffer.from(badgeSvg))
@@ -97,12 +99,12 @@ export async function compositeProductAndLogo({
                     .png()
                     .toBuffer();
 
-                // Positions
-                let top = 840;
-                let left = 840;
-                if (logoPosition === 'top-right') { top = 34; left = 840; }
-                else if (logoPosition === 'top-left') { top = 34; left = 34; }
-                else if (logoPosition === 'bottom-left') { top = 840; left = 34; }
+                // Coordinates for 80x80 badge on 1024x1024 image
+                let top = 920;
+                let left = 920;
+                if (logoPosition === 'top-right') { top = 24; left = 920; }
+                else if (logoPosition === 'top-left') { top = 24; left = 24; }
+                else if (logoPosition === 'bottom-left') { top = 920; left = 24; }
 
                 overlays.push({
                     input: badgeBuffer,
@@ -112,11 +114,11 @@ export async function compositeProductAndLogo({
 
                 logoProcessed = true;
             } catch (e) {
-                console.warn('[Composer] Warning: Could not process brand logo, trying fallback badge:', e);
+                console.warn('[Composer] Could not process logo, fallback to watermark text:', e);
             }
         }
 
-        // 3. Brand Text Watermark Fallback if logo failed or brandName specified
+        // 3. Brand Text Watermark Fallback if logo unavailable
         if (!logoProcessed && brandName) {
             const cleanBrand = brandName.trim().toUpperCase();
             const watermarkSvg = `
@@ -127,14 +129,38 @@ export async function compositeProductAndLogo({
                         <stop offset="100%" stop-color="${primaryColor}" stop-opacity="0.9" />
                     </linearGradient>
                 </defs>
-                <rect x="800" y="930" width="190" height="56" rx="14" fill="rgba(15, 23, 42, 0.8)" stroke="rgba(255, 255, 255, 0.2)" />
-                <text x="895" y="965" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="url(#brandGrad)" text-anchor="middle" letter-spacing="2">
+                <rect x="850" y="960" width="150" height="40" rx="10" fill="rgba(15, 23, 42, 0.6)" stroke="rgba(255, 255, 255, 0.15)" />
+                <text x="925" y="985" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="url(#brandGrad)" text-anchor="middle" letter-spacing="1.5">
                     ${cleanBrand}
                 </text>
             </svg>`;
 
             overlays.push({
                 input: Buffer.from(watermarkSvg),
+                top: 0,
+                left: 0
+            });
+        }
+
+        // 4. Headline / Copy Overlay on Image (if requested)
+        if (headlineText && headlineText.trim().length > 0) {
+            const cleanHeadline = headlineText.replace(/["']/g, "").trim().substring(0, 45);
+            const textBannerSvg = `
+            <svg width="1024" height="1024">
+                <defs>
+                    <linearGradient id="textBg" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="rgba(15, 23, 42, 0)" />
+                        <stop offset="100%" stop-color="rgba(15, 23, 42, 0.85)" />
+                    </linearGradient>
+                </defs>
+                <rect x="0" y="860" width="1024" height="164" fill="url(#textBg)"/>
+                <text x="512" y="915" font-family="Helvetica, Arial, sans-serif" font-size="28" font-weight="bold" fill="#ffffff" text-anchor="middle" filter="drop-shadow(0px 2px 8px rgba(0,0,0,0.8))">
+                    ${cleanHeadline}
+                </text>
+            </svg>`;
+
+            overlays.push({
+                input: Buffer.from(textBannerSvg),
                 top: 0,
                 left: 0
             });
@@ -148,7 +174,6 @@ export async function compositeProductAndLogo({
         return `data:image/png;base64,${finalBuffer.toString('base64')}`;
     } catch (err: any) {
         console.error('[Composer] Critical Compositing Error:', err);
-        // Return sceneImage if compositing fails
         if (typeof sceneImage === 'string' && sceneImage.startsWith('data:')) return sceneImage;
         if (typeof sceneImage === 'string') return sceneImage;
         return `data:image/png;base64,${(sceneImage as Buffer).toString('base64')}`;
