@@ -692,27 +692,14 @@ export async function POST(request: Request) {
                 let briaIntegrated = false;
 
                 const baseGeneratedUrl = await (async () => {
-                    // 1. TRY BRIA PRODUCT SHOT (If user uploaded product image base64)
-                    if (manual_image_base64 && (process.env.FAL_KEY || process.env.FAL_API_KEY)) {
-                        try {
-                            const briaUrl = await generateBriaProductShot(manual_image_base64, fullPrompt);
-                            if (briaUrl) {
-                                briaIntegrated = true;
-                                return briaUrl;
-                            }
-                        } catch (e) {
-                            console.error(`⚠️ Bria product shot failed, trying standard generators...`);
-                        }
-                    }
-
-                    // 2. TRY FAL.AI (FLUX DEV)
+                    // 1. TRY FAL.AI (FLUX DEV)
                     try {
                         if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
                             const falResult = await generateFalImage(fullPrompt);
                             if (falResult && falResult.imageUrl) return falResult.imageUrl;
                         }
                     } catch (e) {
-                        console.error(`⚠️ Fal.ai failed, trying Ideogram...`);
+                        console.error(`⚠️ Fal.ai failed, trying Replicate Flux...`);
                     }
 
                     // 3. TRY IDEOGRAM V2 TEXT-TO-IMAGE

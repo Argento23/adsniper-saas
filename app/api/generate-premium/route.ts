@@ -1,7 +1,8 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
-import { pollFalResult } from '@/lib/fal';
+import { generateFalImage } from '@/lib/fal';
+import { generateReplicateImage } from '@/lib/replicate';
 import { compositeProductAndLogo } from '@/lib/composer';
 
 export const dynamic = 'force-dynamic';
@@ -20,8 +21,8 @@ async function consumePremiumCredit(userId: string): Promise<{ canProceed: boole
     return { canProceed: true, isAdmin: false, meta };
 }
 
-// GROQ: Enhance user prompt for Kontext contextual editing
-async function enhancePrompt(userScene: string, brandName?: string): Promise<string> {
+// GROQ: Expand user prompt into an 8K Commercial Advertising Art Prompt
+async function enhancePromptForStudio8K(userScene: string, brandName?: string): Promise<string> {
     const apiKey = process.env.GROQ_API_KEY;
     try {
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -31,113 +32,30 @@ async function enhancePrompt(userScene: string, brandName?: string): Promise<str
                 model: "llama-3.3-70b-versatile",
                 messages: [{
                     role: "system",
-                    content: `You are an expert AI image editing prompt engineer. The user has uploaded an image (a product, logo, person, or character).
-You must write a CONTEXTUAL EDIT INSTRUCTION for Flux Kontext AI. The instruction tells the AI how to TRANSFORM the uploaded image into the desired scene while PRESERVING the identity of the subject in the image.
+                    content: `You are an elite commercial ad photographer and art director.
+Your task is to take the user's scene description and transform it into a hyper-realistic 8K FLUX image prompt.
 
-CRITICAL RULES:
+RULES:
 - Write in English
-- The instruction must describe HOW to transform/place the subject FROM THE UPLOADED IMAGE into the new scene
-- Preserve the original subject's appearance, colors, shape, and identity
-- Include lighting, atmosphere, and mood details
-- Add: "photorealistic, 8k, professional advertising photography"
-- Max 50 words, return ONLY the prompt text
+- Describe the subjects, action, posture, expressions, lighting, shadows, environment, and camera settings in vivid detail
+- ALWAYS specify high-end commercial quality: "photorealistic 8k professional advertising photography, 35mm Hasselblad lens, warm soft natural lighting, sharp focus, cinema depth of field"
+- If people or children are in the prompt, describe their authentic happy expressions and how they hold or display the product/brand emblem naturally
+- Max 60 words, return ONLY the prompt text, no quotes or intros
 
 EXAMPLES:
-"niños sosteniendo el logo" → "Place the logo from the image into the hands of two smiling children sitting in a sunlit park, the children tenderly holding it, warm natural lighting, photorealistic 8k professional advertising photography"
-"producto en mesa elegante" → "Place the product from the image on an elegant marble table with soft bokeh background, warm studio lighting, subtle reflections, photorealistic 8k commercial photography"
-"persona en la playa" → "Transform the scene so the person from the image is standing on a beautiful tropical beach at golden hour, ocean waves behind, warm cinematic lighting, photorealistic 8k photography"`
+"niños sosteniendo el logo" → "Two smiling happy children sitting in a sunlit green park, carefully holding a polished 3D geometric brand emblem in their hands, genuine joyful expressions, warm afternoon sunlight, soft bokeh background, photorealistic 8k professional advertising photography"
+"dos emprendedores dándose la mano" → "Two ambitious professionals warmly shaking hands in a modern glass office at sunset, confident smiles, tailored suits, warm golden hour ambient lighting, crisp focus, photorealistic 8k commercial photography"`
                 }, {
                     role: "user",
-                    content: `Brand: ${brandName || 'GenerArise'}. Scene: ${userScene}`
+                    content: `Brand: ${brandName || 'GenerArise'}. Desired scene: ${userScene}`
                 }]
             })
         });
         const data = await response.json();
         return data.choices[0].message.content.trim().replace(/^"|"$/g, '');
     } catch {
-        return `Place the subject from the image into this scene: ${userScene}, photorealistic 8k professional advertising photography`;
+        return `A photorealistic 8k commercial ad photo of ${userScene}, professional advertising photography, soft studio lighting, sharp focus`;
     }
-}
-
-// Flux Kontext Dev — contextual image editing (takes user image + prompt → transforms it)
-async function generateWithKontext(imageDataUri: string, editPrompt: string): Promise<string> {
-    const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
-    if (!apiKey) throw new Error('FAL_KEY not configured');
-
-    console.log('🎨 [Kontext] Starting contextual image integration...');
-    console.log('🎨 [Kontext] Prompt:', editPrompt);
-
-    const response = await fetch('https://fal.run/fal-ai/flux-1/kontext/dev', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Key ${apiKey}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'respond-async'
-        },
-        body: JSON.stringify({
-            prompt: editPrompt,
-            image_url: imageDataUri,
-            num_inference_steps: 28,
-            guidance_scale: 3.5
-        })
-    });
-
-    if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Kontext submit failed (${response.status}): ${error}`);
-    }
-
-    const data = await response.json();
-
-    // Synchronous response
-    if (data.images && data.images[0]) return data.images[0].url;
-
-    // Async — poll
-    const requestId = data.request_id;
-    if (!requestId) throw new Error('No request_id from Kontext');
-
-    const result = await pollFalResult(requestId, apiKey, 'fal-ai/flux-1/kontext/dev');
-    if (result.images && result.images[0]) return result.images[0].url;
-    throw new Error('Kontext completed but no images returned');
-}
-
-// Flux Redux fallback — uses image as visual reference for generation
-async function generateWithRedux(imageDataUri: string, prompt: string): Promise<string> {
-    const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
-    if (!apiKey) throw new Error('FAL_KEY not configured');
-
-    console.log('🎨 [Redux] Fallback: reference-based generation...');
-
-    const response = await fetch('https://fal.run/fal-ai/flux-1/dev/redux', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Key ${apiKey}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'respond-async'
-        },
-        body: JSON.stringify({
-            image_url: imageDataUri,
-            prompt,
-            image_size: "square_hd",
-            num_inference_steps: 28,
-            guidance_scale: 3.5
-        })
-    });
-
-    if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Redux failed (${response.status}): ${error}`);
-    }
-
-    const data = await response.json();
-    if (data.images && data.images[0]) return data.images[0].url;
-
-    const requestId = data.request_id;
-    if (!requestId) throw new Error('No request_id from Redux');
-
-    const result = await pollFalResult(requestId, apiKey, 'fal-ai/flux-1/dev/redux');
-    if (result.images && result.images[0]) return result.images[0].url;
-    throw new Error('Redux completed but no images returned');
 }
 
 export async function POST(req: Request) {
@@ -148,62 +66,56 @@ export async function POST(req: Request) {
         const body = await req.json();
         const { image_base64, scene_prompt, brand, applyLogo = true, headlineText } = body;
 
-        if (!image_base64) return NextResponse.json({ error: 'Falta la imagen' }, { status: 400 });
-
         // Credit check
         const { canProceed } = await consumePremiumCredit(userId);
         if (!canProceed) return NextResponse.json({ error: 'NO_PREMIUM_CREDITS' }, { status: 403 });
 
-        // Enhance prompt
-        const enhancedPrompt = await enhancePrompt(
-            scene_prompt || "Product on elegant studio pedestal, professional lighting",
+        // 1. Expand scene description into 8K Ad Prompt
+        const enhancedPrompt = await enhancePromptForStudio8K(
+            scene_prompt || "Product displayed on an elegant marble pedestal, studio lighting",
             brand?.name
         );
-        console.log(`🎯 [Studio Pro] Enhanced prompt: ${enhancedPrompt}`);
-
-        // Prepare image data URI
-        const imageDataUri = image_base64.startsWith('data:')
-            ? image_base64
-            : image_base64.startsWith('http')
-                ? image_base64
-                : `data:image/png;base64,${image_base64}`;
+        console.log(`🎯 [Studio Pro 8K] Prompt: ${enhancedPrompt}`);
 
         let generatedImageUrl: string | null = null;
 
-        // Strategy 1: Flux Kontext Dev (contextual image editing — integrates uploaded image into scene)
+        // 2. Strategy 1: Fal.ai FLUX Dev (Highest 8K quality)
         try {
-            generatedImageUrl = await generateWithKontext(imageDataUri, enhancedPrompt);
-            console.log('✅ [Studio Pro] Kontext succeeded:', generatedImageUrl?.substring(0, 80));
-        } catch (err: any) {
-            console.warn(`⚠️ Kontext failed: ${err.message}`);
+            if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
+                console.log('🚀 [Studio Pro 8K] Generating via Fal FLUX Dev...');
+                const falResult = await generateFalImage(enhancedPrompt, "square_hd");
+                if (falResult && falResult.imageUrl) {
+                    generatedImageUrl = falResult.imageUrl;
+                    console.log('✅ [Studio Pro 8K] Fal FLUX succeeded');
+                }
+            }
+        } catch (falErr: any) {
+            console.warn(`⚠️ [Studio Pro 8K] Fal.ai failed: ${falErr.message}`);
         }
 
-        // Strategy 2: Flux Redux (reference-based generation)
+        // 3. Strategy 2: Replicate FLUX Schnell
         if (!generatedImageUrl) {
             try {
-                generatedImageUrl = await generateWithRedux(imageDataUri, enhancedPrompt);
-                console.log('✅ [Studio Pro] Redux succeeded');
-            } catch (err: any) {
-                console.warn(`⚠️ Redux failed: ${err.message}`);
+                console.log('🚀 [Studio Pro 8K] Fallback to Replicate FLUX...');
+                const repResult = await generateReplicateImage(enhancedPrompt, 1024, 1024);
+                if (repResult && repResult.imageUrl) {
+                    generatedImageUrl = repResult.imageUrl;
+                    console.log('✅ [Studio Pro 8K] Replicate FLUX succeeded');
+                }
+            } catch (repErr: any) {
+                console.warn(`⚠️ [Studio Pro 8K] Replicate failed: ${repErr.message}`);
             }
         }
 
-        // Strategy 3: Replicate FLUX text-only (last resort)
+        // 4. Strategy 3: Pollinations AI
         if (!generatedImageUrl) {
-            try {
-                const { generateReplicateImage } = await import('@/lib/replicate');
-                const res = await generateReplicateImage(enhancedPrompt, 1024, 1024);
-                if (res?.imageUrl) generatedImageUrl = res.imageUrl;
-            } catch (err: any) {
-                console.warn(`⚠️ Replicate fallback failed: ${err.message}`);
-            }
+            console.warn('⚠️ [Studio Pro 8K] Fallback to Pollinations AI');
+            const cleanPrompt = encodeURIComponent(enhancedPrompt.substring(0, 150));
+            const seed = Math.floor(Math.random() * 1000000);
+            generatedImageUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
         }
 
-        if (!generatedImageUrl) {
-            throw new Error('Todos los servicios de generación fallaron. Intente nuevamente.');
-        }
-
-        // Optional: Logo badge & text overlay via composer
+        // 5. Composite logo watermark & headline text
         let finalUrl = generatedImageUrl;
         try {
             finalUrl = await compositeProductAndLogo({
@@ -215,18 +127,18 @@ export async function POST(req: Request) {
                 applyLogo: applyLogo !== false
             });
         } catch (compErr) {
-            console.warn('[Studio Pro] Composer warning:', compErr);
+            console.warn('[Studio Pro 8K] Composer warning:', compErr);
         }
 
         return NextResponse.json({
             success: true,
             final_composition: finalUrl,
-            original_extracted: image_base64,
+            original_extracted: image_base64 || '',
             prompt_used: enhancedPrompt
         });
 
     } catch (error: any) {
         console.error("Studio API Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: error.message || 'Error en Studio Pro' }, { status: 500 });
     }
 }
