@@ -1004,32 +1004,32 @@ export default function Dashboard() {
                                                     className="w-full bg-slate-950 border border-purple-500/30 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:border-purple-400 outline-none transition-colors"
                                                 />
                                             </div>
-
-                                            <div>
-                                                <label className="text-xs font-bold text-slate-300 uppercase ml-2 mb-1 block flex items-center gap-2">
-                                                    ✏️ 3. Texto Superpuesto en Imagen (Opcional)
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={customImageText}
-                                                    onChange={(e) => setCustomImageText(e.target.value)}
-                                                    placeholder="Ej: 50% OFF, Oferta Especial, Tu Slogan..."
-                                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white placeholder:text-slate-600 focus:border-emerald-500 outline-none transition-colors"
-                                                />
-                                            </div>
                                         </div>
                                     )}
 
-                                    {/* OPCIONES AVANZADAS: LOGO Y CANTIDAD */}
-                                    <div className="flex flex-col md:flex-row gap-4 mt-2">
+                                    {/* OPCIONES AVANZADAS: TEXTO SUPERPUESTO, LOGO Y CANTIDAD */}
+                                    <div className="space-y-3 mt-4">
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-300 uppercase ml-2 mb-1 block flex items-center gap-2">
+                                                ✏️ Texto Superpuesto en Imagen (Opcional - Aplica a todos los modos)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={customImageText}
+                                                onChange={(e) => setCustomImageText(e.target.value)}
+                                                placeholder="Ej: 50% OFF, Oferta Especial, Tu Slogan..."
+                                                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white placeholder:text-slate-600 focus:border-emerald-500 outline-none transition-colors"
+                                            />
+                                        </div>
 
-                                        {/* Logo Toggle */}
-                                        <div className="flex-1 flex items-center justify-between bg-slate-900 rounded-xl px-4 py-3 border border-slate-800 focus-within:border-emerald-500/50 transition-colors">
-                                            <div className="flex flex-col">
-                                                <span className="text-xs font-bold text-slate-300 uppercase flex items-center gap-2">
-                                                    <FaStar className={applyLogo ? "text-emerald-400" : "text-slate-600"} />
-                                                    Aplicar Marca de Agua (Logo)
-                                                </span>
+                                        <div className="flex flex-col md:flex-row gap-4">
+                                            {/* Logo Toggle */}
+                                            <div className="flex-1 flex items-center justify-between bg-slate-900 rounded-xl px-4 py-3 border border-slate-800 focus-within:border-emerald-500/50 transition-colors">
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-bold text-slate-300 uppercase flex items-center gap-2">
+                                                        <FaStar className={applyLogo ? "text-emerald-400" : "text-slate-600"} />
+                                                        Aplicar Marca de Agua (Logo)
+                                                    </span>
                                                 <span className="text-[10px] text-slate-500 mt-0.5">Muestra u oculta la firma de tu marca</span>
                                             </div>
 

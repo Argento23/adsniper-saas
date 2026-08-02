@@ -727,7 +727,8 @@ export async function POST(request: Request) {
                 // 6. REALISTIC LOGO & TEXT COMPOSITING
                 const finalImageUrl = await compositeProductAndLogo({
                     sceneImage: baseGeneratedUrl,
-                    logoUrlOrBase64: brand?.logo_url,
+                    logoUrlOrBase64: brand?.logo_url || null,
+                    productImageBase64: manual_image_base64 || null,
                     brandName: brand?.name,
                     primaryColor: brand?.primary_color,
                     headlineText: headlineText || null,

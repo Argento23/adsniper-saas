@@ -3,11 +3,21 @@ import sharp from 'sharp';
 interface CompositeOptions {
     sceneImage: string | Buffer; // URL or Base64 or Buffer
     logoUrlOrBase64?: string | null;
+    productImageBase64?: string | null;
     logoPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
     brandName?: string;
     primaryColor?: string;
     headlineText?: string | null;
     applyLogo?: boolean;
+}
+
+function escapeXml(str: string) {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
 }
 
 async function fetchImageBuffer(src: string): Promise<Buffer> {
@@ -25,12 +35,13 @@ async function fetchImageBuffer(src: string): Promise<Buffer> {
 }
 
 /**
- * Composites brand logo (discrete badge in corner) and optional headline text overlay onto an AI-generated scene image.
- * NEVER pastes crude product boxes over the middle of the scene.
+ * Composites brand logo badge and custom text overlay onto an AI-generated scene image.
+ * Uses robust SVG text rendering compatible with Linux/Vercel serverless.
  */
 export async function compositeProductAndLogo({
     sceneImage,
     logoUrlOrBase64,
+    productImageBase64,
     logoPosition = 'top-left',
     brandName,
     primaryColor = '#10b981',
@@ -44,27 +55,30 @@ export async function compositeProductAndLogo({
         let baseSharp = sharp(sceneBuffer).resize(1024, 1024, { fit: 'cover' });
         const overlays: sharp.OverlayOptions[] = [];
 
+        // Determine effective logo source (brand logo first, fallback to user uploaded product/logo image)
+        const effectiveLogo = logoUrlOrBase64 || productImageBase64;
+
         // 1. Composite Discrete Brand Logo in corner ONLY IF applyLogo is true
-        if (applyLogo && logoUrlOrBase64 && logoUrlOrBase64.length > 10) {
+        if (applyLogo && effectiveLogo && effectiveLogo.length > 10) {
             try {
-                const rawLogoBuffer = await fetchImageBuffer(logoUrlOrBase64);
-                // Sleek, compact logo: max 56x56
+                const rawLogoBuffer = await fetchImageBuffer(effectiveLogo);
+                // Sleek, compact logo badge: max 64x64
                 const resizedLogo = await sharp(rawLogoBuffer)
-                    .resize(56, 56, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+                    .resize(64, 64, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
                     .png()
                     .toBuffer();
 
                 // Coordinates for logo badge in corner
                 let top = 24;
                 let left = 24; // Default top-left corner
-                if (logoPosition === 'top-right') { top = 24; left = 944; }
-                else if (logoPosition === 'bottom-left') { top = 944; left = 24; }
-                else if (logoPosition === 'bottom-right') { top = 944; left = 944; }
+                if (logoPosition === 'top-right') { top = 24; left = 924; }
+                else if (logoPosition === 'bottom-left') { top = 924; left = 24; }
+                else if (logoPosition === 'bottom-right') { top = 924; left = 924; }
 
-                // Small glassmorphic backing badge (68x68)
+                // Glassmorphic backing badge (76x76)
                 const badgeSvg = `
-                <svg width="68" height="68">
-                    <rect x="0" y="0" width="68" height="68" rx="14" fill="rgba(15, 23, 42, 0.55)" stroke="rgba(255, 255, 255, 0.25)" stroke-width="1" />
+                <svg width="76" height="76" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="0" y="0" width="76" height="76" rx="16" fill="rgba(15, 23, 42, 0.65)" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1.5" />
                 </svg>`;
 
                 const badgeBuffer = await sharp(Buffer.from(badgeSvg))
@@ -85,18 +99,18 @@ export async function compositeProductAndLogo({
 
         // 2. Headline / Custom Copy Overlay at the bottom of the image (if requested)
         if (headlineText && headlineText.trim().length > 0) {
-            const cleanHeadline = headlineText.replace(/["']/g, "").trim().substring(0, 50);
+            const cleanHeadline = escapeXml(headlineText.trim().substring(0, 50));
             const textBannerSvg = `
-            <svg width="1024" height="1024">
+            <svg width="1024" height="1024" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                     <linearGradient id="textBgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
                         <stop offset="0%" stop-color="rgba(15, 23, 42, 0)" />
-                        <stop offset="50%" stop-color="rgba(15, 23, 42, 0.75)" />
-                        <stop offset="100%" stop-color="rgba(15, 23, 42, 0.95)" />
+                        <stop offset="40%" stop-color="rgba(15, 23, 42, 0.8)" />
+                        <stop offset="100%" stop-color="rgba(15, 23, 42, 0.98)" />
                     </linearGradient>
                 </defs>
-                <rect x="0" y="860" width="1024" height="164" fill="url(#textBgGrad)"/>
-                <text x="512" y="940" font-family="Arial, sans-serif" font-size="32" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">
+                <rect x="0" y="850" width="1024" height="174" fill="url(#textBgGrad)"/>
+                <text x="512" y="945" font-family="DejaVu Sans, Liberation Sans, FreeSans, sans-serif" font-size="34" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="1">
                     ${cleanHeadline}
                 </text>
             </svg>`;
