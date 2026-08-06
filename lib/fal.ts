@@ -107,6 +107,9 @@ export async function generateFalImage(
     const result = await runFalAsync('https://fal.run/fal-ai/flux/dev', {
         prompt, image_size: imageSize, num_inference_steps: 28, guidance_scale: 3.5, num_images: 1, enable_safety_checker: true
     });
+    return { imageUrl: result.images[0].url, seed: result.seed };
+}
+
 /**
  * Uploads a base64 image (data URI or raw base64) to FAL storage
  * and returns a public HTTP URL that FAL AI models can consume.
