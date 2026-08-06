@@ -9,6 +9,7 @@ interface CompositeOptions {
     primaryColor?: string;
     headlineText?: string | null;
     applyLogo?: boolean;
+    applyText?: boolean;
 }
 
 function escapeXml(str: string) {
@@ -46,7 +47,8 @@ export async function compositeProductAndLogo({
     brandName,
     primaryColor = '#10b981',
     headlineText,
-    applyLogo = true
+    applyLogo = true,
+    applyText = true
 }: CompositeOptions): Promise<string> {
     try {
         const sceneBuffer = typeof sceneImage === 'string' ? await fetchImageBuffer(sceneImage) : sceneImage;
@@ -97,8 +99,8 @@ export async function compositeProductAndLogo({
             }
         }
 
-        // 2. Headline / Custom Copy Overlay at the bottom of the image (if requested)
-        if (headlineText && headlineText.trim().length > 0) {
+        // 2. Headline / Custom Copy Overlay at the bottom of the image (if requested AND applyText is true)
+        if (applyText && headlineText && headlineText.trim().length > 0) {
             const cleanHeadline = escapeXml(headlineText.trim().substring(0, 50));
             const textBannerSvg = `
             <svg width="1024" height="1024" xmlns="http://www.w3.org/2000/svg">

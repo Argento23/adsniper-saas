@@ -475,6 +475,7 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<'ads' | 'scripts'>('ads');
     const [applyLogo, setApplyLogo] = useState(true);
+    const [applyText, setApplyText] = useState(true);
     const [customImageText, setCustomImageText] = useState('');
 
     // Admin Helper
@@ -585,6 +586,7 @@ export default function Dashboard() {
                     scene_prompt: manualVisual,
                     brand,
                     applyLogo,
+                    applyText,
                     headlineText: customImageText
                 }),
             });
@@ -642,6 +644,7 @@ export default function Dashboard() {
                     count: count, // Pass count to backend
                     brand, // Pass the brand identity to the API
                     applyLogo,
+                    applyText,
                     headlineText: customImageText
                 }),
             });
@@ -1030,15 +1033,34 @@ export default function Dashboard() {
                                                         <FaStar className={applyLogo ? "text-emerald-400" : "text-slate-600"} />
                                                         Aplicar Marca de Agua (Logo)
                                                     </span>
-                                                <span className="text-[10px] text-slate-500 mt-0.5">Muestra u oculta la firma de tu marca</span>
+                                                    <span className="text-[10px] text-slate-500 mt-0.5">Muestra u oculta la firma de tu marca</span>
+                                                </div>
+
+                                                <button
+                                                    onClick={() => setApplyLogo(!applyLogo)}
+                                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${applyLogo ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                                                >
+                                                    <span className={`${applyLogo ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`} />
+                                                </button>
                                             </div>
 
-                                            <button
-                                                onClick={() => setApplyLogo(!applyLogo)}
-                                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${applyLogo ? 'bg-emerald-500' : 'bg-slate-700'}`}
-                                            >
-                                                <span className={`${applyLogo ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`} />
-                                            </button>
+                                            {/* Text Toggle */}
+                                            <div className="flex-1 flex items-center justify-between bg-slate-900 rounded-xl px-4 py-3 border border-slate-800 focus-within:border-emerald-500/50 transition-colors">
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-bold text-slate-300 uppercase flex items-center gap-2">
+                                                        <FaPen className={applyText ? "text-emerald-400" : "text-slate-600"} />
+                                                        Aplicar Texto Generado
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-500 mt-0.5">Muestra u oculta el texto en la imagen</span>
+                                                </div>
+
+                                                <button
+                                                    onClick={() => setApplyText(!applyText)}
+                                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${applyText ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                                                >
+                                                    <span className={`${applyText ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`} />
+                                                </button>
+                                            </div>
                                         </div>
 
                                         {/* QUANTITY SELECTOR */}

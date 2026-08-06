@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
 import { generateReplicateImage } from '@/lib/replicate';
-import { generateFalImage, generateBriaProductShot } from '@/lib/fal';
+import { generateFalImage, generateBriaProductShot, generateFluxReduxImage, generateFluxIPAdapter } from '@/lib/fal';
 import { compositeProductAndLogo } from '@/lib/composer';
 import { checkAndTrackUsage } from '@/lib/usageTracker';
 
@@ -540,7 +540,7 @@ function generateFallbackScripts(productName: string, desc: string, lang: string
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { productUrl, manual_title, manual_description, manual_image_prompt, manual_image_base64, brand, count = 3, language = 'es', applyLogo = true, headlineText } = body;
+        const { productUrl, manual_title, manual_description, manual_image_prompt, manual_image_base64, brand, count = 3, language = 'es', applyLogo = true, applyText = true, headlineText } = body;
 
         const { userId } = await auth();
         if (!userId) {
@@ -667,9 +667,10 @@ export async function POST(request: Request) {
         }
 
 
-        // Process Ads — SEQUENTIAL REPLICATE / FAL / BRIA + COMPOSITOR
+        // Process Ads — SEQUENTIAL IMAGE GENERATION WITH REFERENCE IMAGE INTEGRATION
         if (data.ads && Array.isArray(data.ads)) {
-            console.log(`💎 Generating ${data.ads.length} images with Product & Logo Integration...`);
+            const hasUserImage = manual_image_base64 && manual_image_base64.length > 100;
+            console.log(`💎 Generating ${data.ads.length} images. User image integration: ${hasUserImage ? 'YES (Redux/IP-Adapter)' : 'NO (text-to-image)'}`);
 
             const processedAds = [];
             for (const ad of data.ads) {
@@ -685,24 +686,64 @@ export async function POST(request: Request) {
                     .replace(/[¿¡]/g, "");
 
                 let fullPrompt = `A beautiful physical ${scrapedTitle}, ${basePrompt}, professional product photography, 8k, cinematic lighting, high quality, studio setup`;
-                if (cleanHeadline) {
+                if (applyText && cleanHeadline) {
                     fullPrompt += `, typography rendering: "${cleanHeadline}"`;
                 }
 
-                let briaIntegrated = false;
-
                 const baseGeneratedUrl = await (async () => {
-                    // 1. TRY FAL.AI (FLUX DEV)
+
+                    // ===== STRATEGY A: USER UPLOADED IMAGE → INTEGRATE INTO SCENE =====
+                    if (hasUserImage) {
+                        const integrationPrompt = `Professional advertising photograph, ${basePrompt}, the brand logo/product is naturally integrated into the scene as a real 3D object, held by a person or displayed prominently as part of the composition, photorealistic 8k commercial photography, cinematic lighting, sharp focus, bokeh background`;
+
+                        // A1. TRY FLUX REDUX (best for reference-based image generation)
+                        try {
+                            if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
+                                console.log(`🎨 [Redux] Integrating user image into scene via Flux Redux...`);
+                                const reduxResult = await generateFluxReduxImage(manual_image_base64, integrationPrompt);
+                                if (reduxResult) return reduxResult;
+                            }
+                        } catch (e: any) {
+                            console.warn(`⚠️ Flux Redux failed: ${e.message}. Trying IP-Adapter...`);
+                        }
+
+                        // A2. TRY IP-ADAPTER (alternative reference integration)
+                        try {
+                            if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
+                                console.log(`🎨 [IP-Adapter] Integrating user image into scene...`);
+                                const ipResult = await generateFluxIPAdapter(manual_image_base64, integrationPrompt, 0.65);
+                                if (ipResult) return ipResult;
+                            }
+                        } catch (e: any) {
+                            console.warn(`⚠️ IP-Adapter failed: ${e.message}. Falling back to text-to-image...`);
+                        }
+
+                        // A3. FALLBACK: Use image-to-image (Flux Dev img2img) with lower strength
+                        try {
+                            if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
+                                console.log(`🎨 [Img2Img] Using image-to-image with low strength...`);
+                                const { generateFluxImageToImage } = await import('@/lib/fal');
+                                const img2imgResult = await generateFluxImageToImage(manual_image_base64, integrationPrompt, 0.45);
+                                if (img2imgResult) return img2imgResult;
+                            }
+                        } catch (e: any) {
+                            console.warn(`⚠️ Img2Img failed: ${e.message}. Using standard text-to-image...`);
+                        }
+                    }
+
+                    // ===== STRATEGY B: NO USER IMAGE → STANDARD TEXT-TO-IMAGE =====
+
+                    // B1. TRY FAL.AI (FLUX DEV)
                     try {
                         if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
                             const falResult = await generateFalImage(fullPrompt);
                             if (falResult && falResult.imageUrl) return falResult.imageUrl;
                         }
                     } catch (e) {
-                        console.error(`⚠️ Fal.ai failed, trying Replicate Flux...`);
+                        console.error(`⚠️ Fal.ai failed, trying Ideogram...`);
                     }
 
-                    // 3. TRY IDEOGRAM V2 TEXT-TO-IMAGE
+                    // B2. TRY IDEOGRAM V2 TEXT-TO-IMAGE
                     try {
                         const ideogramImage = await generateIdeogramImage(fullPrompt, scrapedImage);
                         if (ideogramImage) return ideogramImage;
@@ -710,7 +751,7 @@ export async function POST(request: Request) {
                         console.error(`⚠️ Ideogram failed, trying Replicate Flux...`);
                     }
 
-                    // 4. TRY REPLICATE (FLUX)
+                    // B3. TRY REPLICATE (FLUX)
                     try {
                         const replicateResult = await generateReplicateImage(fullPrompt);
                         if (replicateResult && replicateResult.imageUrl) return replicateResult.imageUrl;
@@ -718,21 +759,22 @@ export async function POST(request: Request) {
                         console.error(`⚠️ Replicate failed, trying Pollinations...`);
                     }
 
-                    // 5. FINAL FALLBACK: POLLINATIONS
+                    // B4. FINAL FALLBACK: POLLINATIONS
                     const cleanPrompt = fullPrompt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s]/gi, '').substring(0, 100).trim().replace(/\s+/g, '_');
                     const seed = Math.floor(Math.random() * 1000000);
                     return `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
                 })();
 
-                // 6. REALISTIC LOGO & TEXT COMPOSITING
+                // POST-PROCESSING: Logo watermark & text overlay (only if enabled)
                 const finalImageUrl = await compositeProductAndLogo({
                     sceneImage: baseGeneratedUrl,
                     logoUrlOrBase64: brand?.logo_url || null,
-                    productImageBase64: manual_image_base64 || null,
+                    productImageBase64: hasUserImage ? null : (manual_image_base64 || null), // Don't re-paste the image that was already integrated
                     brandName: brand?.name,
                     primaryColor: brand?.primary_color,
                     headlineText: headlineText || null,
-                    applyLogo: applyLogo !== false
+                    applyLogo: applyLogo !== false,
+                    applyText: applyText !== false
                 });
 
                 processedAds.push({ ...ad, generated_image_url: finalImageUrl, product_image_fallback: scrapedImage });

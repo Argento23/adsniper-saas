@@ -121,6 +121,34 @@ export async function generateFluxReduxImage(
     return result.images[0].url;
 }
 
+/**
+ * IP-Adapter integration: Generates an image where a reference image (logo/product)
+ * is organically integrated into a generated scene as described by the prompt.
+ * Uses FLUX Dev IP-Adapter for style/subject transfer with configurable influence.
+ */
+export async function generateFluxIPAdapter(
+    referenceImageUrl: string,
+    prompt: string,
+    ipAdapterScale: number = 0.7,
+    imageSize: "square_hd" | "square" | "portrait_4_3" | "landscape_4_3" = "square_hd"
+): Promise<string> {
+    console.log(`🎨 [Fal IP-Adapter] Integrating reference image into scene...`);
+    const result = await runFalAsync('https://fal.run/fal-ai/flux-general', {
+        prompt,
+        image_size: imageSize,
+        num_inference_steps: 28,
+        guidance_scale: 3.5,
+        num_images: 1,
+        enable_safety_checker: true,
+        ip_adapter: [{
+            ip_adapter_image_url: referenceImageUrl,
+            ip_adapter_scale: ipAdapterScale,
+            ip_adapter_model: "ip-adapter-faceid" // General subject adapter
+        }]
+    });
+    return result.images[0].url;
+}
+
 export async function generateFluxImageToImage(
     imageUrl: string,
     prompt: string,

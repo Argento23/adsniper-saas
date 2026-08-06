@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
-import { generateFalImage } from '@/lib/fal';
+import { generateFalImage, generateFluxReduxImage } from '@/lib/fal';
 import { generateReplicateImage } from '@/lib/replicate';
 import { compositeProductAndLogo } from '@/lib/composer';
 
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const body = await req.json();
-        const { image_base64, scene_prompt, brand, applyLogo = true, headlineText } = body;
+        const { image_base64, scene_prompt, brand, applyLogo = true, applyText = true, headlineText } = body;
 
         // Credit check
         const { canProceed } = await consumePremiumCredit(userId);
@@ -79,21 +79,41 @@ export async function POST(req: Request) {
 
         let generatedImageUrl: string | null = null;
 
-        // 2. Strategy 1: Fal.ai FLUX Dev (Highest 8K quality)
-        try {
-            if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
-                console.log('🚀 [Studio Pro 8K] Generating via Fal FLUX Dev...');
-                const falResult = await generateFalImage(enhancedPrompt, "square_hd");
-                if (falResult && falResult.imageUrl) {
-                    generatedImageUrl = falResult.imageUrl;
-                    console.log('✅ [Studio Pro 8K] Fal FLUX succeeded');
+        const hasUserImage = image_base64 && image_base64.length > 100;
+
+        // 2. Strategy 0: Flux Redux (If user uploaded an image to integrate)
+        if (hasUserImage) {
+            try {
+                if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
+                    console.log('🚀 [Studio Pro 8K] Integrating user image via Fal Flux Redux...');
+                    const reduxUrl = await generateFluxReduxImage(image_base64, enhancedPrompt);
+                    if (reduxUrl) {
+                        generatedImageUrl = reduxUrl;
+                        console.log('✅ [Studio Pro 8K] Flux Redux scene integration succeeded');
+                    }
                 }
+            } catch (reduxErr: any) {
+                console.warn(`⚠️ [Studio Pro 8K] Flux Redux failed: ${reduxErr.message}. Trying FLUX Dev...`);
             }
-        } catch (falErr: any) {
-            console.warn(`⚠️ [Studio Pro 8K] Fal.ai failed: ${falErr.message}`);
         }
 
-        // 3. Strategy 2: Replicate FLUX Schnell
+        // 3. Strategy 1: Fal.ai FLUX Dev (Highest 8K quality)
+        if (!generatedImageUrl) {
+            try {
+                if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
+                    console.log('🚀 [Studio Pro 8K] Generating via Fal FLUX Dev...');
+                    const falResult = await generateFalImage(enhancedPrompt, "square_hd");
+                    if (falResult && falResult.imageUrl) {
+                        generatedImageUrl = falResult.imageUrl;
+                        console.log('✅ [Studio Pro 8K] Fal FLUX succeeded');
+                    }
+                }
+            } catch (falErr: any) {
+                console.warn(`⚠️ [Studio Pro 8K] Fal.ai failed: ${falErr.message}`);
+            }
+        }
+
+        // 4. Strategy 2: Replicate FLUX Schnell
         if (!generatedImageUrl) {
             try {
                 console.log('🚀 [Studio Pro 8K] Fallback to Replicate FLUX...');
@@ -107,7 +127,7 @@ export async function POST(req: Request) {
             }
         }
 
-        // 4. Strategy 3: Pollinations AI
+        // 5. Strategy 3: Pollinations AI
         if (!generatedImageUrl) {
             console.warn('⚠️ [Studio Pro 8K] Fallback to Pollinations AI');
             const cleanPrompt = encodeURIComponent(enhancedPrompt.substring(0, 150));
@@ -115,17 +135,18 @@ export async function POST(req: Request) {
             generatedImageUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
         }
 
-        // 5. Composite logo watermark & headline text
+        // 6. Composite logo watermark & headline text
         let finalUrl = generatedImageUrl;
         try {
             finalUrl = await compositeProductAndLogo({
                 sceneImage: generatedImageUrl,
                 logoUrlOrBase64: brand?.logo_url || null,
-                productImageBase64: image_base64 || null,
+                productImageBase64: hasUserImage ? null : (image_base64 || null),
                 brandName: brand?.name,
                 primaryColor: brand?.primary_color,
                 headlineText: headlineText || null,
-                applyLogo: applyLogo !== false
+                applyLogo: applyLogo !== false,
+                applyText: applyText !== false
             });
         } catch (compErr) {
             console.warn('[Studio Pro 8K] Composer warning:', compErr);
