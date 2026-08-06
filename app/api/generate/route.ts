@@ -693,41 +693,34 @@ export async function POST(request: Request) {
                 const baseGeneratedUrl = await (async () => {
 
                     // ===== STRATEGY A: USER UPLOADED IMAGE → INTEGRATE INTO SCENE =====
-                    if (hasUserImage) {
+                    if (hasUserImage && (process.env.FAL_KEY || process.env.FAL_API_KEY)) {
                         const integrationPrompt = `Professional advertising photograph, ${basePrompt}, the brand logo/product is naturally integrated into the scene as a real 3D object, held by a person or displayed prominently as part of the composition, photorealistic 8k commercial photography, cinematic lighting, sharp focus, bokeh background`;
 
-                        // A1. TRY FLUX REDUX (best for reference-based image generation)
+                        // A1. TRY BRIA PRODUCT SHOT (Best for product-in-scene placement)
                         try {
-                            if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
-                                console.log(`🎨 [Redux] Integrating user image into scene via Flux Redux...`);
-                                const reduxResult = await generateFluxReduxImage(manual_image_base64, integrationPrompt);
-                                if (reduxResult) return reduxResult;
-                            }
+                            console.log(`🎨 [Bria] Integrating user image into scene via Bria Product Shot...`);
+                            const briaResult = await generateBriaProductShot(manual_image_base64, basePrompt);
+                            if (briaResult) return briaResult;
                         } catch (e: any) {
-                            console.warn(`⚠️ Flux Redux failed: ${e.message}. Trying IP-Adapter...`);
+                            console.warn(`⚠️ Bria Product Shot failed: ${e.message}. Trying Flux I2I...`);
                         }
 
-                        // A2. TRY IP-ADAPTER (alternative reference integration)
+                        // A2. TRY FLUX IMAGE-TO-IMAGE (strength 0.55 allows creating context around product)
                         try {
-                            if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
-                                console.log(`🎨 [IP-Adapter] Integrating user image into scene...`);
-                                const ipResult = await generateFluxIPAdapter(manual_image_base64, integrationPrompt, 0.65);
-                                if (ipResult) return ipResult;
-                            }
+                            console.log(`🎨 [Img2Img] Using image-to-image (strength 0.55)...`);
+                            const img2imgResult = await generateFluxImageToImage(manual_image_base64, integrationPrompt, 0.55);
+                            if (img2imgResult) return img2imgResult;
                         } catch (e: any) {
-                            console.warn(`⚠️ IP-Adapter failed: ${e.message}. Falling back to text-to-image...`);
+                            console.warn(`⚠️ Img2Img failed: ${e.message}. Trying Flux Redux...`);
                         }
 
-                        // A3. FALLBACK: Use image-to-image (Flux Dev img2img) with lower strength
+                        // A3. TRY FLUX REDUX
                         try {
-                            if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
-                                console.log(`🎨 [Img2Img] Using image-to-image with low strength...`);
-                                const { generateFluxImageToImage } = await import('@/lib/fal');
-                                const img2imgResult = await generateFluxImageToImage(manual_image_base64, integrationPrompt, 0.45);
-                                if (img2imgResult) return img2imgResult;
-                            }
+                            console.log(`🎨 [Redux] Integrating user image into scene via Flux Redux...`);
+                            const reduxResult = await generateFluxReduxImage(manual_image_base64, integrationPrompt);
+                            if (reduxResult) return reduxResult;
                         } catch (e: any) {
-                            console.warn(`⚠️ Img2Img failed: ${e.message}. Using standard text-to-image...`);
+                            console.warn(`⚠️ Flux Redux failed: ${e.message}. Falling back to text-to-image...`);
                         }
                     }
 

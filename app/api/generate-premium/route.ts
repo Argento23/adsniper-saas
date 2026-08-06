@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
-import { generateFalImage, generateFluxReduxImage } from '@/lib/fal';
+import { generateFalImage, generateFluxReduxImage, generateBriaProductShot, generateFluxImageToImage, generateFluxIPAdapter } from '@/lib/fal';
 import { generateReplicateImage } from '@/lib/replicate';
 import { compositeProductAndLogo } from '@/lib/composer';
 
@@ -81,19 +81,46 @@ export async function POST(req: Request) {
 
         const hasUserImage = image_base64 && image_base64.length > 100;
 
-        // 2. Strategy 0: Flux Redux (If user uploaded an image to integrate)
-        if (hasUserImage) {
+        // 2. Strategy 0: Product & Scene Integration (If user uploaded an image)
+        if (hasUserImage && (process.env.FAL_KEY || process.env.FAL_API_KEY)) {
+            // Stage A: Bria Product Shot (Native commercial product-in-scene generator)
             try {
-                if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
-                    console.log('🚀 [Studio Pro 8K] Integrating user image via Fal Flux Redux...');
+                console.log('🚀 [Studio Pro 8K] Stage A: Bria Product Shot scene integration...');
+                const briaUrl = await generateBriaProductShot(image_base64, scene_prompt || enhancedPrompt);
+                if (briaUrl) {
+                    generatedImageUrl = briaUrl;
+                    console.log('✅ [Studio Pro 8K] Bria Product Shot succeeded');
+                }
+            } catch (briaErr: any) {
+                console.warn(`⚠️ [Studio Pro 8K] Bria Product Shot failed: ${briaErr.message}. Trying Flux I2I...`);
+            }
+
+            // Stage B: Flux Image-to-Image (strength 0.55 allows creating background/people from prompt)
+            if (!generatedImageUrl) {
+                try {
+                    console.log('🚀 [Studio Pro 8K] Stage B: Flux Image-to-Image (strength 0.55)...');
+                    const i2iUrl = await generateFluxImageToImage(image_base64, enhancedPrompt, 0.55);
+                    if (i2iUrl) {
+                        generatedImageUrl = i2iUrl;
+                        console.log('✅ [Studio Pro 8K] Flux I2I succeeded');
+                    }
+                } catch (i2iErr: any) {
+                    console.warn(`⚠️ [Studio Pro 8K] Flux I2I failed: ${i2iErr.message}. Trying Flux Redux...`);
+                }
+            }
+
+            // Stage C: Flux Redux
+            if (!generatedImageUrl) {
+                try {
+                    console.log('🚀 [Studio Pro 8K] Stage C: Flux Redux...');
                     const reduxUrl = await generateFluxReduxImage(image_base64, enhancedPrompt);
                     if (reduxUrl) {
                         generatedImageUrl = reduxUrl;
-                        console.log('✅ [Studio Pro 8K] Flux Redux scene integration succeeded');
+                        console.log('✅ [Studio Pro 8K] Flux Redux succeeded');
                     }
+                } catch (reduxErr: any) {
+                    console.warn(`⚠️ [Studio Pro 8K] Flux Redux failed: ${reduxErr.message}`);
                 }
-            } catch (reduxErr: any) {
-                console.warn(`⚠️ [Studio Pro 8K] Flux Redux failed: ${reduxErr.message}. Trying FLUX Dev...`);
             }
         }
 
