@@ -140,8 +140,8 @@ export async function POST(req: Request) {
         try {
             finalUrl = await compositeProductAndLogo({
                 sceneImage: generatedImageUrl,
-                logoUrlOrBase64: brand?.logo_url || null,
-                productImageBase64: hasUserImage ? null : (image_base64 || null),
+                logoUrlOrBase64: hasUserImage ? null : (brand?.logo_url || null),
+                productImageBase64: null,
                 brandName: brand?.name,
                 primaryColor: brand?.primary_color,
                 headlineText: headlineText || null,

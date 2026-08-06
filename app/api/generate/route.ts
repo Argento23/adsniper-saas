@@ -768,8 +768,8 @@ export async function POST(request: Request) {
                 // POST-PROCESSING: Logo watermark & text overlay (only if enabled)
                 const finalImageUrl = await compositeProductAndLogo({
                     sceneImage: baseGeneratedUrl,
-                    logoUrlOrBase64: brand?.logo_url || null,
-                    productImageBase64: hasUserImage ? null : (manual_image_base64 || null), // Don't re-paste the image that was already integrated
+                    logoUrlOrBase64: hasUserImage ? null : (brand?.logo_url || null),
+                    productImageBase64: null,
                     brandName: brand?.name,
                     primaryColor: brand?.primary_color,
                     headlineText: headlineText || null,

@@ -107,7 +107,62 @@ export async function generateFalImage(
     const result = await runFalAsync('https://fal.run/fal-ai/flux/dev', {
         prompt, image_size: imageSize, num_inference_steps: 28, guidance_scale: 3.5, num_images: 1, enable_safety_checker: true
     });
-    return { imageUrl: result.images[0].url, seed: result.seed };
+/**
+ * Uploads a base64 image (data URI or raw base64) to FAL storage
+ * and returns a public HTTP URL that FAL AI models can consume.
+ */
+export async function uploadBase64ToFalStorage(imageBase64: string): Promise<string> {
+    if (imageBase64.startsWith('http://') || imageBase64.startsWith('https://')) {
+        return imageBase64;
+    }
+
+    const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
+    if (!apiKey) throw new Error('FAL_KEY not configured');
+
+    const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+    const buffer = Buffer.from(base64Data, 'base64');
+    const contentType = imageBase64.startsWith('data:image/jpeg') ? 'image/jpeg' : (imageBase64.startsWith('data:image/webp') ? 'image/webp' : 'image/png');
+    const fileName = contentType === 'image/jpeg' ? 'product.jpg' : 'product.png';
+
+    console.log('📤 [Fal Storage] Initiating image upload...');
+
+    const initiateResponse = await fetch('https://rest.fal.ai/storage/upload/initiate', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Key ${apiKey}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            file_name: fileName,
+            content_type: contentType
+        })
+    });
+
+    if (!initiateResponse.ok) {
+        const errText = await initiateResponse.text();
+        throw new Error(`FAL storage initiate failed (${initiateResponse.status}): ${errText}`);
+    }
+
+    const initiateData = await initiateResponse.json();
+    const { upload_url, file_url } = initiateData;
+
+    if (!upload_url || !file_url) {
+        throw new Error('FAL storage initiate: missing upload_url/file_url in response');
+    }
+
+    const putResponse = await fetch(upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: new Uint8Array(buffer)
+    });
+
+    if (!putResponse.ok) {
+        const errText = await putResponse.text();
+        throw new Error(`FAL storage PUT failed (${putResponse.status}): ${errText}`);
+    }
+
+    console.log(`✅ [Fal Storage] Image uploaded successfully: ${file_url}`);
+    return file_url;
 }
 
 export async function generateFluxReduxImage(
@@ -115,8 +170,9 @@ export async function generateFluxReduxImage(
     prompt: string,
     imageSize: "square_hd" | "portrait_hd" | "landscape_hd" = "square_hd"
 ): Promise<string> {
+    const httpUrl = referenceImageUrl.startsWith('data:') ? await uploadBase64ToFalStorage(referenceImageUrl) : referenceImageUrl;
     const result = await runFalAsync('https://fal.run/fal-ai/flux-1/dev/redux', {
-        image_url: referenceImageUrl, prompt, image_size: imageSize, num_inference_steps: 28, guidance_scale: 3.5
+        image_url: httpUrl, prompt, image_size: imageSize, num_inference_steps: 28, guidance_scale: 3.5
     });
     return result.images[0].url;
 }
@@ -133,6 +189,7 @@ export async function generateFluxIPAdapter(
     imageSize: "square_hd" | "square" | "portrait_4_3" | "landscape_4_3" = "square_hd"
 ): Promise<string> {
     console.log(`🎨 [Fal IP-Adapter] Integrating reference image into scene...`);
+    const httpUrl = referenceImageUrl.startsWith('data:') ? await uploadBase64ToFalStorage(referenceImageUrl) : referenceImageUrl;
     const result = await runFalAsync('https://fal.run/fal-ai/flux-general', {
         prompt,
         image_size: imageSize,
@@ -141,7 +198,7 @@ export async function generateFluxIPAdapter(
         num_images: 1,
         enable_safety_checker: true,
         ip_adapter: [{
-            ip_adapter_image_url: referenceImageUrl,
+            ip_adapter_image_url: httpUrl,
             ip_adapter_scale: ipAdapterScale,
             ip_adapter_model: "ip-adapter-faceid" // General subject adapter
         }]
@@ -152,10 +209,11 @@ export async function generateFluxIPAdapter(
 export async function generateFluxImageToImage(
     imageUrl: string,
     prompt: string,
-    strength: number = 0.35
+    strength: number = 0.45
 ): Promise<string> {
+    const httpUrl = imageUrl.startsWith('data:') ? await uploadBase64ToFalStorage(imageUrl) : imageUrl;
     const result = await runFalAsync('https://fal.run/fal-ai/flux/dev/image-to-image', {
-        image_url: imageUrl, prompt, strength, num_inference_steps: 28, guidance_scale: 3.5
+        image_url: httpUrl, prompt, strength, num_inference_steps: 28, guidance_scale: 3.5
     });
     return result.images[0].url;
 }
@@ -166,8 +224,10 @@ export async function generateFluxInpaint(
     prompt: string,
     strength: number = 0.85
 ): Promise<string> {
+    const httpUrl = imageUrl.startsWith('data:') ? await uploadBase64ToFalStorage(imageUrl) : imageUrl;
+    const httpMaskUrl = maskUrl.startsWith('data:') ? await uploadBase64ToFalStorage(maskUrl) : maskUrl;
     const result = await runFalAsync('https://fal.run/fal-ai/flux-general/inpainting', {
-        image_url: imageUrl, mask_url: maskUrl, prompt, strength, num_inference_steps: 24, guidance_scale: 3.5
+        image_url: httpUrl, mask_url: httpMaskUrl, prompt, strength, num_inference_steps: 24, guidance_scale: 3.5
     });
     return result.images[0].url;
 }
@@ -177,13 +237,12 @@ export async function generateBriaProductShot(
     imageBase64: string,
     sceneDescription: string
 ): Promise<string> {
+    const httpUrl = imageBase64.startsWith('data:') ? await uploadBase64ToFalStorage(imageBase64) : imageBase64;
     const result = await runFalAsync('https://fal.run/fal-ai/bria/product-shot', {
-        image_url: imageBase64,
+        image_url: httpUrl,
         scene_description: sceneDescription,
-        // v45.1: Use manual padding to give the AI space to draw hands/people around the product.
-        // "automatic" forces a static centered packshot.
         placement_type: "manual_padding",
-        padding: [300, 300, 300, 300], // [left, right, top, bottom] pixels for context
+        padding: [300, 300, 300, 300],
         optimize_description: true,
         num_results: 1
     });

@@ -57,45 +57,31 @@ export async function compositeProductAndLogo({
         let baseSharp = sharp(sceneBuffer).resize(1024, 1024, { fit: 'cover' });
         const overlays: sharp.OverlayOptions[] = [];
 
-        // Determine effective logo source (brand logo first, fallback to user uploaded product/logo image)
-        const effectiveLogo = logoUrlOrBase64 || productImageBase64;
-
-        // 1. Composite Discrete Brand Logo in corner ONLY IF applyLogo is true
-        if (applyLogo && effectiveLogo && effectiveLogo.length > 10) {
+        // 1. Composite Discrete Brand Logo in corner ONLY IF applyLogo is true and brand logo URL is provided
+        if (applyLogo && logoUrlOrBase64 && logoUrlOrBase64.length > 10) {
             try {
-                const rawLogoBuffer = await fetchImageBuffer(effectiveLogo);
-                // Sleek, compact logo badge: max 64x64
+                const rawLogoBuffer = await fetchImageBuffer(logoUrlOrBase64);
+                // Sleek, frameless logo watermark: max 80x80
                 const resizedLogo = await sharp(rawLogoBuffer)
-                    .resize(64, 64, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+                    .resize(80, 80, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
                     .png()
                     .toBuffer();
 
-                // Coordinates for logo badge in corner
+                // Coordinates for logo watermark in corner
                 let top = 24;
                 let left = 24; // Default top-left corner
-                if (logoPosition === 'top-right') { top = 24; left = 924; }
-                else if (logoPosition === 'bottom-left') { top = 924; left = 24; }
-                else if (logoPosition === 'bottom-right') { top = 924; left = 924; }
-
-                // Glassmorphic backing badge (76x76)
-                const badgeSvg = `
-                <svg width="76" height="76" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="0" y="0" width="76" height="76" rx="16" fill="rgba(15, 23, 42, 0.65)" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1.5" />
-                </svg>`;
-
-                const badgeBuffer = await sharp(Buffer.from(badgeSvg))
-                    .composite([{ input: resizedLogo, gravity: 'center' }])
-                    .png()
-                    .toBuffer();
+                if (logoPosition === 'top-right') { top = 24; left = 920; }
+                else if (logoPosition === 'bottom-left') { top = 920; left = 24; }
+                else if (logoPosition === 'bottom-right') { top = 920; left = 920; }
 
                 overlays.push({
-                    input: badgeBuffer,
+                    input: resizedLogo,
                     top,
                     left
                 });
 
             } catch (e) {
-                console.warn('[Composer] Could not process logo badge:', e);
+                console.warn('[Composer] Could not process logo watermark:', e);
             }
         }
 
