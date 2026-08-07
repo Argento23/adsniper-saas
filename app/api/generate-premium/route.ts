@@ -1,9 +1,9 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
-import { generateFalImage, generateFluxReduxImage, generateBriaProductShot, generateFluxImageToImage, generateFluxIPAdapter } from '@/lib/fal';
+import { generateFalImage, generateBriaProductShot, generateFluxIPAdapter } from '@/lib/fal';
 import { generateReplicateImage } from '@/lib/replicate';
-import { compositeProductAndLogo } from '@/lib/composer';
+import { compositeStudioPro } from '@/lib/composer';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,50 +81,38 @@ export async function POST(req: Request) {
 
         const hasUserImage = image_base64 && image_base64.length > 100;
 
-        // 2. Strategy 0: Product & Scene Integration (If user uploaded an image)
-        if (hasUserImage && (process.env.FAL_KEY || process.env.FAL_API_KEY)) {
-            // Stage A: Bria Product Shot (Native commercial product-in-scene generator)
+        console.log(`🎯 [Studio Pro 8K] User image: ${hasUserImage ? 'YES (will integrate into scene)' : 'NO'}`);
+
+        // 0. BRIA PRODUCT SHOT — purpose-built to keep the user's product AND blend it
+        // into any described scene. This is the closest to "perfect integration".
+        if (hasUserImage) {
             try {
-                console.log('🚀 [Studio Pro 8K] Stage A: Bria Product Shot scene integration...');
-                const briaUrl = await generateBriaProductShot(image_base64, scene_prompt || enhancedPrompt);
+                console.log('🎯 [Studio Pro 8K] Trying Bria Product Shot for seamless product-in-scene...');
+                const briaUrl = await generateBriaProductShot(image_base64, enhancedPrompt);
                 if (briaUrl) {
                     generatedImageUrl = briaUrl;
                     console.log('✅ [Studio Pro 8K] Bria Product Shot succeeded');
                 }
             } catch (briaErr: any) {
-                console.warn(`⚠️ [Studio Pro 8K] Bria Product Shot failed: ${briaErr.message}. Trying Flux I2I...`);
-            }
-
-            // Stage B: Flux Image-to-Image (strength 0.55 allows creating background/people from prompt)
-            if (!generatedImageUrl) {
-                try {
-                    console.log('🚀 [Studio Pro 8K] Stage B: Flux Image-to-Image (strength 0.55)...');
-                    const i2iUrl = await generateFluxImageToImage(image_base64, enhancedPrompt, 0.55);
-                    if (i2iUrl) {
-                        generatedImageUrl = i2iUrl;
-                        console.log('✅ [Studio Pro 8K] Flux I2I succeeded');
-                    }
-                } catch (i2iErr: any) {
-                    console.warn(`⚠️ [Studio Pro 8K] Flux I2I failed: ${i2iErr.message}. Trying Flux Redux...`);
-                }
-            }
-
-            // Stage C: Flux Redux
-            if (!generatedImageUrl) {
-                try {
-                    console.log('🚀 [Studio Pro 8K] Stage C: Flux Redux...');
-                    const reduxUrl = await generateFluxReduxImage(image_base64, enhancedPrompt);
-                    if (reduxUrl) {
-                        generatedImageUrl = reduxUrl;
-                        console.log('✅ [Studio Pro 8K] Flux Redux succeeded');
-                    }
-                } catch (reduxErr: any) {
-                    console.warn(`⚠️ [Studio Pro 8K] Flux Redux failed: ${reduxErr.message}`);
-                }
+                console.warn(`⚠️ [Studio Pro 8K] Bria failed, falling back to FLUX IP-Adapter: ${briaErr.message}`);
             }
         }
 
-        // 3. Strategy 1: Fal.ai FLUX Dev (Highest 8K quality)
+        // 0b. FLUX IP-ADAPTER — second-best image-guided integration
+        if (!generatedImageUrl && hasUserImage) {
+            try {
+                console.log('🎯 [Studio Pro 8K] Trying FLUX IP-Adapter for image-guided scene...');
+                const ipUrl = await generateFluxIPAdapter(image_base64, enhancedPrompt, 0.75, "square_hd");
+                if (ipUrl) {
+                    generatedImageUrl = ipUrl;
+                    console.log('✅ [Studio Pro 8K] FLUX IP-Adapter succeeded');
+                }
+            } catch (ipErr: any) {
+                console.warn(`⚠️ [Studio Pro 8K] FLUX IP-Adapter failed: ${ipErr.message}`);
+            }
+        }
+
+        // 1. FAL.AI FLUX DEV — high-quality text-to-image scene
         if (!generatedImageUrl) {
             try {
                 if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
@@ -140,7 +128,7 @@ export async function POST(req: Request) {
             }
         }
 
-        // 4. Strategy 2: Replicate FLUX Schnell
+        // 2. Replicate FLUX Schnell
         if (!generatedImageUrl) {
             try {
                 console.log('🚀 [Studio Pro 8K] Fallback to Replicate FLUX...');
@@ -154,7 +142,7 @@ export async function POST(req: Request) {
             }
         }
 
-        // 5. Strategy 3: Pollinations AI
+        // 3. Pollinations AI final fallback
         if (!generatedImageUrl) {
             console.warn('⚠️ [Studio Pro 8K] Fallback to Pollinations AI');
             const cleanPrompt = encodeURIComponent(enhancedPrompt.substring(0, 150));
@@ -162,21 +150,25 @@ export async function POST(req: Request) {
             generatedImageUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
         }
 
-        // 6. Composite logo watermark & headline text
+        // 4. STUDIO PRO overlay system — premium logo badge + price pill + CTA banner
         let finalUrl = generatedImageUrl;
         try {
-            finalUrl = await compositeProductAndLogo({
+            finalUrl = await compositeStudioPro({
                 sceneImage: generatedImageUrl,
-                logoUrlOrBase64: hasUserImage ? null : (brand?.logo_url || null),
-                productImageBase64: null,
+                logoUrlOrBase64: brand?.logo_url || null,
+                productImageBase64: null, // product already integrated into scene by Bria/IP-Adapter
                 brandName: brand?.name,
                 primaryColor: brand?.primary_color,
                 headlineText: headlineText || null,
+                ctaText: 'Pedí el tuyo por WhatsApp',
+                priceText: null,
                 applyLogo: applyLogo !== false,
-                applyText: applyText !== false
+                applyText: applyText !== false,
+                vignette: true,
+                grain: true
             });
         } catch (compErr) {
-            console.warn('[Studio Pro 8K] Composer warning:', compErr);
+            console.warn('[Studio Pro 8K] Composer Pro warning:', compErr);
         }
 
         return NextResponse.json({

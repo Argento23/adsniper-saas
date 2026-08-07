@@ -2,8 +2,13 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
 import { generateReplicateVideo } from '@/lib/replicate';
+import { generateFalKlingVideo } from '@/lib/fal';
+import { compositeStudioPro } from '@/lib/composer';
+import sharp from 'sharp';
 
 export const dynamic = 'force-dynamic';
+
+const VIDEO_LIMIT_MAX = 4;
 
 // Video limits per plan (monthly)
 const VIDEO_LIMITS: Record<string, number> = {
@@ -24,7 +29,7 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { imageUrl, prompt } = body;
+        const { imageUrl, prompt, brand } = body;
 
         if (!imageUrl) {
             return NextResponse.json({ error: 'Image URL is required' }, { status: 400 });
@@ -68,7 +73,43 @@ export async function POST(request: Request) {
 
         console.log(`🎬 API: Generating video for user ${userId} (${plan} plan, admin: ${isAdmin})`);
 
-        const videoUrl = await generateReplicateVideo(imageUrl, prompt || "Smooth cinematic motion, professional product showcase, subtle camera movement, high quality 4K");
+        // 1. Optionally enrich the input frame with the user's brand before sending it to the video model.
+        //    This guarantees the resulting video carries the user's branding throughout every frame.
+        let brandedImageUrl = imageUrl;
+        if (brand && (brand.logo_url || brand.name || brand.primary_color)) {
+            try {
+                console.log('🎨 [Video] Compositing brand onto input frame...');
+                const composed = await compositeStudioPro({
+                    sceneImage: imageUrl,
+                    logoUrlOrBase64: brand.logo_url || null,
+                    brandName: brand.name,
+                    primaryColor: brand.primary_color || '#10b981',
+                    headlineText: prompt || null,
+                    ctaText: 'Pedí el tuyo por WhatsApp',
+                    applyLogo: true,
+                    applyText: true,
+                    vignette: true,
+                    grain: false
+                });
+                brandedImageUrl = composed;
+                console.log('✅ [Video] Brand overlay applied to input frame');
+            } catch (compErr) {
+                console.warn('⚠️ [Video] Brand overlay failed, using original frame:', (compErr as Error).message);
+            }
+        }
+
+        // 2. Try Replicate Wan 2.5 first, then Fal.ai Kling as a fallback (premium-quality models).
+        let videoUrl: string;
+        try {
+            videoUrl = await generateReplicateVideo(brandedImageUrl, prompt || "Smooth cinematic motion, professional product showcase, subtle camera movement, high quality 4K");
+        } catch (repErr: any) {
+            console.warn(`⚠️ Replicate Wan 2.5 failed, falling back to Fal Kling: ${repErr.message}`);
+            try {
+                videoUrl = await generateFalKlingVideo(brandedImageUrl, prompt || "Smooth cinematic motion, professional product showcase, subtle camera movement, high quality 4K", "1:1");
+            } catch (klingErr: any) {
+                throw new Error(`Video generation failed (Replicate + Kling): ${repErr.message} / ${klingErr.message}`);
+            }
+        }
 
         // Track usage (admin skips tracking)
         if (!isAdmin) {

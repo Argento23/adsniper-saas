@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { FaSave, FaUser, FaPalette, FaCommentDots, FaGlobe, FaLink, FaImage } from 'react-icons/fa';
+import { useState, useEffect, useRef } from 'react';
+import { FaSave, FaUser, FaPalette, FaCommentDots, FaGlobe, FaLink, FaImage, FaBox, FaTimes, FaUpload, FaMagic } from 'react-icons/fa';
 
 interface BrandData {
     name: string;
@@ -10,6 +10,8 @@ interface BrandData {
     primary_color: string;
     tone: string;
     avatar: string;
+    product_photos: string[]; // base64 array of the user's product/brand photos
+    default_scene_prompt: string; // user's preferred default scene description
 }
 
 interface BrandSetupProps {
@@ -17,24 +19,64 @@ interface BrandSetupProps {
     existingData?: BrandData;
 }
 
+function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
 export default function BrandSetup({ onSave, existingData }: BrandSetupProps) {
     const [name, setName] = useState(existingData?.name || '');
     const [website, setWebsite] = useState(existingData?.website || '');
     const [logoUrl, setLogoUrl] = useState(existingData?.logo_url || '');
-    const [primaryColor, setPrimaryColor] = useState(existingData?.primary_color || '#10b981'); // Default Emerald
+    const [primaryColor, setPrimaryColor] = useState(existingData?.primary_color || '#10b981');
     const [tone, setTone] = useState(existingData?.tone || 'Profesional');
     const [avatar, setAvatar] = useState(existingData?.avatar || '');
+    const [productPhotos, setProductPhotos] = useState<string[]>(existingData?.product_photos || []);
+    const [defaultScenePrompt, setDefaultScenePrompt] = useState(existingData?.default_scene_prompt || '');
 
-    // Logo Preview State
     const [logoPreview, setLogoPreview] = useState('');
+    const [uploading, setUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         if (logoUrl) setLogoPreview(logoUrl);
     }, [logoUrl]);
 
+    const handleProductPhotosUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (!files.length) return;
+        setUploading(true);
+        try {
+            const base64s = await Promise.all(
+                files.map(f => fileToBase64(f))
+            );
+            setProductPhotos(prev => [...prev, ...base64s].slice(0, 12)); // cap at 12 photos
+        } finally {
+            setUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    const removePhoto = (idx: number) => {
+        setProductPhotos(prev => prev.filter((_, i) => i !== idx));
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const data = { name, website, logo_url: logoUrl, primary_color: primaryColor, tone, avatar };
+        const data: BrandData = {
+            name,
+            website,
+            logo_url: logoUrl,
+            primary_color: primaryColor,
+            tone,
+            avatar,
+            product_photos: productPhotos,
+            default_scene_prompt: defaultScenePrompt
+        };
         localStorage.setItem('AdSíntesisBrand', JSON.stringify(data));
         onSave(data);
     };
@@ -47,7 +89,7 @@ export default function BrandSetup({ onSave, existingData }: BrandSetupProps) {
 
                 <div className="text-center mb-8">
                     <h2 className="text-3xl font-bold text-white mb-2">Identidad de Marca & Avatar</h2>
-                    <p className="text-slate-400">Define los activos visuales y psicológicos de tu marca.</p>
+                    <p className="text-slate-400">Logo, fotos de producto y escena. La IA los integra en cada anuncio.</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-8">
@@ -118,6 +160,63 @@ export default function BrandSetup({ onSave, existingData }: BrandSetupProps) {
                                         />
                                         <span className="text-slate-300 font-mono text-sm uppercase">{primaryColor}</span>
                                     </div>
+                                </div>
+
+                                {/* NEW: Product Photos Upload */}
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-1 flex items-center gap-2">
+                                        <FaBox className="w-4 h-4 text-amber-400" /> Fotos del Producto (para integrar en escenas IA)
+                                    </label>
+                                    <p className="text-xs text-slate-500 mb-2">
+                                        Subí hasta 12 fotos. La IA las integra perfectamente en escenas realistas con Bria Product Shot + FLUX IP-Adapter.
+                                    </p>
+                                    <div className="grid grid-cols-3 gap-2 mb-2">
+                                        {productPhotos.map((src, idx) => (
+                                            <div key={idx} className="relative aspect-square rounded-lg overflow-hidden bg-slate-950 border border-slate-800 group">
+                                                <img src={src} alt={`Producto ${idx + 1}`} className="w-full h-full object-cover" />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removePhoto(idx)}
+                                                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                >
+                                                    <FaTimes className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {productPhotos.length < 12 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => fileInputRef.current?.click()}
+                                                disabled={uploading}
+                                                className="aspect-square rounded-lg border-2 border-dashed border-slate-700 hover:border-emerald-500 transition-colors flex flex-col items-center justify-center gap-1 text-slate-500 hover:text-emerald-400 disabled:opacity-50"
+                                            >
+                                                <FaUpload className="w-5 h-5" />
+                                                <span className="text-[10px]">{uploading ? 'Subiendo...' : 'Subir'}</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        multiple
+                                        onChange={handleProductPhotosUpload}
+                                        className="hidden"
+                                    />
+                                </div>
+
+                                {/* NEW: Default Scene Prompt */}
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-1 flex items-center gap-2">
+                                        <FaMagic className="w-4 h-4 text-pink-400" /> Escena por defecto (opcional)
+                                    </label>
+                                    <textarea
+                                        value={defaultScenePrompt}
+                                        onChange={(e) => setDefaultScenePrompt(e.target.value)}
+                                        placeholder="Ej: 'Mesa de mármol blanco con luz natural matutina, fondo desenfocado de cafetería moderna'. La IA lo usará por defecto si no especificás una escena."
+                                        rows={3}
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600 resize-none text-sm leading-relaxed"
+                                    />
                                 </div>
                             </div>
                         </div>

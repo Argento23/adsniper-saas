@@ -9,13 +9,13 @@ import UpgradeModal from './components/UpgradeModal';
 
 const MOCK_SCRIPTS = [
     {
-        title: "POV: DescubrÃ­ esto",
+        title: "POV: Descubrí esto",
         angle: "Storytelling",
         audio_suggestion: "Trending 'Oh No' remix",
         platform: "TikTok",
         sections: [
-            { type: "Gancho", content: "POV: EstÃ¡s por descubrir algo que cambia todo.", duration: "3s" },
-            { type: "Cuerpo", content: "(CÃ¡mara en mano) Miren lo que acabo de encontrar. La diferencia se nota desde el primer uso.", duration: "12s" },
+            { type: "Gancho", content: "POV: Estás por descubrir algo que cambia todo.", duration: "3s" },
+            { type: "Cuerpo", content: "(Cámara en mano) Miren lo que acabo de encontrar. La diferencia se nota desde el primer uso.", duration: "12s" },
             { type: "CTA", content: "Link en bio. Quedan pocas unidades.", duration: "4s" }
         ]
     },
@@ -25,31 +25,31 @@ const MOCK_SCRIPTS = [
         audio_suggestion: "Lo-fi study beats",
         platform: "Reels",
         sections: [
-            { type: "Gancho", content: "3 formas de usarlo que no conocÃ­as ðŸ‘‡", duration: "3s" },
+            { type: "Gancho", content: "3 formas de usarlo que no conocías 👇", duration: "3s" },
             { type: "Cuerpo", content: "Tip 1: Uso principal. Tip 2: Hack creativo. Tip 3: El secreto que nadie te cuenta.", duration: "15s" },
-            { type: "CTA", content: "GuardÃ¡ este video y comprÃ¡ en el link de la bio.", duration: "3s" }
+            { type: "CTA", content: "Guardá este video y comprá en el link de la bio.", duration: "3s" }
         ]
     },
     {
-        title: "Antes vs DespuÃ©s",
-        angle: "TransformaciÃ³n",
+        title: "Antes vs Después",
+        angle: "Transformación",
         audio_suggestion: "Dramatic reveal sound",
         platform: "TikTok",
         sections: [
-            { type: "Gancho", content: "ANTES vs DESPUÃ‰S ðŸ˜±", duration: "3s" },
-            { type: "Cuerpo", content: "(Split screen) El cambio es increÃ­ble. La transformaciÃ³n habla sola.", duration: "10s" },
-            { type: "CTA", content: "ComentÃ¡ 'ðŸ”¥' y te mando el link.", duration: "3s" }
+            { type: "Gancho", content: "ANTES vs DESPUÉS 😱", duration: "3s" },
+            { type: "Cuerpo", content: "(Split screen) El cambio es increíble. La transformación habla sola.", duration: "10s" },
+            { type: "CTA", content: "Comentá '🔥' y te mando el link.", duration: "3s" }
         ]
     },
     {
-        title: "Cosas que no sabÃ­as",
+        title: "Cosas que no sabías",
         angle: "Educativo Viral",
-        audio_suggestion: "Audio 'Cosas que no sabÃ­as'",
+        audio_suggestion: "Audio 'Cosas que no sabías'",
         platform: "Shorts",
         sections: [
-            { type: "Gancho", content: "Cosas que no sabÃ­as sobre este producto:", duration: "2s" },
+            { type: "Gancho", content: "Cosas que no sabías sobre este producto:", duration: "2s" },
             { type: "Cuerpo", content: "1. Beneficio clave. 2. Lo usan profesionales. 3. Dato sorprendente. *Green screen*", duration: "12s" },
-            { type: "CTA", content: "Seguime para mÃ¡s y link en bio.", duration: "3s" }
+            { type: "CTA", content: "Seguime para más y link en bio.", duration: "3s" }
         ]
     }
 ];
@@ -58,7 +58,7 @@ const MOCK_ADS = [
     {
         type: "Viral Hook",
         headline: "Stop Wasting Money on Bad Ads",
-        primary_text: "This simple tool saved me hours of work. The results are insane! ðŸš€ #GrowthHacking #Marketing",
+        primary_text: "This simple tool saved me hours of work. The results are insane! 🚀 #GrowthHacking #Marketing",
         generated_image_url: "https://images.unsplash.com/photo-1533750516457-a7f992034fec?auto=format&fit=crop&w=800&q=80"
     },
     {
@@ -70,7 +70,7 @@ const MOCK_ADS = [
     {
         type: "Social Proof",
         headline: "Everyone is Talking About This",
-        primary_text: "Join thousands of satisfied users who have transformed their business. Don't miss out! â­â­â­â­â­",
+        primary_text: "Join thousands of satisfied users who have transformed their business. Don't miss out! ⭐⭐⭐⭐⭐",
         generated_image_url: "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=800&q=80"
     }
 ];
@@ -651,7 +651,7 @@ export default function Dashboard() {
 
             const data = await res.json();
             if (data.VERSION_MARKER) {
-                console.log(`ðŸš€ Backend Version: ${data.VERSION_MARKER}`);
+                console.log(`🚀 Backend Version: ${data.VERSION_MARKER}`);
             }
 
 

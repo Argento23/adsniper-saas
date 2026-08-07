@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
 import { generateFalKlingVideo } from '@/lib/fal';
+import { compositeStudioPro } from '@/lib/composer';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,18 +62,41 @@ export async function POST(req: Request) {
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const body = await req.json();
-        const { imageUrl, prompt, aspectRatio = "1:1" } = body;
+        const { imageUrl, prompt, aspectRatio = "1:1", brand } = body;
 
         if (!imageUrl) return NextResponse.json({ error: 'Falta la imagen del producto' }, { status: 400 });
 
         // Credit check (ADMIN BYPASS for v13 Rescue)
-        const { canProceed, isAdmin, meta, clerk } = await consumePremiumCredit(userId);
+        const { canProceed, isAdmin, meta } = await consumePremiumCredit(userId);
         if (!canProceed && !isAdmin) return NextResponse.json({ error: 'NO_PREMIUM_CREDITS' }, { status: 403 });
 
         // Enhance prompt for video
         const enhancedPrompt = await enhanceVideoPrompt(prompt || "Product showcase, professional advertising video");
 
         console.log(`🎬 Premium Video: Generating for ${userId} with prompt: ${enhancedPrompt}`);
+
+        // Composite brand overlay onto input frame so every generated frame carries the brand.
+        let brandedImageUrl = imageUrl;
+        if (brand && (brand.logo_url || brand.name || brand.primary_color)) {
+            try {
+                console.log('🎨 [Premium Video] Compositing brand onto input frame...');
+                brandedImageUrl = await compositeStudioPro({
+                    sceneImage: imageUrl,
+                    logoUrlOrBase64: brand.logo_url || null,
+                    brandName: brand.name,
+                    primaryColor: brand.primary_color || '#10b981',
+                    headlineText: prompt || null,
+                    ctaText: 'Pedí el tuyo por WhatsApp',
+                    applyLogo: true,
+                    applyText: true,
+                    vignette: true,
+                    grain: false
+                });
+                console.log('✅ [Premium Video] Brand overlay applied to input frame');
+            } catch (compErr) {
+                console.warn('⚠️ [Premium Video] Brand overlay failed, using original frame:', (compErr as Error).message);
+            }
+        }
 
         // Generate Kling Video via Fal.ai
         let videoUrl: string;
@@ -82,7 +106,7 @@ export async function POST(req: Request) {
             console.log(`[Premium Video API v21] MOCK MODE ACTIVE - Returning placeholder video`);
             videoUrl = "https://cdn.pixabay.com/video/2016/10/11/5826-185790892_tiny.mp4"; // Generic high-end video placeholder
         } else {
-            videoUrl = await generateFalKlingVideo(imageUrl, enhancedPrompt, aspectRatio as any);
+            videoUrl = await generateFalKlingVideo(brandedImageUrl, enhancedPrompt, aspectRatio as any);
         }
 
         return NextResponse.json({

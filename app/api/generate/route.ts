@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
 import { generateReplicateImage } from '@/lib/replicate';
-import { generateFalImage, generateBriaProductShot, generateFluxReduxImage, generateFluxIPAdapter } from '@/lib/fal';
+import { generateFalImage, generateBriaProductShot, generateFluxIPAdapter } from '@/lib/fal';
 import { compositeProductAndLogo } from '@/lib/composer';
 import { checkAndTrackUsage } from '@/lib/usageTracker';
 
@@ -223,14 +223,14 @@ async function generateIdeogramImage(prompt: string, referenceImage: string | nu
 // GROQ API GENERATOR (Llama 3 70B) - Professional Copy & Prompts
 async function generateGroqAds(productName: string, desc: string, count: number, lang: string = 'es') {
     const apiKey = process.env.GROQ_API_KEY;
-    console.log(`ðŸ”‘ Groq Check: Key Present? ${!!apiKey && apiKey.length > 5}`);
+    console.log(`🔑 Groq Check: Key Present? ${!!apiKey && apiKey.length > 5}`);
 
     if (!apiKey || apiKey.length < 10) {
-        console.warn("âš ï¸ Groq Key missing or too short.");
+        console.warn("⚠️ Groq Key missing or too short.");
         return [{ type: "ERROR", headline: "GROQ KEY MISSING IN ENV", primary_text: "Check .env.local", image_prompt: "error" }];
     }
     try {
-        console.log(`ðŸ¦™ Generating ${count} ads with Llama 3 (70b-8192) on Groq...`);
+        console.log(`🦙 Generating ${count} ads with Llama 3 (70b-8192) on Groq...`);
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -280,7 +280,7 @@ RETURN ONLY VALID JSON with this EXACT structure:
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error(`âŒ Groq API Error: ${response.status} ${response.statusText}`, errorText);
+            console.error(`❌ Groq API Error: ${response.status} ${response.statusText}`, errorText);
             throw new Error(`Groq API Error: ${response.status} ${response.statusText} - ${errorText}`);
         }
 
@@ -298,18 +298,18 @@ RETURN ONLY VALID JSON with this EXACT structure:
                 try {
                     parsed = JSON.parse(match[0]);
                 } catch (e2) {
-                    console.error("âŒ JSON Parse Failed (Regex):", content);
+                    console.error("❌ JSON Parse Failed (Regex):", content);
                     return null;
                 }
             } else {
-                console.error("âŒ No JSON found in response:", content);
+                console.error("❌ No JSON found in response:", content);
                 return null;
             }
         }
 
         const ads = parsed.ads || parsed;
         if (!Array.isArray(ads)) {
-            console.error("âŒ Groq returned invalid structure (not array):", ads);
+            console.error("❌ Groq returned invalid structure (not array):", ads);
             throw new Error(`Invalid JSON Structure: ${JSON.stringify(ads).substring(0, 50)}...`);
         }
         return ads;
@@ -323,14 +323,14 @@ RETURN ONLY VALID JSON with this EXACT structure:
 async function generateGroqScripts(productName: string, desc: string, lang: string = 'es') {
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-        console.warn("âš ï¸ No GROQ_API_KEY for scripts, using fallback.");
+        console.warn("⚠️ No GROQ_API_KEY for scripts, using fallback.");
         return generateFallbackScripts(productName, desc, lang);
     }
 
     const isEs = lang === 'es' || lang.includes('es');
 
     try {
-        console.log(`ðŸŽ¬ Generating AI video scripts with Groq for: ${productName}`);
+        console.log(`🎬 Generating AI video scripts with Groq for: ${productName}`);
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -370,13 +370,13 @@ RULES:
         - ${isEs ? 'Write entirely in SPANISH' : 'Write entirely in ENGLISH'}
         - Make scripts that a creator could actually film and post today
         - Include timing for each section
-            - DO NOT use generic filler like "solucionar tu problema" â€” be SPECIFIC about what the product does
+            - DO NOT use generic filler like "solucionar tu problema" — be SPECIFIC about what the product does
 
 SCRIPT VARIETY(use exactly these 4 angles):
-        1. POV / Storytelling â€” first person narrative showing the problem â†’ discovery â†’ result
-        2. Tutorial / How - To â€” quick demo showing the product in use with tips
-3. Before / After or Transformation â€” dramatic visual comparison
-        4. Trend Hijack â€” adapt a current social media trend format to showcase the product
+        1. POV / Storytelling — first person narrative showing the problem → discovery → result
+        2. Tutorial / How - To — quick demo showing the product in use with tips
+3. Before / After or Transformation — dramatic visual comparison
+        4. Trend Hijack — adapt a current social media trend format to showcase the product
 
 NO MARKDOWN.ONLY JSON.`
                     },
@@ -407,13 +407,13 @@ NO MARKDOWN.ONLY JSON.`
 
         const scripts = parsed.scripts || parsed;
         if (Array.isArray(scripts) && scripts.length > 0) {
-            console.log(`âœ… Generated ${scripts.length} AI video scripts`);
+            console.log(`✅ Generated ${scripts.length} AI video scripts`);
             return scripts;
         }
         throw new Error("Empty scripts array");
 
     } catch (error: any) {
-        console.error("âš ï¸ Groq Scripts Failed:", error.message);
+        console.error("⚠️ Groq Scripts Failed:", error.message);
         return generateFallbackScripts(productName, desc, lang);
     }
 }
@@ -443,13 +443,13 @@ function generateFallbackScripts(productName: string, desc: string, lang: string
     if (isEs) {
         return [
             {
-                title: "POV: DescubrÃ­ esto",
+                title: "POV: Descubrí esto",
                 angle: "Storytelling",
                 audio_suggestion: "Trending 'Oh No' remix",
                 platform: "TikTok",
                 sections: [
-                    { type: "Gancho", content: `POV: EstÃ¡s por descubrir ${productName} y tu vida cambia.`, duration: "3s" },
-                    { type: "Cuerpo", content: `(CÃ¡mara en mano) Miren lo que acabo de encontrar.${benefit}. No puedo creer que no lo conocÃ­a antes.La diferencia se nota desde el primer uso.`, duration: "12s" },
+                    { type: "Gancho", content: `POV: Estás por descubrir ${productName} y tu vida cambia.`, duration: "3s" },
+                    { type: "Cuerpo", content: `(Cámara en mano) Miren lo que acabo de encontrar.${benefit}. No puedo creer que no lo conocía antes.La diferencia se nota desde el primer uso.`, duration: "12s" },
                     { type: "CTA", content: `Link en bio.Quedan pocas unidades de ${productName}.`, duration: "4s" }
                 ]
             },
@@ -459,31 +459,31 @@ function generateFallbackScripts(productName: string, desc: string, lang: string
                 audio_suggestion: "Lo-fi study beats",
                 platform: "Reels",
                 sections: [
-                    { type: "Gancho", content: `3 formas de usar ${productName} que no conocÃ­as ðŸ‘‡`, duration: "3s" },
+                    { type: "Gancho", content: `3 formas de usar ${productName} que no conocías 👇`, duration: "3s" },
                     { type: "Cuerpo", content: `Tip 1: (mostrar uso principal). Tip 2: (uso creativo). Tip 3: ${benefit}. * Texto en pantalla con cada tip * `, duration: "15s" },
-                    { type: "CTA", content: "GuardÃ¡ este video y comprÃ¡ en el link de la bio.", duration: "3s" }
+                    { type: "CTA", content: "Guardá este video y comprá en el link de la bio.", duration: "3s" }
                 ]
             },
             {
-                title: "Antes vs DespuÃ©s",
-                angle: "TransformaciÃ³n",
+                title: "Antes vs Después",
+                angle: "Transformación",
                 audio_suggestion: "Dramatic reveal sound",
                 platform: "TikTok",
                 sections: [
-                    { type: "Gancho", content: `ANTES vs DESPUÃ‰S de usar ${productName} ðŸ˜±`, duration: "3s" },
-                    { type: "Cuerpo", content: `(Split screen) Antes: problema comÃºn.DespuÃ©s: ${benefit}. La transformaciÃ³n habla sola.`, duration: "10s" },
-                    { type: "CTA", content: "ComentÃ¡ 'ðŸ”¥' y te mando el link.", duration: "3s" }
+                    { type: "Gancho", content: `ANTES vs DESPUÉS de usar ${productName} 😱`, duration: "3s" },
+                    { type: "Cuerpo", content: `(Split screen) Antes: problema común.Después: ${benefit}. La transformación habla sola.`, duration: "10s" },
+                    { type: "CTA", content: "Comentá '🔥' y te mando el link.", duration: "3s" }
                 ]
             },
             {
-                title: "Trend: Cosas que no sabÃ­as",
+                title: "Trend: Cosas que no sabías",
                 angle: "Educativo Viral",
-                audio_suggestion: "Audio 'Cosas que no sabÃ­as'",
+                audio_suggestion: "Audio 'Cosas que no sabías'",
                 platform: "Shorts",
                 sections: [
-                    { type: "Gancho", content: `Cosas que no sabÃ­as sobre ${productName}: `, duration: "2s" },
-                    { type: "Cuerpo", content: `1. ${benefit}.2. Lo usan mÃ¡s de X profesionales. 3.(dato sorprendente del rubro). * Green screen con imÃ¡genes * `, duration: "12s" },
-                    { type: "CTA", content: "Seguime para mÃ¡s y el link estÃ¡ en la bio.", duration: "3s" }
+                    { type: "Gancho", content: `Cosas que no sabías sobre ${productName}: `, duration: "2s" },
+                    { type: "Cuerpo", content: `1. ${benefit}.2. Lo usan más de X profesionales. 3.(dato sorprendente del rubro). * Green screen con imágenes * `, duration: "12s" },
+                    { type: "CTA", content: "Seguime para más y el link está en la bio.", duration: "3s" }
                 ]
             }
         ];
@@ -506,7 +506,7 @@ function generateFallbackScripts(productName: string, desc: string, lang: string
                 audio_suggestion: "Lo-fi study beats",
                 platform: "Reels",
                 sections: [
-                    { type: "Hook", content: `3 ways to use ${productName} you didn't know ðŸ‘‡`, duration: "3s" },
+                    { type: "Hook", content: `3 ways to use ${productName} you didn't know 👇`, duration: "3s" },
                     { type: "Body", content: `Tip 1: (show main use). Tip 2: (creative hack). Tip 3: ${benefit}. *On-screen text for each tip*`, duration: "15s" },
                     { type: "CTA", content: "Save this and shop at the link in bio.", duration: "3s" }
                 ]
@@ -517,9 +517,9 @@ function generateFallbackScripts(productName: string, desc: string, lang: string
                 audio_suggestion: "Dramatic reveal sound",
                 platform: "TikTok",
                 sections: [
-                    { type: "Hook", content: `BEFORE vs AFTER using ${productName} ðŸ˜±`, duration: "3s" },
+                    { type: "Hook", content: `BEFORE vs AFTER using ${productName} 😱`, duration: "3s" },
                     { type: "Body", content: `(Split screen) Before: common problem. After: ${benefit}. The transformation speaks for itself.`, duration: "10s" },
-                    { type: "CTA", content: "Comment 'ðŸ”¥' and I'll send the link.", duration: "3s" }
+                    { type: "CTA", content: "Comment '🔥' and I'll send the link.", duration: "3s" }
                 ]
             },
             {
@@ -575,7 +575,7 @@ export async function POST(request: Request) {
         // DEDUCT CREDIT - MOVED TO END (ONLY ON SUCCESS)
         let remainingCredits = credits;
 
-        console.log(`ðŸŽ¯ Generating ${count} ads for: ${productUrl || manual_title} (Lang: ${language})`);
+        console.log(`🎯 Generating ${count} ads for: ${productUrl || manual_title} (Lang: ${language})`);
 
         let scrapedTitle = manual_title || 'Producto';
         let scrapedDesc = manual_description || '';
@@ -623,7 +623,7 @@ export async function POST(request: Request) {
                 data = await response.json();
                 // PARANOID CHECK
                 if (!data || !data.ads || !Array.isArray(data.ads) || data.ads.length === 0) {
-                    console.warn("âš ï¸ n8n returned empty/invalid ads. Triggering LOCAL FALLBACK.");
+                    console.warn("⚠️ n8n returned empty/invalid ads. Triggering LOCAL FALLBACK.");
                     throw new Error("n8n returned empty ads");
                 }
             } else {
@@ -631,7 +631,7 @@ export async function POST(request: Request) {
             }
 
         } catch (n8nError) {
-            console.error('âš ï¸ n8n Failed/Empty, using SMART LOCAL FALLBACK:', n8nError);
+            console.error('⚠️ n8n Failed/Empty, using SMART LOCAL FALLBACK:', n8nError);
             // We use count here to generate ALL ads locally
             data = {
                 ads: [], // Leave empty to trigger GROQ HYBRID FILL below
@@ -650,15 +650,15 @@ export async function POST(request: Request) {
             if (groqAds && Array.isArray(groqAds) && groqAds.length > 0) {
                 // Check for ERROR object
                 if (groqAds[0].type === "ERROR") {
-                    console.log("âš ï¸ Groq Failed with Error, showing in UI.");
+                    console.log("⚠️ Groq Failed with Error, showing in UI.");
                     data.ads = [...data.ads, ...groqAds]; // SHOW ERROR IN UI
                 } else {
-                    console.log(`âœ… Specific Llama 3 ads generated: ${groqAds.length}`);
+                    console.log(`✅ Specific Llama 3 ads generated: ${groqAds.length}`);
                     data.ads = [...data.ads, ...groqAds];
                 }
             } else {
                 const needed = count - data.ads.length;
-                console.log(`âš ï¸ Falling back to Local Templates for ${needed} ads.`);
+                console.log(`⚠️ Falling back to Local Templates for ${needed} ads.`);
                 const extraAds = generateLocalAds(scrapedTitle, scrapedDesc, scrapedImage, manual_image_prompt, needed, language);
                 // Add DEBUG Marker
                 extraAds[0].headline = "DEBUG: LOCAL FALLBACK TRIGGERED";
@@ -692,39 +692,26 @@ export async function POST(request: Request) {
 
                 const baseGeneratedUrl = await (async () => {
 
-                    // ===== STRATEGY A: USER UPLOADED IMAGE → INTEGRATE INTO SCENE =====
-                    if (hasUserImage && (process.env.FAL_KEY || process.env.FAL_API_KEY)) {
-                        const integrationPrompt = `Professional advertising photograph, ${basePrompt}, the brand logo/product is naturally integrated into the scene as a real 3D object, held by a person or displayed prominently as part of the composition, photorealistic 8k commercial photography, cinematic lighting, sharp focus, bokeh background`;
-
-                        // A1. TRY BRIA PRODUCT SHOT (Best for product-in-scene placement)
+                    // B0. TRY BRIA PRODUCT SHOT (only when user uploaded a real product image)
+                    // Bria is purpose-built to keep the product intact while placing it into any scene.
+                    if (hasUserImage) {
                         try {
-                            console.log(`🎨 [Bria] Integrating user image into scene via Bria Product Shot...`);
-                            const briaResult = await generateBriaProductShot(manual_image_base64, basePrompt);
-                            if (briaResult) return briaResult;
-                        } catch (e: any) {
-                            console.warn(`⚠️ Bria Product Shot failed: ${e.message}. Trying Flux I2I...`);
+                            console.log(`🎯 [Standard] Trying Bria Product Shot for: ${scrapedTitle}`);
+                            const briaUrl = await generateBriaProductShot(manual_image_base64, basePrompt || scrapedTitle);
+                            if (briaUrl) return briaUrl;
+                        } catch (e) {
+                            console.warn(`⚠️ Bria failed, falling back to FLUX IP-Adapter: ${(e as Error).message}`);
                         }
 
-                        // A2. TRY FLUX IMAGE-TO-IMAGE (strength 0.55 allows creating context around product)
+                        // B0b. TRY FLUX IP-ADAPTER (image-guided scene generation)
                         try {
-                            console.log(`🎨 [Img2Img] Using image-to-image (strength 0.55)...`);
-                            const img2imgResult = await generateFluxImageToImage(manual_image_base64, integrationPrompt, 0.55);
-                            if (img2imgResult) return img2imgResult;
-                        } catch (e: any) {
-                            console.warn(`⚠️ Img2Img failed: ${e.message}. Trying Flux Redux...`);
-                        }
-
-                        // A3. TRY FLUX REDUX
-                        try {
-                            console.log(`🎨 [Redux] Integrating user image into scene via Flux Redux...`);
-                            const reduxResult = await generateFluxReduxImage(manual_image_base64, integrationPrompt);
-                            if (reduxResult) return reduxResult;
-                        } catch (e: any) {
-                            console.warn(`⚠️ Flux Redux failed: ${e.message}. Falling back to text-to-image...`);
+                            console.log(`🎯 [Standard] Trying FLUX IP-Adapter for: ${scrapedTitle}`);
+                            const ipUrl = await generateFluxIPAdapter(manual_image_base64, fullPrompt, 0.65, "square_hd");
+                            if (ipUrl) return ipUrl;
+                        } catch (e) {
+                            console.warn(`⚠️ IP-Adapter failed, falling back to text-to-image: ${(e as Error).message}`);
                         }
                     }
-
-                    // ===== STRATEGY B: NO USER IMAGE → STANDARD TEXT-TO-IMAGE =====
 
                     // B1. TRY FAL.AI (FLUX DEV)
                     try {
@@ -758,14 +745,17 @@ export async function POST(request: Request) {
                     return `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
                 })();
 
-                // POST-PROCESSING: Logo watermark & text overlay (only if enabled)
+                // POST-PROCESSING: product card + logo badge + brand banner overlay
+                const productPrice = ad.price || (manual_description?.match(/\$\s?[\d,.]+/)?.[0]) || '';
                 const finalImageUrl = await compositeProductAndLogo({
                     sceneImage: baseGeneratedUrl,
-                    logoUrlOrBase64: hasUserImage ? null : (brand?.logo_url || null),
-                    productImageBase64: null,
+                    logoUrlOrBase64: brand?.logo_url || null,
+                    productImageBase64: hasUserImage ? manual_image_base64 : null,
                     brandName: brand?.name,
                     primaryColor: brand?.primary_color,
-                    headlineText: headlineText || null,
+                    headlineText: headlineText || ad.headline || null,
+                    ctaText: ad.cta || 'Pedí el tuyo por WhatsApp',
+                    priceText: productPrice || null,
                     applyLogo: applyLogo !== false,
                     applyText: applyText !== false
                 });
