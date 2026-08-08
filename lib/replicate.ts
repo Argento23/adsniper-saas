@@ -112,6 +112,122 @@ export async function generateReplicateImage(
     }
 }
 
+/**
+ * Generate 8K Photorealistic Commercial Image via Replicate FLUX Dev
+ */
+export async function generateReplicateFluxDev(
+    prompt: string,
+    width: number = 1024,
+    height: number = 1024
+): Promise<ReplicateImageResponse> {
+    const apiKey = process.env.REPLICATE_API_KEY || process.env.REPLICATE_API_TOKEN;
+    if (!apiKey) throw new Error('REPLICATE_API_KEY not configured');
+
+    console.log(`🚀 Replicate: Generating 8K Commercial render with FLUX Dev...`);
+    const response = await fetch('https://api.replicate.com/v1/models/black-forest-labs/flux-dev/predictions', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Token ${apiKey}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'wait'
+        },
+        body: JSON.stringify({
+            input: {
+                prompt,
+                aspect_ratio: '1:1',
+                output_format: 'jpg',
+                output_quality: 92,
+                guidance: 3.5,
+                num_inference_steps: 28
+            }
+        })
+    });
+
+    if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Replicate FLUX Dev failed (${response.status}): ${errText}`);
+    }
+
+    let prediction = await response.json();
+    if (prediction.status === 'succeeded' && prediction.output && prediction.output[0]) {
+        return { imageUrl: prediction.output[0], cost: 0.025 };
+    }
+
+    // Poll if needed
+    let attempts = 0;
+    while (attempts < 30) {
+        await new Promise(r => setTimeout(r, 1500));
+        const statusRes = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+            headers: { 'Authorization': `Token ${apiKey}` }
+        });
+        prediction = await statusRes.json();
+        if (prediction.status === 'succeeded' && prediction.output && prediction.output[0]) {
+            return { imageUrl: prediction.output[0], cost: 0.025 };
+        }
+        if (prediction.status === 'failed') {
+            throw new Error(`Replicate FLUX Dev failed: ${prediction.error}`);
+        }
+        attempts++;
+    }
+    throw new Error('Replicate FLUX Dev timeout');
+}
+
+/**
+ * Generate 3D Scene Synthesis guided by an uploaded logo via Replicate FLUX Redux
+ */
+export async function generateReplicateFluxRedux(
+    referenceImageUrl: string,
+    prompt: string
+): Promise<string | null> {
+    const apiKey = process.env.REPLICATE_API_KEY || process.env.REPLICATE_API_TOKEN;
+    if (!apiKey) return null;
+
+    try {
+        console.log(`🎨 Replicate: Synthesizing 3D Scene guided by logo via FLUX Redux...`);
+        const response = await fetch('https://api.replicate.com/v1/models/black-forest-labs/flux-redux-dev/predictions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Token ${apiKey}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'wait'
+            },
+            body: JSON.stringify({
+                input: {
+                    redux_image: referenceImageUrl,
+                    aspect_ratio: '1:1',
+                    output_format: 'jpg',
+                    output_quality: 90
+                }
+            })
+        });
+
+        if (!response.ok) return null;
+
+        let prediction = await response.json();
+        if (prediction.status === 'succeeded' && prediction.output && prediction.output[0]) {
+            return prediction.output[0];
+        }
+
+        let attempts = 0;
+        while (attempts < 25) {
+            await new Promise(r => setTimeout(r, 1500));
+            const statusRes = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+                headers: { 'Authorization': `Token ${apiKey}` }
+            });
+            prediction = await statusRes.json();
+            if (prediction.status === 'succeeded' && prediction.output && prediction.output[0]) {
+                return prediction.output[0];
+            }
+            if (prediction.status === 'failed') break;
+            attempts++;
+        }
+        return null;
+    } catch (err) {
+        console.warn('⚠️ FLUX Redux on Replicate error:', err);
+        return null;
+    }
+}
+
 // Video generation using Wan 2.5 image-to-video (modern, reliable)
 export async function generateReplicateVideo(
     imageUrl: string,
@@ -148,7 +264,7 @@ export async function generateReplicateVideo(
             if (response.status === 429 && !isRetry) {
                 console.warn(`⏳ Replicate Limit (429) hit for Video. Waiting 10s...`);
                 await new Promise(r => setTimeout(r, 10500));
-                return generateReplicateVideo(imageUrl, true);
+                return generateReplicateVideo(imageUrl, prompt, true);
             }
             const errorText = await response.text();
             throw new Error(`Replicate Video API error (${response.status}): ${errorText}`);

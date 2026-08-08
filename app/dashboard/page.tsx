@@ -997,15 +997,50 @@ export default function Dashboard() {
 
                                             <div>
                                                 <label className="text-xs font-bold text-purple-300 uppercase ml-2 mb-1 block flex items-center gap-2">
-                                                    <FaMagic /> 2. Escenario Deseado
+                                                    <FaMagic /> 2. Escenario Deseado (Integración Logo/Producto 3D)
                                                 </label>
                                                 <input
                                                     type="text"
                                                     value={manualVisual}
                                                     onChange={(e) => setManualVisual(e.target.value)}
-                                                    placeholder="Ej: Apoyado en una roca cubierta de musgo en un bosque lluvioso..."
+                                                    placeholder="Ej: Un niño sosteniendo en sus manos el logo 3D translúcido azul iluminado..."
                                                     className="w-full bg-slate-950 border border-purple-500/30 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:border-purple-400 outline-none transition-colors"
                                                 />
+
+                                                {/* PRESETS DE INTEGRACIÓN 3D PARA AGENCIAS */}
+                                                <div className="mt-3">
+                                                    <span className="text-[11px] font-bold text-slate-400 uppercase block mb-1.5">⚡ Presets 3D para Agencias:</span>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setManualVisual("Un niño pequeño sosteniendo en sus manos un emblema 3D translúcido iluminado con fondo de estudio oscuro y bokeh")}
+                                                            className="text-xs bg-purple-950/60 hover:bg-purple-900 border border-purple-500/30 text-purple-200 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                                                        >
+                                                            👶 Niño sosteniendo logo 3D
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setManualVisual("Manos de un profesional sosteniendo cuidadosamente el logo 3D en metal pulido con luz cinematográfica")}
+                                                            className="text-xs bg-purple-950/60 hover:bg-purple-900 border border-purple-500/30 text-purple-200 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                                                        >
+                                                            🤝 Manos sosteniendo logo 3D
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setManualVisual("Emblema 3D de cristal y cromo sobre un pedestal de mármol blanco en estudio de lujo con iluminación de estudio")}
+                                                            className="text-xs bg-purple-950/60 hover:bg-purple-900 border border-purple-500/30 text-purple-200 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                                                        >
+                                                            🏛️ Podio de Lujo 3D
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setManualVisual("Escultura 3D del logo con iluminación neón vibrante sobre superficie de vidrio negro con reflejos")}
+                                                            className="text-xs bg-purple-950/60 hover:bg-purple-900 border border-purple-500/30 text-purple-200 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                                                        >
+                                                            💡 Neón / Reflejo 3D
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     )}

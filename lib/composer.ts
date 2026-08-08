@@ -103,65 +103,9 @@ export async function compositeProductAndLogo({
         </svg>`;
         overlays.push({ input: Buffer.from(dimOverlaySvg), top: 0, left: 0 });
 
-        // 2. Product card composition (if user provided product image)
-        if (productImageBase64 && productImageBase64.length > 100) {
-            try {
-                const prodBuffer = await withTimeout(fetchImageBuffer(productImageBase64), 15000, 'product fetch');
-                const cardW = Math.round(width * 0.55);
-                const cardH = Math.round(height * 0.55);
-                const prodSize = { w: cardW - 24, h: cardH - 24 };
+        // 2. Note: productImageBase64 logo/product is already seamlessly synthesized into the 3D scene by AI (FLUX Dev / Redux).
+        // We do NOT overlay a 2D rectangular card onto the generated 3D scene.
 
-                // Drop shadow SVG
-                const shadowSvg = `
-                <svg width="${cardW + 8}" height="${cardH + 8}">
-                    <defs>
-                        <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
-                            <feGaussianBlur in="SourceAlpha" stdDeviation="14"/>
-                            <feOffset dx="0" dy="10"/>
-                            <feComponentTransfer><feFuncA type="linear" slope="0.55"/></feComponentTransfer>
-                            <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
-                        </filter>
-                    </defs>
-                    <rect x="0" y="0" width="${cardW + 8}" height="${cardH + 8}" rx="22" fill="rgba(0,0,0,0.001)" filter="url(#ds)"/>
-                </svg>`;
-
-                // Card background (white with brand color border)
-                const cardBgSvg = `
-                <svg width="${cardW}" height="${cardH}">
-                    <rect x="0" y="0" width="${cardW}" height="${cardH}" rx="20" fill="#ffffff"/>
-                    <rect x="3" y="3" width="${cardW - 6}" height="${cardH - 6}" rx="18" fill="none" stroke="${brand}" stroke-width="3" stroke-opacity="0.85"/>
-                </svg>`;
-
-                // Resize product photo to fit card
-                const resizedProd = await sharp(prodBuffer)
-                    .resize(prodSize.w, prodSize.h, { fit: 'cover' })
-                    .composite([{ input: Buffer.from(`<svg width="${prodSize.w}" height="${prodSize.h}"><rect width="100%" height="100%" rx="14" fill="#fff"/></svg>`), blend: 'dest-in' }])
-                    .toBuffer();
-
-                // Composite order: shadow → card bg → product photo
-                let cardX = 0, cardY = 0;
-                if (productPlacement === 'bottom-right' || (productPlacement === 'auto' && width === height)) {
-                    cardX = width - cardW - 30;
-                    cardY = height - cardH - 30;
-                } else if (productPlacement === 'bottom-left') {
-                    cardX = 30;
-                    cardY = height - cardH - 30;
-                } else if (productPlacement === 'top-right') {
-                    cardX = width - cardW - 30;
-                    cardY = 30;
-                } else {
-                    // center
-                    cardX = Math.round((width - cardW) / 2);
-                    cardY = Math.round((height - cardH) / 2);
-                }
-
-                overlays.push({ input: Buffer.from(shadowSvg), top: cardY - 4, left: cardX - 4 });
-                overlays.push({ input: Buffer.from(cardBgSvg), top: cardY, left: cardX });
-                overlays.push({ input: resizedProd, top: cardY + 12, left: cardX + 12 });
-            } catch (e) {
-                console.warn('[Composer] Product card failed, falling back to logo-only overlay:', (e as Error).message);
-            }
-        }
 
         // 3. Logo badge in corner
         if (applyLogo && logoUrlOrBase64 && logoUrlOrBase64.length > 10) {

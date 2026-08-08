@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
-import { generateReplicateImage } from '@/lib/replicate';
+import { generateReplicateImage, generateReplicateFluxDev, generateReplicateFluxRedux } from '@/lib/replicate';
 import { generateFalImage, generateBriaProductShot, generateFluxIPAdapter } from '@/lib/fal';
 import { compositeProductAndLogo } from '@/lib/composer';
 import { checkAndTrackUsage } from '@/lib/usageTracker';
@@ -692,15 +692,14 @@ export async function POST(request: Request) {
 
                 const baseGeneratedUrl = await (async () => {
 
-                    // B0. TRY BRIA PRODUCT SHOT (only when user uploaded a real product image)
-                    // Bria is purpose-built to keep the product intact while placing it into any scene.
+                    // B0. TRY FLUX REDUX (when user uploaded logo/product)
                     if (hasUserImage) {
                         try {
-                            console.log(`🎯 [Standard] Trying Bria Product Shot for: ${scrapedTitle}`);
-                            const briaUrl = await generateBriaProductShot(manual_image_base64, basePrompt || scrapedTitle);
-                            if (briaUrl) return briaUrl;
+                            console.log(`🎯 [Standard] Trying FLUX Redux 3D synthesis for: ${scrapedTitle}`);
+                            const reduxUrl = await generateReplicateFluxRedux(manual_image_base64, fullPrompt);
+                            if (reduxUrl) return reduxUrl;
                         } catch (e) {
-                            console.warn(`⚠️ Bria failed, falling back to FLUX IP-Adapter: ${(e as Error).message}`);
+                            console.warn(`⚠️ FLUX Redux failed, falling back to IP-Adapter: ${(e as Error).message}`);
                         }
 
                         // B0b. TRY FLUX IP-ADAPTER (image-guided scene generation)
@@ -713,7 +712,16 @@ export async function POST(request: Request) {
                         }
                     }
 
-                    // B1. TRY FAL.AI (FLUX DEV)
+                    // B1. TRY REPLICATE FLUX DEV 8K
+                    try {
+                        console.log(`🚀 [Standard] Generating via Replicate FLUX Dev (8K Commercial)...`);
+                        const repDev = await generateReplicateFluxDev(fullPrompt);
+                        if (repDev && repDev.imageUrl) return repDev.imageUrl;
+                    } catch (e) {
+                        console.warn(`⚠️ Replicate FLUX Dev failed, trying Fal.ai...`);
+                    }
+
+                    // B2. TRY FAL.AI (FLUX DEV)
                     try {
                         if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
                             const falResult = await generateFalImage(fullPrompt);
@@ -723,15 +731,15 @@ export async function POST(request: Request) {
                         console.error(`⚠️ Fal.ai failed, trying Ideogram...`);
                     }
 
-                    // B2. TRY IDEOGRAM V2 TEXT-TO-IMAGE
+                    // B3. TRY IDEOGRAM V2 TEXT-TO-IMAGE
                     try {
                         const ideogramImage = await generateIdeogramImage(fullPrompt, scrapedImage);
                         if (ideogramImage) return ideogramImage;
                     } catch (e) {
-                        console.error(`⚠️ Ideogram failed, trying Replicate Flux...`);
+                        console.error(`⚠️ Ideogram failed, trying Replicate Flux Schnell...`);
                     }
 
-                    // B3. TRY REPLICATE (FLUX)
+                    // B4. TRY REPLICATE (FLUX Schnell)
                     try {
                         const replicateResult = await generateReplicateImage(fullPrompt);
                         if (replicateResult && replicateResult.imageUrl) return replicateResult.imageUrl;

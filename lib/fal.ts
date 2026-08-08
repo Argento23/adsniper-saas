@@ -191,8 +191,26 @@ export async function generateFluxIPAdapter(
     ipAdapterScale: number = 0.7,
     imageSize: "square_hd" | "square" | "portrait_4_3" | "landscape_4_3" = "square_hd"
 ): Promise<string> {
-    console.log(`🎨 [Fal IP-Adapter] Integrating reference image into scene...`);
+    console.log(`🎨 [Fal FLUX Redux/Adapter] Integrating reference logo/product into scene...`);
     const httpUrl = referenceImageUrl.startsWith('data:') ? await uploadBase64ToFalStorage(referenceImageUrl) : referenceImageUrl;
+    
+    // First try FLUX 1.0 Dev Redux for structural & style synthesis
+    try {
+        const result = await runFalAsync('https://fal.run/fal-ai/flux-1/dev/redux', {
+            image_url: httpUrl,
+            prompt: prompt,
+            image_size: imageSize,
+            num_inference_steps: 28,
+            guidance_scale: 3.5
+        });
+        if (result && result.images && result.images[0]?.url) {
+            return result.images[0].url;
+        }
+    } catch (reduxError: any) {
+        console.warn(`⚠️ FLUX Redux failed, falling back to flux-general: ${reduxError.message}`);
+    }
+
+    // Fallback to flux-general with image conditioning
     const result = await runFalAsync('https://fal.run/fal-ai/flux-general', {
         prompt,
         image_size: imageSize,
@@ -202,8 +220,7 @@ export async function generateFluxIPAdapter(
         enable_safety_checker: true,
         ip_adapter: [{
             ip_adapter_image_url: httpUrl,
-            ip_adapter_scale: ipAdapterScale,
-            ip_adapter_model: "ip-adapter-faceid" // General subject adapter
+            ip_adapter_scale: ipAdapterScale
         }]
     });
     return result.images[0].url;

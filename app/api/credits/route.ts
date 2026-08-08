@@ -31,15 +31,20 @@ export async function GET() {
 
         console.log(`[Credits API] Emails: ${emails.join(', ')} | isAdmin: ${isAdmin}`);
 
-        const premiumStudioCredits = typeof metadata.premiumStudioCredits === 'number' ? metadata.premiumStudioCredits : 0;
+        const userCredits = typeof metadata.credits === 'number' ? metadata.credits : 3;
+        const userPlan = metadata.plan || 'Free';
+        const userVideoLimit = VIDEO_LIMITS[userPlan.toLowerCase()] || 0;
+        const userVideosUsed = typeof metadata.videosUsed === 'number' ? metadata.videosUsed : 0;
+        const userVideosRemaining = Math.max(0, userVideoLimit - userVideosUsed);
+        const userPremiumStudioCredits = typeof metadata.premiumStudioCredits === 'number' ? metadata.premiumStudioCredits : 0;
 
         return NextResponse.json({
-            credits: isAdmin ? 9999 : credits,
-            plan: isAdmin ? 'Infinity' : plan,
-            videoLimit: isAdmin ? 9999 : videoLimit,
-            videosUsed: isAdmin ? 0 : videosUsed,
-            videosRemaining: isAdmin ? 9999 : videosRemaining,
-            premiumStudioCredits: isAdmin ? 9999 : premiumStudioCredits,
+            credits: isAdmin ? 9999 : userCredits,
+            plan: isAdmin ? 'Infinity' : userPlan,
+            videoLimit: isAdmin ? 9999 : userVideoLimit,
+            videosUsed: isAdmin ? 0 : userVideosUsed,
+            videosRemaining: isAdmin ? 9999 : userVideosRemaining,
+            premiumStudioCredits: isAdmin ? 9999 : userPremiumStudioCredits,
             isAdmin
         });
 
