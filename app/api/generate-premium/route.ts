@@ -86,19 +86,31 @@ export async function POST(req: Request) {
 
         console.log(`🎯 [Studio Pro 8K] User image: ${hasUserImage ? 'YES (3D Scene Integration Mode)' : 'NO'}`);
 
-        // 1. IP-Adapter Image-guided 3D Synthesis
+        // 1. FLUX Redux 3D Logo Scene Synthesis via Replicate
         if (hasUserImage) {
             try {
-                console.log('🎯 [Studio Pro 8K] Trying FLUX Image-to-Image (0.55 strength) for 3D logo synthesis...');
-                // We use Image-to-Image with 0.55 strength to allow the model to build the scene (hands, background) 
-                // while strictly keeping the structure and colors of the logo in the center.
-                const ipUrl = await generateFluxImageToImage(image_base64, enhancedPrompt, 0.55);
-                if (ipUrl) {
-                    generatedImageUrl = ipUrl;
-                    console.log('✅ [Studio Pro 8K] FLUX IP-Adapter succeeded');
+                console.log('🎯 [Studio Pro 8K] Synthesizing 3D logo scene with FLUX Redux on Replicate...');
+                const reduxUrl = await generateReplicateFluxRedux(image_base64, enhancedPrompt);
+                if (reduxUrl) {
+                    generatedImageUrl = reduxUrl;
+                    console.log('✅ [Studio Pro 8K] FLUX Redux 3D synthesis succeeded!');
                 }
-            } catch (ipErr: any) {
-                console.warn(`⚠️ [Studio Pro 8K] FLUX IP-Adapter failed: ${ipErr.message}`);
+            } catch (reduxErr: any) {
+                console.warn(`⚠️ [Studio Pro 8K] FLUX Redux failed: ${reduxErr.message}`);
+            }
+
+            // Fallback: IP-Adapter Image-guided 3D Synthesis if FAL available
+            if (!generatedImageUrl && (process.env.FAL_KEY || process.env.FAL_API_KEY)) {
+                try {
+                    console.log('🎯 [Studio Pro 8K] Trying Fal.ai FLUX Image-to-Image...');
+                    const ipUrl = await generateFluxImageToImage(image_base64, enhancedPrompt, 0.55);
+                    if (ipUrl) {
+                        generatedImageUrl = ipUrl;
+                        console.log('✅ [Studio Pro 8K] Fal.ai FLUX Image-to-Image succeeded');
+                    }
+                } catch (ipErr: any) {
+                    console.warn(`⚠️ [Studio Pro 8K] Fal.ai Image-to-Image failed: ${ipErr.message}`);
+                }
             }
         }
 

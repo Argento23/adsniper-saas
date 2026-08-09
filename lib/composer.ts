@@ -24,10 +24,10 @@ interface StudioProOptions extends CompositeOptions {
 
 function escapeXml(str: string) {
     return str
-        .replace(/&/g, '&')
-        .replace(/</g, '<')
-        .replace(/>/g, '>')
-        .replace(/"/g, '"')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
         .replace(/'/g, '&apos;');
 }
 
@@ -58,6 +58,27 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
         const t = setTimeout(() => reject(new Error(`Timeout: ${label}`)), ms);
         p.then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
     });
+}
+
+function wrapTextToLines(text: string, maxCharsPerLine = 28, maxLines = 3): string[] {
+    if (!text) return [];
+    const words = text.trim().split(/\s+/);
+    const lines: string[] = [];
+    let currentLine = '';
+
+    for (const word of words) {
+        if ((currentLine + ' ' + word).trim().length <= maxCharsPerLine) {
+            currentLine = (currentLine + ' ' + word).trim();
+        } else {
+            if (currentLine) lines.push(currentLine);
+            currentLine = word;
+            if (lines.length >= maxLines - 1) break;
+        }
+    }
+    if (currentLine && lines.length < maxLines) {
+        lines.push(currentLine);
+    }
+    return lines;
 }
 
 /**
@@ -102,10 +123,6 @@ export async function compositeProductAndLogo({
             <rect width="100%" height="100%" fill="url(#vignette)"/>
         </svg>`;
         overlays.push({ input: Buffer.from(dimOverlaySvg), top: 0, left: 0 });
-
-        // 2. Note: productImageBase64 logo/product is already seamlessly synthesized into the 3D scene by AI (FLUX Dev / Redux).
-        // We do NOT overlay a 2D rectangular card onto the generated 3D scene.
-
 
         // 3. Logo badge in corner
         if (applyLogo && logoUrlOrBase64 && logoUrlOrBase64.length > 10) {
@@ -159,23 +176,35 @@ export async function compositeProductAndLogo({
                     </filter>
                 </defs>
                 <rect x="0" y="0" width="${pillW}" height="68" rx="34" fill="${brand}" filter="url(#ps)"/>
-                <text x="${pillW / 2}" y="46" font-family="DejaVu Sans, Liberation Sans, FreeSans, sans-serif" font-size="30" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${cleanPrice}</text>
+                <text x="${pillW / 2}" y="46" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="30" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${cleanPrice}</text>
             </svg>`;
             overlays.push({ input: Buffer.from(pillSvg), top: 30, left: width - pillW - 30 });
         }
 
-        // 5. Headline + CTA banner at bottom
+        // 5. Headline + CTA banner at bottom with MULTILINE WRAPPING
         if (applyText && (headlineText || ctaText || brandName)) {
-            const head = (headlineText || '').trim().substring(0, 60);
+            const rawHead = (headlineText || '').trim();
+            const headLines = wrapTextToLines(rawHead, 30, 3);
             const cta = (ctaText || '').trim().substring(0, 40);
             const bn = (brandName || '').trim().substring(0, 32);
 
+            const lineHeight = 42;
+            const textBlockHeight = headLines.length * lineHeight;
+            const bannerHeight = Math.max(220, 110 + textBlockHeight + (cta ? 60 : 0));
+            const startY = bn ? 65 : 45;
+
+            const tspanElements = headLines.map((line, idx) =>
+                `<tspan x="40" y="${startY + (idx * lineHeight)}" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="32" font-weight="800" fill="#ffffff">${escapeXml(line)}</tspan>`
+            ).join('');
+
+            const ctaTop = startY + textBlockHeight + 15;
+
             const bannerSvg = `
-            <svg width="${width}" height="220" xmlns="http://www.w3.org/2000/svg">
+            <svg width="${width}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                     <linearGradient id="bannerBg" x1="0%" y1="0%" x2="0%" y2="100%">
                         <stop offset="0%" stop-color="rgba(15,23,42,0)" />
-                        <stop offset="35%" stop-color="rgba(15,23,42,0.92)" />
+                        <stop offset="30%" stop-color="rgba(15,23,42,0.92)" />
                         <stop offset="100%" stop-color="rgba(2,6,23,0.98)" />
                     </linearGradient>
                     <filter id="bs" x="-5%" y="-10%" width="110%" height="120%">
@@ -185,23 +214,23 @@ export async function compositeProductAndLogo({
                         <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
                     </filter>
                 </defs>
-                <rect x="0" y="0" width="${width}" height="220" fill="url(#bannerBg)"/>
+                <rect x="0" y="0" width="${width}" height="${bannerHeight}" fill="url(#bannerBg)"/>
                 <rect x="0" y="0" width="${width}" height="5" fill="${brand}"/>
                 ${bn ? `
-                <text x="40" y="55" font-family="DejaVu Sans, Liberation Sans, FreeSans, sans-serif" font-size="22" font-weight="800" fill="${brand}" letter-spacing="3">
+                <text x="40" y="38" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="800" fill="${brand}" letter-spacing="3">
                     ${escapeXml(bn.toUpperCase())}
                 </text>` : ''}
-                ${head ? `
-                <text x="40" y="115" font-family="DejaVu Sans, Liberation Sans, FreeSans, sans-serif" font-size="36" font-weight="800" fill="#ffffff">
-                    ${escapeXml(head)}
+                ${headLines.length > 0 ? `
+                <text>
+                    ${tspanElements}
                 </text>` : ''}
                 ${cta ? `
-                <rect x="40" y="150" width="280" height="50" rx="25" fill="${brand}" filter="url(#bs)"/>
-                <text x="180" y="183" font-family="DejaVu Sans, Liberation Sans, FreeSans, sans-serif" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">
+                <rect x="40" y="${ctaTop}" width="300" height="50" rx="25" fill="${brand}" filter="url(#bs)"/>
+                <text x="190" y="${ctaTop + 32}" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="800" fill="#ffffff" text-anchor="middle">
                     ${escapeXml(cta)}
                 </text>` : ''}
             </svg>`;
-            overlays.push({ input: Buffer.from(bannerSvg), top: height - 220, left: 0 });
+            overlays.push({ input: Buffer.from(bannerSvg), top: height - bannerHeight, left: 0 });
         }
 
         if (overlays.length > 0) baseSharp = baseSharp.composite(overlays);
@@ -332,18 +361,30 @@ export async function compositeStudioPro({
             overlays.push({ input: Buffer.from(pillSvg), top: 36, left: width - pillW - 36 });
         }
 
-        // 4. Premium glassmorphism headline + CTA banner at bottom
+        // 4. Premium glassmorphism headline + CTA banner at bottom with MULTILINE WRAPPING
         if (applyText && (headlineText || ctaText || brandName)) {
-            const head = (headlineText || '').trim().substring(0, 70);
+            const rawHead = (headlineText || '').trim();
+            const headLines = wrapTextToLines(rawHead, 28, 3);
             const cta = (ctaText || '').trim().substring(0, 40);
             const bn = (brandName || '').trim().substring(0, 32);
 
+            const lineHeight = 46;
+            const textBlockHeight = headLines.length * lineHeight;
+            const bannerHeight = Math.max(260, 120 + textBlockHeight + (cta ? 70 : 0));
+            const startY = bn ? 70 : 50;
+
+            const tspanElements = headLines.map((line, idx) =>
+                `<tspan x="40" y="${startY + (idx * lineHeight)}" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="36" font-weight="800" fill="#ffffff">${escapeXml(line)}</tspan>`
+            ).join('');
+
+            const ctaTop = startY + textBlockHeight + 20;
+
             const bannerSvg = `
-            <svg width="${width}" height="260" xmlns="http://www.w3.org/2000/svg">
+            <svg width="${width}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                     <linearGradient id="bannerBgP" x1="0%" y1="0%" x2="0%" y2="100%">
                         <stop offset="0%" stop-color="rgba(2,6,23,0)" />
-                        <stop offset="30%" stop-color="rgba(2,6,23,0.85)" />
+                        <stop offset="30%" stop-color="rgba(2,6,23,0.88)" />
                         <stop offset="100%" stop-color="rgba(0,0,0,0.98)" />
                     </linearGradient>
                     <linearGradient id="ctaG" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -357,23 +398,23 @@ export async function compositeStudioPro({
                         <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
                     </filter>
                 </defs>
-                <rect x="0" y="0" width="${width}" height="260" fill="url(#bannerBgP)"/>
+                <rect x="0" y="0" width="${width}" height="${bannerHeight}" fill="url(#bannerBgP)"/>
                 <rect x="0" y="0" width="${width}" height="6" fill="${brand}"/>
                 ${bn ? `
-                <text x="40" y="60" font-family="DejaVu Sans, Liberation Sans, FreeSans, sans-serif" font-size="20" font-weight="700" fill="${brand}" letter-spacing="4">
+                <text x="40" y="42" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="700" fill="${brand}" letter-spacing="4">
                     ${escapeXml(bn.toUpperCase())}
                 </text>` : ''}
-                ${head ? `
-                <text x="40" y="130" font-family="DejaVu Sans, Liberation Sans, FreeSans, sans-serif" font-size="40" font-weight="800" fill="#ffffff">
-                    ${escapeXml(head)}
+                ${headLines.length > 0 ? `
+                <text>
+                    ${tspanElements}
                 </text>` : ''}
                 ${cta ? `
-                <rect x="40" y="170" width="320" height="58" rx="29" fill="url(#ctaG)" filter="url(#ctaSh)"/>
-                <text x="200" y="207" font-family="DejaVu Sans, Liberation Sans, FreeSans, sans-serif" font-size="20" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">
+                <rect x="40" y="${ctaTop}" width="320" height="58" rx="29" fill="url(#ctaG)" filter="url(#ctaSh)"/>
+                <text x="200" y="${ctaTop + 37}" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">
                     ${escapeXml(cta)}
                 </text>` : ''}
             </svg>`;
-            overlays.push({ input: Buffer.from(bannerSvg), top: height - 260, left: 0 });
+            overlays.push({ input: Buffer.from(bannerSvg), top: height - bannerHeight, left: 0 });
         }
 
         // 5. Grain texture overlay (premium film grain, very subtle)

@@ -172,6 +172,60 @@ export async function generateReplicateFluxDev(
     throw new Error('Replicate FLUX Dev timeout');
 }
 
+export async function ensurePublicUrl(src: string): Promise<string> {
+    if (!src) throw new Error('Empty image input');
+    if (src.startsWith('http://') || src.startsWith('https://')) {
+        return src;
+    }
+
+    try {
+        const cleanBase64 = src.includes(',') ? src.split(',')[1] : src;
+        const mimeType = src.includes('data:image/jpeg') ? 'image/jpeg' : (src.includes('data:image/webp') ? 'image/webp' : 'image/png');
+        const ext = mimeType === 'image/jpeg' ? 'jpg' : (mimeType === 'image/webp' ? 'webp' : 'png');
+        const buffer = Buffer.from(cleanBase64, 'base64');
+        const blob = new Blob([buffer], { type: mimeType });
+
+        // 1. Try Catbox upload first (fast, reliable public URL)
+        const formData = new FormData();
+        formData.append('reqtype', 'fileupload');
+        formData.append('fileToUpload', blob, `image.${ext}`);
+
+        const res = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: formData });
+        if (res.ok) {
+            const url = (await res.text()).trim();
+            if (url.startsWith('http')) {
+                console.log(`✅ [ensurePublicUrl] Uploaded image to Catbox: ${url}`);
+                return url;
+            }
+        }
+    } catch (e: any) {
+        console.warn('⚠️ [ensurePublicUrl] Catbox upload error, trying tmpfiles fallback:', e.message);
+    }
+
+    // 2. Fallback to tmpfiles.org
+    try {
+        const cleanBase64 = src.includes(',') ? src.split(',')[1] : src;
+        const buffer = Buffer.from(cleanBase64, 'base64');
+        const blob = new Blob([buffer], { type: 'image/png' });
+        const formData = new FormData();
+        formData.append('file', blob, 'product_image.png');
+
+        const res = await fetch('https://tmpfiles.org/api/v1/upload', { method: 'POST', body: formData });
+        if (res.ok) {
+            const data = await res.json();
+            if (data?.data?.url) {
+                const directUrl = data.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+                console.log(`✅ [ensurePublicUrl] Uploaded image to tmpfiles: ${directUrl}`);
+                return directUrl;
+            }
+        }
+    } catch (e: any) {
+        console.warn('⚠️ [ensurePublicUrl] tmpfiles upload error:', e.message);
+    }
+
+    return src;
+}
+
 /**
  * Generate 3D Scene Synthesis guided by an uploaded logo via Replicate FLUX Redux
  */
@@ -184,25 +238,30 @@ export async function generateReplicateFluxRedux(
 
     try {
         console.log(`🎨 Replicate: Synthesizing 3D Scene guided by logo via FLUX Redux...`);
+        const publicUrl = await ensurePublicUrl(referenceImageUrl);
+
         const response = await fetch('https://api.replicate.com/v1/models/black-forest-labs/flux-redux-dev/predictions', {
             method: 'POST',
             headers: {
                 'Authorization': `Token ${apiKey}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'wait'
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({
                 input: {
-                    redux_image: referenceImageUrl,
+                    redux_image: publicUrl,
                     prompt: prompt,
                     aspect_ratio: '1:1',
                     output_format: 'jpg',
-                    output_quality: 90
+                    output_quality: 92
                 }
             })
         });
 
-        if (!response.ok) return null;
+        if (!response.ok) {
+            const errText = await response.text();
+            console.warn(`⚠️ FLUX Redux initial call error (${response.status}): ${errText}`);
+            return null;
+        }
 
         let prediction = await response.json();
         if (prediction.status === 'succeeded' && prediction.output && prediction.output[0]) {
@@ -210,16 +269,20 @@ export async function generateReplicateFluxRedux(
         }
 
         let attempts = 0;
-        while (attempts < 25) {
-            await new Promise(r => setTimeout(r, 1500));
+        while (attempts < 35) {
+            await new Promise(r => setTimeout(r, 1800));
             const statusRes = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
                 headers: { 'Authorization': `Token ${apiKey}` }
             });
             prediction = await statusRes.json();
             if (prediction.status === 'succeeded' && prediction.output && prediction.output[0]) {
+                console.log(`✅ FLUX Redux succeeded in ${attempts * 1.8}s`);
                 return prediction.output[0];
             }
-            if (prediction.status === 'failed') break;
+            if (prediction.status === 'failed') {
+                console.warn(`⚠️ FLUX Redux prediction failed: ${prediction.error}`);
+                break;
+            }
             attempts++;
         }
         return null;
@@ -242,7 +305,9 @@ export async function generateReplicateVideo(
     }
 
     try {
-        console.log(`🎥 Replicate: Generating video from image with Wan 2.5...`);
+        console.log(`🎥 Replicate: Resolving public URL for video generation...`);
+        const validPublicUrl = await ensurePublicUrl(imageUrl);
+        console.log(`🎥 Replicate: Generating video from image with Wan 2.5 (URL: ${validPublicUrl.substring(0, 40)}...)...`);
 
         // Use official model API (no version hash needed)
         const response = await fetch('https://api.replicate.com/v1/models/wan-video/wan-2.5-i2v/predictions', {
@@ -253,7 +318,7 @@ export async function generateReplicateVideo(
             },
             body: JSON.stringify({
                 input: {
-                    image: imageUrl,
+                    image: validPublicUrl,
                     prompt: prompt,
                     max_frames: 81,
                     enable_safety_checker: true
@@ -319,4 +384,5 @@ export async function generateReplicateVideo(
         throw error;
     }
 }
+
 

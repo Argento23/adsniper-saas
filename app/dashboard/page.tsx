@@ -153,7 +153,8 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     imageUrl: imgSrc,
-                    prompt: customVideoPrompt
+                    prompt: customVideoPrompt,
+                    brand
                 })
             });
             const data = await resp.json();
@@ -641,9 +642,9 @@ export default function Dashboard() {
 
             // Format to match standard AdCard structure
             setAds([{
-                type: "Studio Inpainting 8K",
-                headline: "🏆 Composición Premium (" + data.prompt_used.substring(0, 30) + "...)",
-                primary_text: "Escenario hiperrealista generado manteniendo el 100% de los píxeles originales de tu producto. Prompt utilizado:\n" + data.prompt_used,
+                type: "Studio 3D Integration 8K",
+                headline: customImageText || "🏆 Composición 3D Hiperrealista",
+                primary_text: "Escenario 8K generado integrando tu imagen como un objeto 3D real de acuerdo al prompt solícito.\n\nPrompt de escenario:\n" + data.prompt_used,
                 generated_image_url: data.final_composition,
                 product_image_fallback: data.original_extracted // show the cleanly extracted bg in case
             }]);
