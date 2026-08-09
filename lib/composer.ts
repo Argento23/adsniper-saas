@@ -44,10 +44,18 @@ async function fetchImageBuffer(src: string): Promise<Buffer> {
         return Buffer.from(base64Data, 'base64');
     }
     if (src.startsWith('http://') || src.startsWith('https://')) {
-        const res = await fetch(src);
-        if (!res.ok) throw new Error(`Failed to fetch image from ${src}: ${res.statusText}`);
-        const arrayBuffer = await res.arrayBuffer();
-        return Buffer.from(arrayBuffer);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 18000); // 18s timeout
+        try {
+            const res = await fetch(src, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (!res.ok) throw new Error(`Failed to fetch image from ${src}: ${res.statusText}`);
+            const arrayBuffer = await res.arrayBuffer();
+            return Buffer.from(arrayBuffer);
+        } catch (e: any) {
+            clearTimeout(timeoutId);
+            throw new Error(`fetchImageBuffer failed for URL (${e.message}): ${src.substring(0, 80)}`);
+        }
     }
     // raw base64
     return Buffer.from(src, 'base64');
@@ -123,6 +131,47 @@ export async function compositeProductAndLogo({
             <rect width="${width}" height="${height}" fill="url(#vignette)"/>
         </svg>`;
         overlays.push({ input: Buffer.from(dimOverlaySvg), top: 0, left: 0 });
+
+        // 2b. Product image thumbnail card (bottom-right corner) — uses the user's uploaded image
+        if (productImageBase64 && productImageBase64.length > 100) {
+            try {
+                const rawProduct = await withTimeout(fetchImageBuffer(productImageBase64), 12000, 'product thumb fetch');
+                const thumbSize = 200;
+                const borderW = 4;
+                const cardSize = thumbSize + borderW * 2;
+
+                // Rounded square mask
+                const maskSvg = `<svg width="${thumbSize}" height="${thumbSize}"><rect x="0" y="0" width="${thumbSize}" height="${thumbSize}" rx="18" fill="#fff"/></svg>`;
+                const roundedThumb = await sharp(rawProduct)
+                    .resize(thumbSize, thumbSize, { fit: 'cover', position: 'centre' })
+                    .composite([{ input: Buffer.from(maskSvg), blend: 'dest-in' }])
+                    .png()
+                    .toBuffer();
+
+                // Border ring SVG
+                const ringSvg = `
+                <svg width="${cardSize + 8}" height="${cardSize + 8}" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <filter id="pshadow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur in="SourceAlpha" stdDeviation="6"/>
+                            <feOffset dx="0" dy="3"/>
+                            <feComponentTransfer><feFuncA type="linear" slope="0.5"/></feComponentTransfer>
+                            <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+                        </filter>
+                    </defs>
+                    <rect x="0" y="0" width="${cardSize + 8}" height="${cardSize + 8}" rx="22" fill="${brand}" filter="url(#pshadow)"/>
+                    <rect x="${borderW}" y="${borderW}" width="${thumbSize}" height="${thumbSize}" rx="18" fill="#ffffff" fill-opacity="0.08"/>
+                </svg>`;
+
+                const thumbTop = height - cardSize - 8 - 240; // 240px from bottom = above the banner (min 220px tall)
+                const thumbLeft = width - cardSize - 8 - 20;
+                overlays.push({ input: Buffer.from(ringSvg), top: thumbTop - 4, left: thumbLeft - 4 });
+                overlays.push({ input: roundedThumb, top: thumbTop + borderW, left: thumbLeft + borderW });
+                console.log(`[Composer] ✅ Product thumbnail placed at bottom-right (${thumbSize}px)`);
+            } catch (e) {
+                console.warn('[Composer] Product thumbnail failed:', (e as Error).message);
+            }
+        }
 
         // 3. Logo badge in corner
         if (applyLogo && logoUrlOrBase64 && logoUrlOrBase64.length > 10) {

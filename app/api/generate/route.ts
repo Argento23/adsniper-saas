@@ -669,8 +669,8 @@ export async function POST(request: Request) {
 
         // Process Ads — SEQUENTIAL IMAGE GENERATION WITH REFERENCE IMAGE INTEGRATION
         if (data.ads && Array.isArray(data.ads)) {
-            const hasUserImage = manual_image_base64 && manual_image_base64.length > 100;
-            console.log(`💎 Generating ${data.ads.length} images. User image integration: ${hasUserImage ? 'YES (Redux/IP-Adapter)' : 'NO (text-to-image)'}`);
+            const hasUserImage = !!(manual_image_base64 && manual_image_base64.length > 100);
+            console.log(`💎 Generating ${data.ads.length} images. User image integration: ${hasUserImage ? `YES (base64 len: ${manual_image_base64?.length})` : 'NO (text-to-image)'}`);
 
             const processedAds = [];
             for (const ad of data.ads) {
@@ -747,7 +747,13 @@ export async function POST(request: Request) {
                         console.error(`⚠️ Replicate failed, trying Pollinations...`);
                     }
 
-                    // B4. FINAL FALLBACK: POLLINATIONS
+                    // B4. FINAL FALLBACK: If user provided an image, return it directly (never lose the uploaded image)
+                    if (hasUserImage && manual_image_base64) {
+                        console.warn(`⚠️ All AI providers failed. Falling back to USER'S OWN UPLOADED IMAGE as base scene.`);
+                        return manual_image_base64;
+                    }
+
+                    // B5. ABSOLUTE FINAL FALLBACK: POLLINATIONS (only when no user image)
                     const cleanPrompt = fullPrompt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s]/gi, '').substring(0, 100).trim().replace(/\s+/g, '_');
                     const seed = Math.floor(Math.random() * 1000000);
                     return `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
@@ -755,10 +761,12 @@ export async function POST(request: Request) {
 
                 // POST-PROCESSING: product card + logo badge + brand banner overlay
                 const productPrice = ad.price || (manual_description?.match(/\$\s?[\d,.]+/)?.[0]) || '';
+                // Only show product thumbnail if the base scene is a NEW AI-generated image (not the user image itself used as fallback)
+                const sceneIsUserImage = hasUserImage && (baseGeneratedUrl === manual_image_base64);
                 const finalImageUrl = await compositeProductAndLogo({
                     sceneImage: baseGeneratedUrl,
                     logoUrlOrBase64: brand?.logo_url || null,
-                    productImageBase64: hasUserImage ? manual_image_base64 : null,
+                    productImageBase64: (hasUserImage && !sceneIsUserImage) ? manual_image_base64 : null,
                     brandName: brand?.name,
                     primaryColor: brand?.primary_color,
                     headlineText: headlineText || ad.headline || null,
@@ -767,6 +775,7 @@ export async function POST(request: Request) {
                     applyLogo: applyLogo !== false,
                     applyText: applyText !== false
                 });
+                console.log(`[Route] ✅ Ad ${processedAds.length + 1}: scene=${sceneIsUserImage ? 'USER_IMAGE_FALLBACK' : 'AI_GENERATED'} | thumb=${hasUserImage && !sceneIsUserImage ? 'YES' : 'NO'} | text=${applyText !== false ? 'YES' : 'NO'}`);
 
                 processedAds.push({ ...ad, generated_image_url: finalImageUrl, product_image_fallback: scrapedImage });
             }
