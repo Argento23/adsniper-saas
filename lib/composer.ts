@@ -115,12 +115,12 @@ export async function compositeProductAndLogo({
         <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
             <defs>
                 <linearGradient id="vignette" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="rgba(0,0,0,0)" />
-                    <stop offset="55%" stop-color="rgba(0,0,0,0)" />
-                    <stop offset="100%" stop-color="rgba(0,0,0,0.35)" />
+                    <stop offset="0%" stop-color="#000000" stop-opacity="0" />
+                    <stop offset="55%" stop-color="#000000" stop-opacity="0" />
+                    <stop offset="100%" stop-color="#000000" stop-opacity="0.38" />
                 </linearGradient>
             </defs>
-            <rect width="100%" height="100%" fill="url(#vignette)"/>
+            <rect width="${width}" height="${height}" fill="url(#vignette)"/>
         </svg>`;
         overlays.push({ input: Buffer.from(dimOverlaySvg), top: 0, left: 0 });
 
@@ -176,7 +176,7 @@ export async function compositeProductAndLogo({
                     </filter>
                 </defs>
                 <rect x="0" y="0" width="${pillW}" height="68" rx="34" fill="${brand}" filter="url(#ps)"/>
-                <text x="${pillW / 2}" y="46" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="30" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${cleanPrice}</text>
+                <text x="${pillW / 2}" y="46" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${cleanPrice}</text>
             </svg>`;
             overlays.push({ input: Buffer.from(pillSvg), top: 30, left: width - pillW - 30 });
         }
@@ -194,7 +194,7 @@ export async function compositeProductAndLogo({
             const startY = bn ? 65 : 45;
 
             const tspanElements = headLines.map((line, idx) =>
-                `<tspan x="40" y="${startY + (idx * lineHeight)}" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="32" font-weight="800" fill="#ffffff">${escapeXml(line)}</tspan>`
+                `<tspan x="40" y="${startY + (idx * lineHeight)}" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="#ffffff">${escapeXml(line)}</tspan>`
             ).join('');
 
             const ctaTop = startY + textBlockHeight + 15;
@@ -203,32 +203,18 @@ export async function compositeProductAndLogo({
             <svg width="${width}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                     <linearGradient id="bannerBg" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stop-color="rgba(15,23,42,0)" />
-                        <stop offset="30%" stop-color="rgba(15,23,42,0.92)" />
-                        <stop offset="100%" stop-color="rgba(2,6,23,0.98)" />
+                        <stop offset="0%" stop-color="#0f172a" stop-opacity="0" />
+                        <stop offset="30%" stop-color="#0f172a" stop-opacity="0.93" />
+                        <stop offset="100%" stop-color="#020617" stop-opacity="0.98" />
                     </linearGradient>
-                    <filter id="bs" x="-5%" y="-10%" width="110%" height="120%">
-                        <feGaussianBlur in="SourceAlpha" stdDeviation="6"/>
-                        <feOffset dx="0" dy="3"/>
-                        <feComponentTransfer><feFuncA type="linear" slope="0.4"/></feComponentTransfer>
-                        <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
-                    </filter>
                 </defs>
                 <rect x="0" y="0" width="${width}" height="${bannerHeight}" fill="url(#bannerBg)"/>
                 <rect x="0" y="0" width="${width}" height="5" fill="${brand}"/>
-                ${bn ? `
-                <text x="40" y="38" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="800" fill="${brand}" letter-spacing="3">
-                    ${escapeXml(bn.toUpperCase())}
-                </text>` : ''}
-                ${headLines.length > 0 ? `
-                <text>
-                    ${tspanElements}
-                </text>` : ''}
+                ${bn ? `<text x="40" y="38" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="${brand}" letter-spacing="3">${escapeXml(bn.toUpperCase())}</text>` : ''}
+                ${headLines.length > 0 ? `<text>${tspanElements}</text>` : ''}
                 ${cta ? `
-                <rect x="40" y="${ctaTop}" width="300" height="50" rx="25" fill="${brand}" filter="url(#bs)"/>
-                <text x="190" y="${ctaTop + 32}" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="800" fill="#ffffff" text-anchor="middle">
-                    ${escapeXml(cta)}
-                </text>` : ''}
+                <rect x="40" y="${ctaTop}" width="300" height="50" rx="25" fill="${brand}"/>
+                <text x="190" y="${ctaTop + 33}" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#ffffff" text-anchor="middle">${escapeXml(cta)}</text>` : ''}
             </svg>`;
             overlays.push({ input: Buffer.from(bannerSvg), top: height - bannerHeight, left: 0 });
         }
@@ -347,16 +333,10 @@ export async function compositeStudioPro({
                         <stop offset="0%" stop-color="${brand}" stop-opacity="1" />
                         <stop offset="100%" stop-color="${accent}" stop-opacity="1" />
                     </linearGradient>
-                    <filter id="pSh" x="-10%" y="-10%" width="120%" height="120%">
-                        <feGaussianBlur in="SourceAlpha" stdDeviation="8"/>
-                        <feOffset dx="0" dy="6"/>
-                        <feComponentTransfer><feFuncA type="linear" slope="0.5"/></feComponentTransfer>
-                        <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
-                    </filter>
                 </defs>
-                <rect x="0" y="0" width="${pillW}" height="76" rx="38" fill="url(#gPill)" filter="url(#pSh)"/>
-                <rect x="3" y="3" width="${pillW - 6}" height="36" rx="18" fill="rgba(255,255,255,0.18)"/>
-                <text x="${pillW / 2}" y="50" font-family="DejaVu Sans, Liberation Sans, FreeSans, sans-serif" font-size="32" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${cleanPrice}</text>
+                <rect x="0" y="0" width="${pillW}" height="76" rx="38" fill="url(#gPill)"/>
+                <rect x="3" y="3" width="${pillW - 6}" height="36" rx="18" fill="#ffffff" fill-opacity="0.18"/>
+                <text x="${pillW / 2}" y="50" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${cleanPrice}</text>
             </svg>`;
             overlays.push({ input: Buffer.from(pillSvg), top: 36, left: width - pillW - 36 });
         }
@@ -374,7 +354,7 @@ export async function compositeStudioPro({
             const startY = bn ? 70 : 50;
 
             const tspanElements = headLines.map((line, idx) =>
-                `<tspan x="40" y="${startY + (idx * lineHeight)}" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="36" font-weight="800" fill="#ffffff">${escapeXml(line)}</tspan>`
+                `<tspan x="40" y="${startY + (idx * lineHeight)}" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="bold" fill="#ffffff">${escapeXml(line)}</tspan>`
             ).join('');
 
             const ctaTop = startY + textBlockHeight + 20;
@@ -383,36 +363,22 @@ export async function compositeStudioPro({
             <svg width="${width}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                     <linearGradient id="bannerBgP" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stop-color="rgba(2,6,23,0)" />
-                        <stop offset="30%" stop-color="rgba(2,6,23,0.88)" />
-                        <stop offset="100%" stop-color="rgba(0,0,0,0.98)" />
+                        <stop offset="0%" stop-color="#020617" stop-opacity="0" />
+                        <stop offset="30%" stop-color="#020617" stop-opacity="0.88" />
+                        <stop offset="100%" stop-color="#000000" stop-opacity="0.98" />
                     </linearGradient>
                     <linearGradient id="ctaG" x1="0%" y1="0%" x2="100%" y2="0%">
                         <stop offset="0%" stop-color="${brand}" />
                         <stop offset="100%" stop-color="${accent}" />
                     </linearGradient>
-                    <filter id="ctaSh" x="-10%" y="-10%" width="120%" height="120%">
-                        <feGaussianBlur in="SourceAlpha" stdDeviation="10"/>
-                        <feOffset dx="0" dy="5"/>
-                        <feComponentTransfer><feFuncA type="linear" slope="0.55"/></feComponentTransfer>
-                        <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
-                    </filter>
                 </defs>
                 <rect x="0" y="0" width="${width}" height="${bannerHeight}" fill="url(#bannerBgP)"/>
                 <rect x="0" y="0" width="${width}" height="6" fill="${brand}"/>
-                ${bn ? `
-                <text x="40" y="42" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="700" fill="${brand}" letter-spacing="4">
-                    ${escapeXml(bn.toUpperCase())}
-                </text>` : ''}
-                ${headLines.length > 0 ? `
-                <text>
-                    ${tspanElements}
-                </text>` : ''}
+                ${bn ? `<text x="40" y="42" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="${brand}" letter-spacing="4">${escapeXml(bn.toUpperCase())}</text>` : ''}
+                ${headLines.length > 0 ? `<text>${tspanElements}</text>` : ''}
                 ${cta ? `
-                <rect x="40" y="${ctaTop}" width="320" height="58" rx="29" fill="url(#ctaG)" filter="url(#ctaSh)"/>
-                <text x="200" y="${ctaTop + 37}" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">
-                    ${escapeXml(cta)}
-                </text>` : ''}
+                <rect x="40" y="${ctaTop}" width="320" height="58" rx="29" fill="url(#ctaG)"/>
+                <text x="200" y="${ctaTop + 37}" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#ffffff" text-anchor="middle">${escapeXml(cta)}</text>` : ''}
             </svg>`;
             overlays.push({ input: Buffer.from(bannerSvg), top: height - bannerHeight, left: 0 });
         }
