@@ -96,6 +96,19 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
     }, [ad, productImage]);
 
     const downloadImage = async () => {
+        if (!imgSrc) return;
+        
+        // Base64 direct download
+        if (imgSrc.startsWith('data:')) {
+            const a = document.createElement('a');
+            a.href = imgSrc;
+            a.download = `AdSíntesis-Ad-${Date.now()}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            return;
+        }
+
         try {
             const resp = await fetch(imgSrc);
             const blob = await resp.blob();
@@ -108,7 +121,13 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         } catch {
-            window.open(imgSrc, '_blank');
+            const a = document.createElement('a');
+            a.href = imgSrc;
+            a.download = `AdSíntesis-Ad-${Date.now()}.png`;
+            a.target = '_blank';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
         }
     };
 
@@ -377,19 +396,36 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
                         const isAdminUser = user?.emailAddresses?.some((e: any) => e.emailAddress.toLowerCase() === 'gustavodornhofer@gmail.com') ||
                             user?.primaryEmailAddress?.emailAddress?.toLowerCase() === 'gustavodornhofer@gmail.com';
                         const videoDisabled = generatingVideo || hasError || imgSrc.includes('placehold.co') || (videosRemaining <= 0 && !isAdminUser);
+                        
+                        // Inline Video Generation Field
                         return (
-                            <button
-                                onClick={() => setShowVideoPromptModal(true)}
-                                disabled={videoDisabled}
-                                title={isAdminUser ? 'Admin: video ilimitado' : `${videosRemaining} videos restantes`}
-                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${videoDisabled
-                                    ? 'bg-slate-700 text-slate-500 cursor-not-allowed opacity-50'
-                                    : 'bg-purple-700 text-white hover:bg-purple-600 shadow-lg shadow-purple-900/20'
-                                    }`}
-                            >
-                                {generatingVideo ? <FaSpinner className="animate-spin" /> : <FaVideo />}
-                                {generatingVideo ? 'Generando...' : 'Animar Ad 🎬'}
-                            </button>
+                            <div className="w-full mt-2 bg-slate-900 border border-slate-700 p-2 rounded-xl flex flex-col gap-2">
+                                <p className="text-[10px] text-slate-400 font-bold px-1 uppercase tracking-wider">
+                                    <FaVideo className="inline mr-1 text-purple-400" /> Convertir a Video (Prompt)
+                                </p>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={customVideoPrompt}
+                                        onChange={(e) => setCustomVideoPrompt(e.target.value)}
+                                        placeholder="Ej: Cámara girando lentamente alrededor del logo 3D, ultra realista..."
+                                        className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:border-purple-500 outline-none"
+                                        disabled={videoDisabled}
+                                    />
+                                    <button
+                                        onClick={handleGenerateVideo}
+                                        disabled={videoDisabled}
+                                        title={isAdminUser ? 'Admin: video ilimitado' : `${videosRemaining} videos restantes`}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${videoDisabled
+                                            ? 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50'
+                                            : 'bg-purple-600 text-white hover:bg-purple-500 shadow-lg shadow-purple-900/20'
+                                            }`}
+                                    >
+                                        {generatingVideo ? <FaSpinner className="animate-spin w-3 h-3" /> : <FaMagic className="w-3 h-3" />}
+                                        {generatingVideo ? 'Creando...' : 'Animar'}
+                                    </button>
+                                </div>
+                            </div>
                         );
                     })()}
                 </div>

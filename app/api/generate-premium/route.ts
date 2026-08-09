@@ -89,10 +89,10 @@ export async function POST(req: Request) {
         // 1. IP-Adapter Image-guided 3D Synthesis
         if (hasUserImage) {
             try {
-                console.log('🎯 [Studio Pro 8K] Trying FLUX Image-to-Image (0.85 strength) for 3D logo synthesis...');
-                // We use Image-to-Image with 0.85 strength to allow the model to build the scene (hands, background) 
-                // while keeping the structure and colors of the logo in the center.
-                const ipUrl = await generateFluxImageToImage(image_base64, enhancedPrompt, 0.85);
+                console.log('🎯 [Studio Pro 8K] Trying FLUX Image-to-Image (0.55 strength) for 3D logo synthesis...');
+                // We use Image-to-Image with 0.55 strength to allow the model to build the scene (hands, background) 
+                // while strictly keeping the structure and colors of the logo in the center.
+                const ipUrl = await generateFluxImageToImage(image_base64, enhancedPrompt, 0.55);
                 if (ipUrl) {
                     generatedImageUrl = ipUrl;
                     console.log('✅ [Studio Pro 8K] FLUX IP-Adapter succeeded');
