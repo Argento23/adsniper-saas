@@ -194,6 +194,7 @@ export async function generateReplicateFluxRedux(
             body: JSON.stringify({
                 input: {
                     redux_image: referenceImageUrl,
+                    prompt: prompt,
                     aspect_ratio: '1:1',
                     output_format: 'jpg',
                     output_quality: 90
