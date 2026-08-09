@@ -1,5 +1,8 @@
 FROM node:20-alpine AS base
 
+# Install fonts for Sharp/libvips SVG text rendering (critical for composer.ts)
+RUN apk add --no-cache fontconfig ttf-freefont font-noto font-noto-emoji && fc-cache -f
+
 # Install dependencies only when needed
 FROM base AS deps
 WORKDIR /app

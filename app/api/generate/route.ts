@@ -3,7 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
 import { generateReplicateImage, generateReplicateFluxDev, generateReplicateFluxRedux } from '@/lib/replicate';
 import { generateFalImage, generateBriaProductShot, generateFluxIPAdapter } from '@/lib/fal';
-import { compositeProductAndLogo } from '@/lib/composer';
+import { compositeProductAndLogo, compositeUserLogoAsScene } from '@/lib/composer';
 import { checkAndTrackUsage } from '@/lib/usageTracker';
 
 export const dynamic = 'force-dynamic';
@@ -747,10 +747,22 @@ export async function POST(request: Request) {
                         console.error(`⚠️ Replicate failed, trying Pollinations...`);
                     }
 
-                    // B4. FINAL FALLBACK: If user provided an image, return it directly (never lose the uploaded image)
+                    // B4. PROPER FALLBACK: User uploaded an image but all AI providers failed.
+                    // Instead of returning the raw image (which looks broken), composite it
+                    // properly onto a scene background so the user gets a real ad composition.
                     if (hasUserImage && manual_image_base64) {
-                        console.warn(`⚠️ All AI providers failed. Falling back to USER'S OWN UPLOADED IMAGE as base scene.`);
-                        return manual_image_base64;
+                        console.warn(`⚠️ All AI providers failed. Compositing user logo onto Pollinations scene...`);
+                        try {
+                            const manualScene = await compositeUserLogoAsScene({
+                                logoBase64: manual_image_base64,
+                                scenePrompt: basePrompt || 'cinematic studio advertising dramatic lighting 8k',
+                                primaryColor: brand?.primary_color || '#10b981',
+                            });
+                            return manualScene;
+                        } catch (manualErr) {
+                            console.error('Manual composition also failed, returning raw image:', manualErr);
+                            return manual_image_base64;
+                        }
                     }
 
                     // B5. ABSOLUTE FINAL FALLBACK: POLLINATIONS (only when no user image)

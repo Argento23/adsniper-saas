@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
 import { generateFalImage, generateBriaProductShot, generateFluxImageToImage } from '@/lib/fal';
 import { generateReplicateImage, generateReplicateFluxDev, generateReplicateFluxRedux } from '@/lib/replicate';
-import { compositeStudioPro } from '@/lib/composer';
+import { compositeStudioPro, compositeUserLogoAsScene } from '@/lib/composer';
 
 export const dynamic = 'force-dynamic';
 
@@ -158,13 +158,43 @@ export async function POST(req: Request) {
             }
         }
 
-        // 3. Pollinations AI final fallback
+        // 3. Pollinations AI final fallback (text-to-image only)
         if (!generatedImageUrl) {
             console.warn('⚠️ [Studio Pro 8K] Fallback to Pollinations AI');
             const cleanPrompt = encodeURIComponent(enhancedPrompt.substring(0, 150));
             const seed = Math.floor(Math.random() * 1000000);
             generatedImageUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
         }
+
+        // 4. MANUAL COMPOSITOR: If user uploaded an image but none of the AI image-guided
+        //    providers managed to integrate it (FLUX Redux failed, Fal failed), use Sharp
+        //    to composite the logo onto the generated Pollinations background.
+        //    This ensures the user's brand asset ALWAYS appears in the final output.
+        if (hasUserImage && image_base64 && generatedImageUrl && !generatedImageUrl.startsWith('data:')) {
+            // The current generatedImageUrl is a plain text-to-image (no user logo integrated)
+            // Check if we got here via image-guided route (URL would be Catbox/Replicate output)
+            // If it's a Pollinations URL (no user logo), run manual compositor on top of it
+            const isPollinations = generatedImageUrl.includes('pollinations.ai');
+            const isRawTextToImage = isPollinations || (generatedImageUrl.includes('replicate.delivery') && !hasUserImage);
+
+            if (isPollinations) {
+                console.log('🎨 [Studio Pro 8K] Text-to-image scene generated (no user logo). Running manual compositor...');
+                try {
+                    const manualScene = await compositeUserLogoAsScene({
+                        logoBase64: image_base64,
+                        scenePrompt: enhancedPrompt,
+                        primaryColor: brand?.primary_color || '#10b981',
+                    });
+                    if (manualScene) {
+                        generatedImageUrl = manualScene;
+                        console.log('✅ [Studio Pro 8K] Manual compositor replaced Pollinations fallback with logo-integrated scene!');
+                    }
+                } catch (manualErr: any) {
+                    console.warn(`⚠️ [Studio Pro 8K] Manual compositor failed: ${manualErr.message}`);
+                }
+            }
+        }
+
 
         // 4. STUDIO PRO overlay system — premium logo badge + price pill + CTA banner
         let finalUrl = generatedImageUrl;

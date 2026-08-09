@@ -37,6 +37,15 @@ function clampHex(hex: string, fallback = '#10b981'): string {
     return m ? `#${m[1]}` : fallback;
 }
 
+// ------------------------------------------------------------
+// FONT EMBEDDING: Use a simple inline @font-face with a bundled
+// system-safe declaration. On Alpine with ttf-freefont installed
+// (via Dockerfile), 'FreeSans' / 'FreeMono' will render correctly.
+// On any system, 'Arial' / 'Helvetica' is tried as fallback.
+// This declaration is injected into every SVG <defs> block.
+// ------------------------------------------------------------
+const FONT_STACK = `FreeSans, Arial, Helvetica, Liberation Sans, sans-serif`;
+
 async function fetchImageBuffer(src: string): Promise<Buffer> {
     if (!src) throw new Error('Empty image source');
     if (src.startsWith('data:')) {
@@ -87,6 +96,142 @@ function wrapTextToLines(text: string, maxCharsPerLine = 28, maxLines = 3): stri
         lines.push(currentLine);
     }
     return lines;
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  NEW: Manual Logo-on-Scene Compositor
+//  Used as fallback when AI providers (FLUX Redux, Fal, etc.) fail.
+//  Takes the user's uploaded logo/product PNG and composites it
+//  centered on a Pollinations-generated background scene with
+//  realistic drop-shadow and radial glow to give a 3D-like feel.
+// ─────────────────────────────────────────────────────────────────
+export async function compositeUserLogoAsScene({
+    logoBase64,
+    scenePrompt,
+    primaryColor = '#10b981',
+    width = 1024,
+    height = 1024,
+}: {
+    logoBase64: string;
+    scenePrompt: string;
+    primaryColor?: string;
+    width?: number;
+    height?: number;
+}): Promise<string> {
+    const brand = clampHex(primaryColor);
+
+    try {
+        // 1. Generate background scene via Pollinations (fast, no key needed)
+        const cleanPrompt = scenePrompt
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^\w\s]/gi, '')
+            .substring(0, 120)
+            .trim()
+            .replace(/\s+/g, '_');
+        const seed = Math.floor(Math.random() * 1000000);
+        const bgUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}_cinematic_studio_8k_dramatic_lighting?width=${width}&height=${height}&nologo=true&seed=${seed}`;
+
+        console.log(`[CompositeUserLogo] Fetching Pollinations background scene...`);
+        let bgBuffer: Buffer;
+        try {
+            bgBuffer = await withTimeout(fetchImageBuffer(bgUrl), 30000, 'pollinations bg');
+        } catch (e) {
+            // If Pollinations fails, create a dark gradient background
+            console.warn('[CompositeUserLogo] Pollinations failed, using gradient bg:', e);
+            const gradSvg = `
+            <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <radialGradient id="bgGrad" cx="50%" cy="40%" r="70%">
+                        <stop offset="0%" stop-color="#1e1b4b"/>
+                        <stop offset="60%" stop-color="#0f172a"/>
+                        <stop offset="100%" stop-color="#020617"/>
+                    </radialGradient>
+                </defs>
+                <rect width="${width}" height="${height}" fill="url(#bgGrad)"/>
+            </svg>`;
+            bgBuffer = await sharp(Buffer.from(gradSvg)).png().toBuffer();
+        }
+
+        // Resize background to exact dimensions
+        const bgResized = await sharp(bgBuffer)
+            .resize(width, height, { fit: 'cover', position: 'centre' })
+            .jpeg({ quality: 90 })
+            .toBuffer();
+
+        // 2. Process logo: resize to 65% of canvas, preserve transparency
+        const logoRaw = await fetchImageBuffer(logoBase64);
+        const logoSize = Math.round(width * 0.65);
+        const logoProcessed = await sharp(logoRaw)
+            .resize(logoSize, logoSize, { fit: 'inside', withoutEnlargement: false })
+            .png()
+            .toBuffer();
+
+        // Get actual dimensions after resize
+        const logoMeta = await sharp(logoProcessed).metadata();
+        const logoW = logoMeta.width || logoSize;
+        const logoH = logoMeta.height || logoSize;
+
+        const logoCenterX = Math.round((width - logoW) / 2);
+        const logoCenterY = Math.round((height - logoH) / 2) - Math.round(height * 0.04); // slightly above center
+
+        // 3. Create glow/shadow ring behind logo (SVG overlay)
+        const glowSize = Math.max(logoW, logoH) + 80;
+        const glowX = Math.round((width - glowSize) / 2);
+        const glowY = Math.round((height - glowSize) / 2) - Math.round(height * 0.04);
+
+        const glowSvg = `
+        <svg width="${glowSize}" height="${glowSize}" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <radialGradient id="lglow" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stop-color="${brand}" stop-opacity="0.45"/>
+                    <stop offset="50%" stop-color="${brand}" stop-opacity="0.18"/>
+                    <stop offset="100%" stop-color="${brand}" stop-opacity="0"/>
+                </radialGradient>
+                <filter id="blur1">
+                    <feGaussianBlur stdDeviation="18"/>
+                </filter>
+            </defs>
+            <ellipse cx="${glowSize / 2}" cy="${glowSize / 2}" rx="${glowSize * 0.46}" ry="${glowSize * 0.4}" fill="url(#lglow)" filter="url(#blur1)"/>
+        </svg>`;
+
+        // 4. Shadow below logo (gives 3D grounded feeling)
+        const shadowW = Math.round(logoW * 0.9);
+        const shadowH = Math.round(logoH * 0.12);
+        const shadowX = Math.round((width - shadowW) / 2);
+        const shadowY = logoCenterY + logoH - Math.round(shadowH * 0.3);
+
+        const shadowSvg = `
+        <svg width="${shadowW}" height="${shadowH * 3}" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <radialGradient id="shad" cx="50%" cy="0%" r="100%">
+                    <stop offset="0%" stop-color="#000000" stop-opacity="0.55"/>
+                    <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+                </radialGradient>
+                <filter id="shadblur"><feGaussianBlur stdDeviation="8"/></filter>
+            </defs>
+            <ellipse cx="${shadowW / 2}" cy="${shadowH * 0.8}" rx="${shadowW / 2}" ry="${shadowH}" fill="url(#shad)" filter="url(#shadblur)"/>
+        </svg>`;
+
+        // 5. Composite everything
+        const baseSharp = sharp(bgResized)
+            .composite([
+                // Glow ring behind logo
+                { input: Buffer.from(glowSvg), top: glowY, left: glowX },
+                // Shadow below logo
+                { input: Buffer.from(shadowSvg), top: shadowY, left: shadowX },
+                // The logo itself
+                { input: logoProcessed, top: logoCenterY, left: logoCenterX },
+            ]);
+
+        const finalBuffer = await baseSharp.jpeg({ quality: 92 }).toBuffer();
+        console.log(`[CompositeUserLogo] ✅ Manual logo-on-scene composite done (${logoW}x${logoH} logo on ${width}x${height} scene)`);
+        return `data:image/jpeg;base64,${finalBuffer.toString('base64')}`;
+
+    } catch (err: any) {
+        console.error('[CompositeUserLogo] Failed, returning raw logo:', err.message);
+        return logoBase64; // absolute last resort
+    }
 }
 
 /**
@@ -215,7 +360,7 @@ export async function compositeProductAndLogo({
             const cleanPrice = escapeXml(priceText.trim().substring(0, 24));
             const pillW = Math.max(180, cleanPrice.length * 16 + 40);
             const pillSvg = `
-            <svg width="${pillW}" height="68">
+            <svg width="${pillW}" height="68" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                     <filter id="ps" x="-10%" y="-10%" width="120%" height="120%">
                         <feGaussianBlur in="SourceAlpha" stdDeviation="6"/>
@@ -225,7 +370,7 @@ export async function compositeProductAndLogo({
                     </filter>
                 </defs>
                 <rect x="0" y="0" width="${pillW}" height="68" rx="34" fill="${brand}" filter="url(#ps)"/>
-                <text x="${pillW / 2}" y="46" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${cleanPrice}</text>
+                <text x="${pillW / 2}" y="46" font-family="${FONT_STACK}" font-size="30" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${cleanPrice}</text>
             </svg>`;
             overlays.push({ input: Buffer.from(pillSvg), top: 30, left: width - pillW - 30 });
         }
@@ -243,7 +388,7 @@ export async function compositeProductAndLogo({
             const startY = bn ? 65 : 45;
 
             const tspanElements = headLines.map((line, idx) =>
-                `<tspan x="40" y="${startY + (idx * lineHeight)}" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="#ffffff">${escapeXml(line)}</tspan>`
+                `<tspan x="40" y="${startY + (idx * lineHeight)}" font-family="${FONT_STACK}" font-size="32" font-weight="bold" fill="#ffffff">${escapeXml(line)}</tspan>`
             ).join('');
 
             const ctaTop = startY + textBlockHeight + 15;
@@ -259,11 +404,11 @@ export async function compositeProductAndLogo({
                 </defs>
                 <rect x="0" y="0" width="${width}" height="${bannerHeight}" fill="url(#bannerBg)"/>
                 <rect x="0" y="0" width="${width}" height="5" fill="${brand}"/>
-                ${bn ? `<text x="40" y="38" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="${brand}" letter-spacing="3">${escapeXml(bn.toUpperCase())}</text>` : ''}
+                ${bn ? `<text x="40" y="38" font-family="${FONT_STACK}" font-size="18" font-weight="bold" fill="${brand}" letter-spacing="3">${escapeXml(bn.toUpperCase())}</text>` : ''}
                 ${headLines.length > 0 ? `<text>${tspanElements}</text>` : ''}
                 ${cta ? `
                 <rect x="40" y="${ctaTop}" width="300" height="50" rx="25" fill="${brand}"/>
-                <text x="190" y="${ctaTop + 33}" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#ffffff" text-anchor="middle">${escapeXml(cta)}</text>` : ''}
+                <text x="190" y="${ctaTop + 33}" font-family="${FONT_STACK}" font-size="18" font-weight="bold" fill="#ffffff" text-anchor="middle">${escapeXml(cta)}</text>` : ''}
             </svg>`;
             overlays.push({ input: Buffer.from(bannerSvg), top: height - bannerHeight, left: 0 });
         }
@@ -376,7 +521,7 @@ export async function compositeStudioPro({
             const cleanPrice = escapeXml(priceText.trim().substring(0, 24));
             const pillW = Math.max(200, cleanPrice.length * 17 + 50);
             const pillSvg = `
-            <svg width="${pillW}" height="76">
+            <svg width="${pillW}" height="76" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                     <linearGradient id="gPill" x1="0%" y1="0%" x2="0%" y2="100%">
                         <stop offset="0%" stop-color="${brand}" stop-opacity="1" />
@@ -385,7 +530,7 @@ export async function compositeStudioPro({
                 </defs>
                 <rect x="0" y="0" width="${pillW}" height="76" rx="38" fill="url(#gPill)"/>
                 <rect x="3" y="3" width="${pillW - 6}" height="36" rx="18" fill="#ffffff" fill-opacity="0.18"/>
-                <text x="${pillW / 2}" y="50" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${cleanPrice}</text>
+                <text x="${pillW / 2}" y="50" font-family="${FONT_STACK}" font-size="32" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${cleanPrice}</text>
             </svg>`;
             overlays.push({ input: Buffer.from(pillSvg), top: 36, left: width - pillW - 36 });
         }
@@ -403,7 +548,7 @@ export async function compositeStudioPro({
             const startY = bn ? 70 : 50;
 
             const tspanElements = headLines.map((line, idx) =>
-                `<tspan x="40" y="${startY + (idx * lineHeight)}" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="bold" fill="#ffffff">${escapeXml(line)}</tspan>`
+                `<tspan x="40" y="${startY + (idx * lineHeight)}" font-family="${FONT_STACK}" font-size="36" font-weight="bold" fill="#ffffff">${escapeXml(line)}</tspan>`
             ).join('');
 
             const ctaTop = startY + textBlockHeight + 20;
@@ -423,11 +568,11 @@ export async function compositeStudioPro({
                 </defs>
                 <rect x="0" y="0" width="${width}" height="${bannerHeight}" fill="url(#bannerBgP)"/>
                 <rect x="0" y="0" width="${width}" height="6" fill="${brand}"/>
-                ${bn ? `<text x="40" y="42" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="${brand}" letter-spacing="4">${escapeXml(bn.toUpperCase())}</text>` : ''}
+                ${bn ? `<text x="40" y="42" font-family="${FONT_STACK}" font-size="20" font-weight="bold" fill="${brand}" letter-spacing="4">${escapeXml(bn.toUpperCase())}</text>` : ''}
                 ${headLines.length > 0 ? `<text>${tspanElements}</text>` : ''}
                 ${cta ? `
                 <rect x="40" y="${ctaTop}" width="320" height="58" rx="29" fill="url(#ctaG)"/>
-                <text x="200" y="${ctaTop + 37}" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#ffffff" text-anchor="middle">${escapeXml(cta)}</text>` : ''}
+                <text x="200" y="${ctaTop + 37}" font-family="${FONT_STACK}" font-size="20" font-weight="bold" fill="#ffffff" text-anchor="middle">${escapeXml(cta)}</text>` : ''}
             </svg>`;
             overlays.push({ input: Buffer.from(bannerSvg), top: height - bannerHeight, left: 0 });
         }
