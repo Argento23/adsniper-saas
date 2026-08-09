@@ -194,23 +194,9 @@ export async function generateFluxIPAdapter(
     console.log(`🎨 [Fal FLUX Redux/Adapter] Integrating reference logo/product into scene...`);
     const httpUrl = referenceImageUrl.startsWith('data:') ? await uploadBase64ToFalStorage(referenceImageUrl) : referenceImageUrl;
     
-    // First try FLUX 1.0 Dev Redux for structural & style synthesis
-    try {
-        const result = await runFalAsync('https://fal.run/fal-ai/flux-1/dev/redux', {
-            image_url: httpUrl,
-            prompt: prompt,
-            image_size: imageSize,
-            num_inference_steps: 28,
-            guidance_scale: 3.5
-        });
-        if (result && result.images && result.images[0]?.url) {
-            return result.images[0].url;
-        }
-    } catch (reduxError: any) {
-        console.warn(`⚠️ FLUX Redux failed, falling back to flux-general: ${reduxError.message}`);
-    }
-
-    // Fallback to flux-general with image conditioning
+    // Use flux-general with image conditioning (IP-Adapter)
+    // We skip Redux here because Redux enforces structural similarity too strictly 
+    // and ignores scene prompts (like placing the logo in hands).
     const result = await runFalAsync('https://fal.run/fal-ai/flux-general', {
         prompt,
         image_size: imageSize,

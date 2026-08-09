@@ -86,30 +86,17 @@ export async function POST(req: Request) {
 
         console.log(`🎯 [Studio Pro 8K] User image: ${hasUserImage ? 'YES (3D Scene Integration Mode)' : 'NO'}`);
 
-        // 1. FLUX Redux Image-guided 3D Synthesis (Replicate / Fal)
+        // 1. IP-Adapter Image-guided 3D Synthesis
         if (hasUserImage) {
             try {
-                console.log('🎯 [Studio Pro 8K] Trying FLUX Redux for 3D logo synthesis...');
-                const reduxUrl = await generateReplicateFluxRedux(image_base64, enhancedPrompt);
-                if (reduxUrl) {
-                    generatedImageUrl = reduxUrl;
-                    console.log('✅ [Studio Pro 8K] FLUX Redux (Replicate) succeeded');
+                console.log('🎯 [Studio Pro 8K] Trying FLUX IP-Adapter / Fal...');
+                const ipUrl = await generateFluxIPAdapter(image_base64, enhancedPrompt, 0.65, "square_hd");
+                if (ipUrl) {
+                    generatedImageUrl = ipUrl;
+                    console.log('✅ [Studio Pro 8K] FLUX IP-Adapter succeeded');
                 }
-            } catch (reduxErr: any) {
-                console.warn(`⚠️ [Studio Pro 8K] Replicate FLUX Redux failed: ${reduxErr.message}`);
-            }
-
-            if (!generatedImageUrl) {
-                try {
-                    console.log('🎯 [Studio Pro 8K] Trying FLUX IP-Adapter / Fal Redux...');
-                    const ipUrl = await generateFluxIPAdapter(image_base64, enhancedPrompt, 0.75, "square_hd");
-                    if (ipUrl) {
-                        generatedImageUrl = ipUrl;
-                        console.log('✅ [Studio Pro 8K] FLUX IP-Adapter succeeded');
-                    }
-                } catch (ipErr: any) {
-                    console.warn(`⚠️ [Studio Pro 8K] FLUX IP-Adapter failed: ${ipErr.message}`);
-                }
+            } catch (ipErr: any) {
+                console.warn(`⚠️ [Studio Pro 8K] FLUX IP-Adapter failed: ${ipErr.message}`);
             }
         }
 
