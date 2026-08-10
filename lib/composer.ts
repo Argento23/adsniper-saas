@@ -3,6 +3,61 @@ import sharp from 'sharp';
 // NOTE: @resvg/resvg-js is loaded dynamically to avoid native .node bundling issues
 // in Vercel's webpack pipeline. It's required at runtime inside renderSvgToPngBuffer().
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Font Loading (Inter Regular + Bold) — required for SVG text rendering on
+// Linux/Vercel where there are no installed system fonts. Without this,
+// characters render as tofu boxes (□□□) inside the generated banners.
+// Fonts are downloaded once from a public CDN and cached in-memory.
+// ─────────────────────────────────────────────────────────────────────────────
+type FontBuffers = { regular: Buffer; bold: Buffer } | null;
+let fontCache: FontBuffers = null;
+let fontLoadPromise: Promise<FontBuffers> | null = null;
+
+const FONT_URLS = {
+    regular: 'https://cdn.jsdelivr.net/gh/rsms/inter@master/docs/font-files/Inter-Regular.otf',
+    bold:    'https://cdn.jsdelivr.net/gh/rsms/inter@master/docs/font-files/Inter-Bold.otf',
+};
+
+async function downloadFont(url: string, label: string): Promise<Buffer> {
+    console.log(`🔤 [Composer] Downloading font ${label} from ${url}`);
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 10000);
+    try {
+        const res = await fetch(url, {
+            signal: controller.signal,
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+        });
+        clearTimeout(t);
+        if (!res.ok) throw new Error(`Font HTTP ${res.status}`);
+        const ab = await res.arrayBuffer();
+        return Buffer.from(ab);
+    } catch (e: any) {
+        clearTimeout(t);
+        throw new Error(`Failed to download ${label}: ${e.message}`);
+    }
+}
+
+async function ensureFontsLoaded(): Promise<FontBuffers> {
+    if (fontCache) return fontCache;
+    if (fontLoadPromise) return fontLoadPromise;
+    fontLoadPromise = (async () => {
+        try {
+            const [regular, bold] = await Promise.all([
+                downloadFont(FONT_URLS.regular, 'Inter Regular'),
+                downloadFont(FONT_URLS.bold, 'Inter Bold'),
+            ]);
+            fontCache = { regular, bold };
+            console.log(`✅ [Composer] Fonts loaded (regular: ${regular.length}B, bold: ${bold.length}B)`);
+            return fontCache;
+        } catch (e: any) {
+            console.warn(`⚠️ [Composer] Font download failed: ${e.message}. Falling back to system fonts.`);
+            fontCache = null;
+            return null;
+        }
+    })();
+    return fontLoadPromise;
+}
+
 interface CompositeOptions {
     sceneImage: string | Buffer;
     logoUrlOrBase64?: string | null;
@@ -50,8 +105,11 @@ async function renderSvgToPngBuffer(svgString: string, targetWidth: number): Pro
         // Dynamic require avoids webpack trying to bundle the native .node binary
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { Resvg } = require('@resvg/resvg-js');
+        const fonts = await ensureFontsLoaded();
         const resvg = new Resvg(svgString, {
-            fitTo: { mode: 'width', value: Math.round(targetWidth) }
+            fitTo: { mode: 'width', value: Math.round(targetWidth) },
+            background: 'transparent',
+            font: fonts ? { fontFiles: [fonts.regular, fonts.bold], loadSystemFonts: true, defaultFontFamily: 'Inter' } : { loadSystemFonts: true },
         });
         return resvg.render().asPng();
     } catch (e: any) {
@@ -369,7 +427,7 @@ export async function compositeProductAndLogo({
             const pillSvg = `
             <svg width="${pillW}" height="68" xmlns="http://www.w3.org/2000/svg">
                 <rect x="0" y="0" width="${pillW}" height="68" rx="34" fill="${brand}"/>
-                <text x="${pillW / 2}" y="46" font-family="sans-serif" font-size="30" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${cleanPrice}</text>
+                <text x="${pillW / 2}" y="46" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${cleanPrice}</text>
             </svg>`;
             const pillPng = await renderSvgToPngBuffer(pillSvg, pillW);
             overlays.push({ input: pillPng, top: 30, left: width - pillW - 30 });
@@ -388,7 +446,7 @@ export async function compositeProductAndLogo({
             const startY = bn ? 65 : 45;
 
             const tspanElements = headLines.map((line, idx) =>
-                `<tspan x="40" y="${startY + (idx * lineHeight)}" font-family="sans-serif" font-size="32" font-weight="bold" fill="#ffffff">${escapeXml(line)}</tspan>`
+                `<tspan x="40" y="${startY + (idx * lineHeight)}" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="#ffffff">${escapeXml(line)}</tspan>`
             ).join('');
 
             const ctaTop = startY + textBlockHeight + 15;
@@ -404,11 +462,11 @@ export async function compositeProductAndLogo({
                 </defs>
                 <rect x="0" y="0" width="${width}" height="${bannerHeight}" fill="url(#bannerBg)"/>
                 <rect x="0" y="0" width="${width}" height="5" fill="${brand}"/>
-                ${bn ? `<text x="40" y="38" font-family="sans-serif" font-size="18" font-weight="bold" fill="${brand}" letter-spacing="3">${escapeXml(bn.toUpperCase())}</text>` : ''}
+                ${bn ? `<text x="40" y="38" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="${brand}" letter-spacing="3">${escapeXml(bn.toUpperCase())}</text>` : ''}
                 ${headLines.length > 0 ? `<text>${tspanElements}</text>` : ''}
                 ${cta ? `
                 <rect x="40" y="${ctaTop}" width="300" height="50" rx="25" fill="${brand}"/>
-                <text x="190" y="${ctaTop + 33}" font-family="sans-serif" font-size="18" font-weight="bold" fill="#ffffff" text-anchor="middle">${escapeXml(cta)}</text>` : ''}
+                <text x="190" y="${ctaTop + 33}" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#ffffff" text-anchor="middle">${escapeXml(cta)}</text>` : ''}
             </svg>`;
             const bannerPng = await renderSvgToPngBuffer(bannerSvg, width);
             overlays.push({ input: bannerPng, top: height - bannerHeight, left: 0 });
@@ -516,7 +574,7 @@ export async function compositeStudioPro({
                 </defs>
                 <rect x="0" y="0" width="${pillW}" height="76" rx="38" fill="url(#gPill)"/>
                 <rect x="3" y="3" width="${pillW - 6}" height="36" rx="18" fill="#ffffff" fill-opacity="0.18"/>
-                <text x="${pillW / 2}" y="50" font-family="sans-serif" font-size="32" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${cleanPrice}</text>
+                <text x="${pillW / 2}" y="50" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${cleanPrice}</text>
             </svg>`;
             const pillPng = await renderSvgToPngBuffer(pillSvg, pillW);
             overlays.push({ input: pillPng, top: 36, left: width - pillW - 36 });
@@ -535,7 +593,7 @@ export async function compositeStudioPro({
             const startY = bn ? 70 : 50;
 
             const tspanElements = headLines.map((line, idx) =>
-                `<tspan x="40" y="${startY + (idx * lineHeight)}" font-family="sans-serif" font-size="36" font-weight="bold" fill="#ffffff">${escapeXml(line)}</tspan>`
+                `<tspan x="40" y="${startY + (idx * lineHeight)}" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="36" font-weight="bold" fill="#ffffff">${escapeXml(line)}</tspan>`
             ).join('');
 
             const ctaTop = startY + textBlockHeight + 20;
@@ -555,11 +613,11 @@ export async function compositeStudioPro({
                 </defs>
                 <rect x="0" y="0" width="${width}" height="${bannerHeight}" fill="url(#bannerBgP)"/>
                 <rect x="0" y="0" width="${width}" height="6" fill="${brand}"/>
-                ${bn ? `<text x="40" y="42" font-family="sans-serif" font-size="20" font-weight="bold" fill="${brand}" letter-spacing="4">${escapeXml(bn.toUpperCase())}</text>` : ''}
+                ${bn ? `<text x="40" y="42" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="${brand}" letter-spacing="4">${escapeXml(bn.toUpperCase())}</text>` : ''}
                 ${headLines.length > 0 ? `<text>${tspanElements}</text>` : ''}
                 ${cta ? `
                 <rect x="40" y="${ctaTop}" width="320" height="58" rx="29" fill="url(#ctaG)"/>
-                <text x="200" y="${ctaTop + 37}" font-family="sans-serif" font-size="20" font-weight="bold" fill="#ffffff" text-anchor="middle">${escapeXml(cta)}</text>` : ''}
+                <text x="200" y="${ctaTop + 37}" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#ffffff" text-anchor="middle">${escapeXml(cta)}</text>` : ''}
             </svg>`;
             const bannerPng = await renderSvgToPngBuffer(bannerSvg, width);
             overlays.push({ input: bannerPng, top: height - bannerHeight, left: 0 });

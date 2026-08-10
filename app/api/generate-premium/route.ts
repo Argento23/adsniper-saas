@@ -74,19 +74,20 @@ export async function POST(req: Request) {
 
         // 1. Expand scene description into 8K Ad Prompt
         const enhancedPrompt = await enhancePromptForStudio8K(
-            scene_prompt || "Niño sosteniendo el logo 3D translúcido en sus manos",
+            scene_prompt || "professional commercial product placement on minimalist marble pedestal with cinematic studio lighting",
             brand?.name
         );
-        console.log(`🎯 [Studio Pro 8K] Prompt: ${enhancedPrompt}`);
+        console.log(`🎯 [Studio Pro 8K] User scene: "${scene_prompt || '(default)'}" → Enhanced: ${enhancedPrompt}`);
 
         let generatedImageUrl: string | null = null;
         const hasUserImage = image_base64 && image_base64.length > 100;
 
         console.log(`🎯 [Studio Pro 8K] User image: ${hasUserImage ? 'YES (3D Scene Integration Mode)' : 'NO'}`);
 
-        // 1. REAL PRODUCT PLACEMENT VIA BRIA E-COMMERCE & IP-ADAPTER
+        // ROBUST CASCADE: always build a STUDIO SCENE from the user's prompt first,
+        // then composite the user's image on top so the prompt IS respected.
         if (hasUserImage) {
-            // Primary: Bria Native E-Commerce Product Shot via Fal.ai
+            // 1a. PRIMARY: Bria E-Commerce Product Shot via Fal.ai (best for clean product photos)
             if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
                 try {
                     console.log('🎯 [Studio Pro 8K] Generating via Bria Product Shot (Real Product Placement)...');
@@ -100,17 +101,36 @@ export async function POST(req: Request) {
                 }
             }
 
-            // Secondary: FLUX IP-Adapter via Fal.ai (Image-Guided Scene Synthesis)
+            // 1b. SECONDARY: FLUX IP-Adapter via Fal.ai (Image-Guided Scene Synthesis)
             if (!generatedImageUrl && (process.env.FAL_KEY || process.env.FAL_API_KEY)) {
                 try {
                     console.log('🎯 [Studio Pro 8K] Trying Fal.ai FLUX IP-Adapter...');
-                    const ipUrl = await generateFluxIPAdapter(image_base64, enhancedPrompt, 0.55);
+                    const ipUrl = await generateFluxIPAdapter(image_base64, enhancedPrompt, 0.45);
                     if (ipUrl) {
                         generatedImageUrl = ipUrl;
                         console.log('✅ [Studio Pro 8K] Fal.ai FLUX IP-Adapter succeeded');
                     }
                 } catch (ipErr: any) {
                     console.warn(`⚠️ [Studio Pro 8K] Fal.ai FLUX IP-Adapter failed: ${ipErr.message}`);
+                }
+            }
+
+            // 1c. TERTIARY (FALLBACK): Generate scene from prompt via text-to-image,
+            //     then composite user's image as a clean product placement on top.
+            //     This GUARANTEES the prompt is respected AND the user's image is shown.
+            if (!generatedImageUrl) {
+                console.log('🎨 [Studio Pro 8K] Falling back to text-to-image scene + manual product composite...');
+                try {
+                    generatedImageUrl = await compositeUserLogoAsScene({
+                        logoBase64: image_base64,
+                        scenePrompt: enhancedPrompt,
+                        primaryColor: brand?.primary_color || '#10b981',
+                    });
+                    if (generatedImageUrl) {
+                        console.log('✅ [Studio Pro 8K] Manual product-on-scene composite done');
+                    }
+                } catch (compErr: any) {
+                    console.warn(`⚠️ [Studio Pro 8K] Manual composite failed: ${compErr.message}`);
                 }
             }
         }
@@ -203,7 +223,7 @@ export async function POST(req: Request) {
             finalUrl = await compositeStudioPro({
                 sceneImage: generatedImageUrl,
                 logoUrlOrBase64: brand?.logo_url || null,
-                productImageBase64: null, // product already integrated into scene by Bria/IP-Adapter
+                productImageBase64: hasUserImage ? image_base64 : null, // user's product/logo for thumbnail overlay
                 brandName: brand?.name,
                 primaryColor: brand?.primary_color,
                 headlineText: headlineText || null,
