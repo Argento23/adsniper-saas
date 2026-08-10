@@ -1,5 +1,7 @@
 import sharp from 'sharp';
-import { Resvg } from '@resvg/resvg-js';
+
+// NOTE: @resvg/resvg-js is loaded dynamically to avoid native .node bundling issues
+// in Vercel's webpack pipeline. It's required at runtime inside renderSvgToPngBuffer().
 
 interface CompositeOptions {
     sceneImage: string | Buffer;
@@ -39,19 +41,27 @@ function clampHex(hex: string, fallback = '#10b981'): string {
 }
 
 /**
- * Render SVG string to crisp PNG buffer using @resvg/resvg-js (Rust resvg core).
- * This COMPLETELY avoids host system font dependency in Sharp/librsvg on Vercel AWS Lambda.
- * Guarantees zero tofu boxes [?] [?] [?] on Vercel, Docker, Linux, Windows, etc.
+ * Render SVG string to crisp PNG buffer.
+ * Tries @resvg/resvg-js first (Rust, no system fonts needed — perfect for Vercel/Lambda).
+ * Falls back to Sharp's built-in SVG renderer if native module can't load.
  */
 async function renderSvgToPngBuffer(svgString: string, targetWidth: number): Promise<Buffer> {
     try {
+        // Dynamic require avoids webpack trying to bundle the native .node binary
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { Resvg } = require('@resvg/resvg-js');
         const resvg = new Resvg(svgString, {
             fitTo: { mode: 'width', value: Math.round(targetWidth) }
         });
         return resvg.render().asPng();
     } catch (e: any) {
-        console.warn('[Composer] Resvg rendering warning:', e?.message || e);
-        return Buffer.from(svgString);
+        // Fallback: Sharp's SVG renderer (may have font issues on some systems but usually OK)
+        try {
+            return await sharp(Buffer.from(svgString)).png().toBuffer();
+        } catch (e2: any) {
+            console.warn('[Composer] SVG render fallback also failed:', e2?.message);
+            return Buffer.from(svgString);
+        }
     }
 }
 

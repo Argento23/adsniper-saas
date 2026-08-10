@@ -1,9 +1,8 @@
-// Trigger Rebuild - Image Fallback Logic V3
+// Trigger Rebuild - Image+Text Fix V5 (Dynamic resvg, Vercel-safe)
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    output: 'standalone', // Optimizes for Docker/VPS
-    serverExternalPackages: ['@resvg/resvg-js', 'sharp'],
     experimental: {
+        // Prevents webpack from trying to bundle native .node files (sharp, resvg)
         serverComponentsExternalPackages: ['@resvg/resvg-js', 'sharp'],
     },
     typescript: {
