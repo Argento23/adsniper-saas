@@ -690,93 +690,130 @@ export async function POST(request: Request) {
                     fullPrompt += `, typography rendering: "${cleanHeadline}"`;
                 }
 
-                const baseGeneratedUrl = await (async () => {
+                let imageGuided = false;
+                let baseGeneratedUrl: string | null = null;
 
-                    // B0. TRY BRIA E-COMMERCE PRODUCT SHOT (when user uploaded logo/product)
-                    if (hasUserImage) {
-                        try {
-                            console.log(`🎯 [Standard] Trying Bria Product Shot for: ${scrapedTitle}`);
-                            const briaUrl = await generateBriaProductShot(manual_image_base64, fullPrompt);
-                            if (briaUrl) return briaUrl;
-                        } catch (e) {
-                            console.warn(`⚠️ Bria Product Shot failed, falling back to IP-Adapter: ${(e as Error).message}`);
+                // B0. TRY BRIA E-COMMERCE PRODUCT SHOT (when user uploaded logo/product)
+                if (hasUserImage) {
+                    try {
+                        console.log(`🎯 [Standard] Trying Bria Product Shot for: ${scrapedTitle}`);
+                        const briaUrl = await generateBriaProductShot(manual_image_base64, fullPrompt);
+                        if (briaUrl) {
+                            baseGeneratedUrl = briaUrl;
+                            imageGuided = true;
                         }
+                    } catch (e) {
+                        console.warn(`⚠️ Bria Product Shot failed, falling back to IP-Adapter: ${(e as Error).message}`);
+                    }
 
-                        // B0b. TRY FLUX IP-ADAPTER (image-guided scene generation)
+                    // B0b. TRY FLUX IP-ADAPTER (image-guided scene generation)
+                    if (!baseGeneratedUrl) {
                         try {
                             console.log(`🎯 [Standard] Trying FLUX IP-Adapter for: ${scrapedTitle}`);
-                            const ipUrl = await generateFluxIPAdapter(manual_image_base64, fullPrompt, 0.55, "square_hd");
-                            if (ipUrl) return ipUrl;
+                            const ipUrl = await generateFluxIPAdapter(manual_image_base64, fullPrompt, 0.45, "square_hd");
+                            if (ipUrl) {
+                                baseGeneratedUrl = ipUrl;
+                                imageGuided = true;
+                            }
                         } catch (e) {
                             console.warn(`⚠️ IP-Adapter failed, falling back to text-to-image: ${(e as Error).message}`);
                         }
                     }
+                }
 
-                    // B1. TRY REPLICATE FLUX DEV 8K
+                // B1. TRY REPLICATE FLUX DEV 8K
+                if (!baseGeneratedUrl) {
                     try {
                         console.log(`🚀 [Standard] Generating via Replicate FLUX Dev (8K Commercial)...`);
                         const repDev = await generateReplicateFluxDev(fullPrompt);
-                        if (repDev && repDev.imageUrl) return repDev.imageUrl;
+                        if (repDev && repDev.imageUrl) baseGeneratedUrl = repDev.imageUrl;
                     } catch (e) {
                         console.warn(`⚠️ Replicate FLUX Dev failed, trying Fal.ai...`);
                     }
+                }
 
-                    // B2. TRY FAL.AI (FLUX DEV)
+                // B2. TRY FAL.AI (FLUX DEV)
+                if (!baseGeneratedUrl) {
                     try {
                         if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
                             const falResult = await generateFalImage(fullPrompt);
-                            if (falResult && falResult.imageUrl) return falResult.imageUrl;
+                            if (falResult && falResult.imageUrl) baseGeneratedUrl = falResult.imageUrl;
                         }
                     } catch (e) {
                         console.error(`⚠️ Fal.ai failed, trying Ideogram...`);
                     }
+                }
 
-                    // B3. TRY IDEOGRAM V2 TEXT-TO-IMAGE
+                // B3. TRY IDEOGRAM V2 TEXT-TO-IMAGE
+                if (!baseGeneratedUrl) {
                     try {
                         const ideogramImage = await generateIdeogramImage(fullPrompt, scrapedImage);
-                        if (ideogramImage) return ideogramImage;
+                        if (ideogramImage) baseGeneratedUrl = ideogramImage;
                     } catch (e) {
                         console.error(`⚠️ Ideogram failed, trying Replicate Flux Schnell...`);
                     }
+                }
 
-                    // B4. TRY REPLICATE (FLUX Schnell)
+                // B4. TRY REPLICATE (FLUX Schnell)
+                if (!baseGeneratedUrl) {
                     try {
                         const replicateResult = await generateReplicateImage(fullPrompt);
-                        if (replicateResult && replicateResult.imageUrl) return replicateResult.imageUrl;
+                        if (replicateResult && replicateResult.imageUrl) baseGeneratedUrl = replicateResult.imageUrl;
                     } catch (e) {
                         console.error(`⚠️ Replicate failed, trying Pollinations...`);
                     }
+                }
 
-                    // B4. PROPER FALLBACK: User uploaded an image but all AI providers failed.
-                    // Instead of returning the raw image (which looks broken), composite it
-                    // properly onto a scene background so the user gets a real ad composition.
-                    if (hasUserImage && manual_image_base64) {
-                        console.warn(`⚠️ All AI providers failed. Compositing user logo onto Pollinations scene...`);
-                        try {
-                            const manualScene = await compositeUserLogoAsScene({
-                                logoBase64: manual_image_base64,
-                                scenePrompt: basePrompt || 'cinematic studio advertising dramatic lighting 8k',
-                                primaryColor: brand?.primary_color || '#10b981',
-                            });
-                            return manualScene;
-                        } catch (manualErr) {
-                            console.error('Manual composition also failed, returning raw image:', manualErr);
-                            return manual_image_base64;
-                        }
+                // B4b. PROPER FALLBACK: User uploaded an image but all AI providers failed.
+                // Instead of returning the raw image (which looks broken), composite it
+                // properly onto a scene background so the user gets a real ad composition.
+                if (hasUserImage && manual_image_base64 && !baseGeneratedUrl) {
+                    console.warn(`⚠️ All AI providers failed. Compositing user logo onto scene...`);
+                    try {
+                        baseGeneratedUrl = await compositeUserLogoAsScene({
+                            logoBase64: manual_image_base64,
+                            scenePrompt: basePrompt || 'cinematic studio advertising dramatic lighting 8k',
+                            primaryColor: brand?.primary_color || '#10b981',
+                        });
+                    } catch (manualErr) {
+                        console.error('Manual composition also failed, returning raw image:', manualErr);
+                        baseGeneratedUrl = manual_image_base64;
                     }
+                }
 
-                    // B5. ABSOLUTE FINAL FALLBACK: POLLINATIONS (only when no user image)
+                // B5. ABSOLUTE FINAL FALLBACK: POLLINATIONS (only when no user image)
+                if (!baseGeneratedUrl) {
                     const cleanPrompt = fullPrompt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s]/gi, '').substring(0, 100).trim().replace(/\s+/g, '_');
                     const seed = Math.floor(Math.random() * 1000000);
-                    return `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
-                })();
+                    baseGeneratedUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
+                }
+
+                // B6. GUARANTEED PRODUCT INTEGRATION: no image-guided model placed the
+                // user's product in the scene (bare text-to-image). Composite it onto
+                // the real generated scene so the product ALWAYS appears.
+                if (hasUserImage && manual_image_base64 && baseGeneratedUrl && !imageGuided && !baseGeneratedUrl.startsWith('data:')) {
+                    console.warn(`⚠️ Scene not image-guided. Compositing user product onto scene...`);
+                    try {
+                        const manualScene = await compositeUserLogoAsScene({
+                            logoBase64: manual_image_base64,
+                            scenePrompt: basePrompt || 'cinematic studio advertising dramatic lighting 8k',
+                            primaryColor: brand?.primary_color || '#10b981',
+                            backgroundScene: baseGeneratedUrl,
+                        });
+                        if (manualScene) baseGeneratedUrl = manualScene;
+                    } catch (manualErr) {
+                        console.error('Manual product composite failed:', manualErr);
+                    }
+                }
+
+                const sceneUrl: string = baseGeneratedUrl || 'https://placehold.co/1024x1024/101827/ffffff.png?text=Error';
 
                 // POST-PROCESSING: product card + logo badge + brand banner overlay
                 const productPrice = ad.price || (manual_description?.match(/\$\s?[\d,.]+/)?.[0]) || '';
                 // Only show product thumbnail if the base scene is a NEW AI-generated image (not the user image itself used as fallback)
                 const sceneIsUserImage = hasUserImage && (baseGeneratedUrl === manual_image_base64);
                 const finalImageUrl = await compositeProductAndLogo({
-                    sceneImage: baseGeneratedUrl,
+                    sceneImage: sceneUrl,
                     logoUrlOrBase64: brand?.logo_url || null,
                     productImageBase64: (hasUserImage && !sceneIsUserImage) ? manual_image_base64 : null,
                     brandName: brand?.name,

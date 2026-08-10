@@ -89,6 +89,16 @@ function escapeXml(str: string) {
         .replace(/'/g, '&apos;');
 }
 
+// Emojis (🔥🚀⭐) and other non-Latin symbols have NO glyph in the Inter font
+// loaded on Vercel/Lambda → resvg renders tofu boxes (□□□) inside the banner.
+// Strip them BEFORE SVG text rendering so the output stays clean.
+function stripEmoji(str: string) {
+    return (str || '')
+        .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}\u{3030}\u{2B50}\u{2764}\u{2934}-\u{2935}]/gu, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+}
+
 function clampHex(hex: string, fallback = '#10b981'): string {
     if (!hex) return fallback;
     const m = hex.match(/^#?([0-9a-fA-F]{6})$/);
@@ -196,48 +206,61 @@ export async function compositeUserLogoAsScene({
     primaryColor = '#10b981',
     width = 1024,
     height = 1024,
+    backgroundScene,
 }: {
     logoBase64: string;
     scenePrompt: string;
     primaryColor?: string;
     width?: number;
     height?: number;
+    backgroundScene?: string | null;
 }): Promise<string> {
     const brand = clampHex(primaryColor);
 
     try {
-        const cleanPrompt = scenePrompt
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .replace(/[^\w\s]/gi, '')
-            .substring(0, 120)
-            .trim()
-            .replace(/\s+/g, '_');
-        const seed = Math.floor(Math.random() * 1000000);
-        const bgUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}_cinematic_studio_8k_dramatic_lighting?width=${width}&height=${height}&nologo=true&seed=${seed}`;
-
-        console.log(`[CompositeUserLogo] Fetching Pollinations background scene...`);
-        let bgBuffer: Buffer;
-        try {
-            bgBuffer = await withTimeout(fetchImageBuffer(bgUrl), 20000, 'pollinations bg');
-        } catch (e) {
-            console.warn('[CompositeUserLogo] Pollinations failed, trying backup studio image:', e);
-            const randomBackup = BACKUP_STUDIO_SCENES[Math.floor(Math.random() * BACKUP_STUDIO_SCENES.length)];
+        let bgBuffer: Buffer | null = null;
+        if (backgroundScene) {
+            // Use the already-generated AI scene instead of a lower-quality
+            // Pollinations background, so the user's product is placed ON it.
             try {
-                bgBuffer = await fetchImageBuffer(randomBackup);
-            } catch (err2) {
-                const gradSvg = `
-                <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                        <radialGradient id="bgGrad" cx="50%" cy="40%" r="75%">
-                            <stop offset="0%" stop-color="#1e293b"/>
-                            <stop offset="60%" stop-color="#0f172a"/>
-                            <stop offset="100%" stop-color="#020617"/>
-                        </radialGradient>
-                    </defs>
-                    <rect width="${width}" height="${height}" fill="url(#bgGrad)"/>
-                </svg>`;
-                bgBuffer = await renderSvgToPngBuffer(gradSvg, width);
+                bgBuffer = await withTimeout(fetchImageBuffer(backgroundScene), 20000, 'existing scene fetch');
+            } catch (e) {
+                console.warn('[CompositeUserLogo] Existing scene fetch failed, generating new background:', e);
+            }
+        }
+        if (!bgBuffer) {
+            const cleanPrompt = scenePrompt
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^\w\s]/gi, '')
+                .substring(0, 120)
+                .trim()
+                .replace(/\s+/g, '_');
+            const seed = Math.floor(Math.random() * 1000000);
+            const bgUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}_cinematic_studio_8k_dramatic_lighting?width=${width}&height=${height}&nologo=true&seed=${seed}`;
+
+            console.log(`[CompositeUserLogo] Fetching Pollinations background scene...`);
+            try {
+                bgBuffer = await withTimeout(fetchImageBuffer(bgUrl), 20000, 'pollinations bg');
+            } catch (e) {
+                console.warn('[CompositeUserLogo] Pollinations failed, trying backup studio image:', e);
+                const randomBackup = BACKUP_STUDIO_SCENES[Math.floor(Math.random() * BACKUP_STUDIO_SCENES.length)];
+                try {
+                    bgBuffer = await fetchImageBuffer(randomBackup);
+                } catch (err2) {
+                    const gradSvg = `
+                    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <radialGradient id="bgGrad" cx="50%" cy="40%" r="75%">
+                                <stop offset="0%" stop-color="#1e293b"/>
+                                <stop offset="60%" stop-color="#0f172a"/>
+                                <stop offset="100%" stop-color="#020617"/>
+                            </radialGradient>
+                        </defs>
+                        <rect width="${width}" height="${height}" fill="url(#bgGrad)"/>
+                    </svg>`;
+                    bgBuffer = await renderSvgToPngBuffer(gradSvg, width);
+                }
             }
         }
 
@@ -339,6 +362,18 @@ export async function compositeProductAndLogo({
         let baseSharp = sharp(sceneBuffer).resize(width, height, { fit: 'cover' });
         const overlays: sharp.OverlayOptions[] = [];
 
+        // Precompute banner metrics FIRST so the product thumbnail can be
+        // positioned ABOVE the banner (never hidden or overlapping it).
+        const rawHeadB = stripEmoji((headlineText || '').trim());
+        const headLinesB = applyText ? wrapTextToLines(rawHeadB, 30, 3) : [];
+        const ctaB = applyText ? stripEmoji((ctaText || '').trim()).substring(0, 40) : '';
+        const bnB = applyText ? stripEmoji((brandName || '').trim()).substring(0, 32) : '';
+        const lineHeightB = 42;
+        const textBlockHeightB = headLinesB.length * lineHeightB;
+        const bannerHeight = (applyText && (headLinesB.length > 0 || ctaB || bnB))
+            ? Math.max(220, 110 + textBlockHeightB + (ctaB ? 60 : 0))
+            : 0;
+
         // 1. Subtle bottom vignette + darken
         const dimOverlaySvg = `
         <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
@@ -354,15 +389,15 @@ export async function compositeProductAndLogo({
         const dimPng = await renderSvgToPngBuffer(dimOverlaySvg, width);
         overlays.push({ input: dimPng, top: 0, left: 0 });
 
-        // 2. Product image thumbnail card (bottom-right corner)
+        // 2. Product image card (bottom-right, ABOVE the text banner)
         if (productImageBase64 && productImageBase64.length > 100) {
             try {
                 const rawProduct = await withTimeout(fetchImageBuffer(productImageBase64), 12000, 'product thumb fetch');
-                const thumbSize = 200;
-                const borderW = 4;
+                const thumbSize = 300;
+                const borderW = 5;
                 const cardSize = thumbSize + borderW * 2;
 
-                const maskSvg = `<svg width="${thumbSize}" height="${thumbSize}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${thumbSize}" height="${thumbSize}" rx="18" fill="#fff"/></svg>`;
+                const maskSvg = `<svg width="${thumbSize}" height="${thumbSize}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${thumbSize}" height="${thumbSize}" rx="22" fill="#fff"/></svg>`;
                 const maskPng = await renderSvgToPngBuffer(maskSvg, thumbSize);
 
                 const roundedThumb = await sharp(rawProduct)
@@ -372,15 +407,30 @@ export async function compositeProductAndLogo({
                     .toBuffer();
 
                 const ringSvg = `
-                <svg width="${cardSize + 8}" height="${cardSize + 8}" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="0" y="0" width="${cardSize + 8}" height="${cardSize + 8}" rx="22" fill="${brand}"/>
-                    <rect x="${borderW}" y="${borderW}" width="${thumbSize}" height="${thumbSize}" rx="18" fill="#ffffff" fill-opacity="0.08"/>
+                <svg width="${cardSize + 16}" height="${cardSize + 16}" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="0" y="0" width="${cardSize + 16}" height="${cardSize + 16}" rx="28" fill="${brand}"/>
+                    <rect x="${borderW + 4}" y="${borderW + 4}" width="${thumbSize}" height="${thumbSize}" rx="22" fill="#ffffff" fill-opacity="0.1"/>
                 </svg>`;
-                const ringPng = await renderSvgToPngBuffer(ringSvg, cardSize + 8);
+                const ringPng = await renderSvgToPngBuffer(ringSvg, cardSize + 16);
 
-                const thumbTop = height - cardSize - 8 - 240;
-                const thumbLeft = width - cardSize - 8 - 20;
-                overlays.push({ input: ringPng, top: thumbTop - 4, left: thumbLeft - 4 });
+                const shadowW = Math.round(thumbSize * 0.85);
+                const shadowSvg = `
+                <svg width="${shadowW}" height="44" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <radialGradient id="pshad" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="#000000" stop-opacity="0.55"/>
+                            <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+                        </radialGradient>
+                    </defs>
+                    <ellipse cx="${shadowW / 2}" cy="22" rx="${shadowW / 2}" ry="22" fill="url(#pshad)"/>
+                </svg>`;
+                const shadowPng = await renderSvgToPngBuffer(shadowSvg, shadowW);
+
+                const thumbTop = height - bannerHeight - thumbSize - 64;
+                const thumbLeft = width - thumbSize - 40;
+
+                overlays.push({ input: shadowPng, top: thumbTop + thumbSize + 26, left: thumbLeft + Math.round((thumbSize - shadowW) / 2) });
+                overlays.push({ input: ringPng, top: thumbTop - 8, left: thumbLeft - 8 });
                 overlays.push({ input: roundedThumb, top: thumbTop + borderW, left: thumbLeft + borderW });
             } catch (e) {
                 console.warn('[Composer] Product thumbnail failed:', (e as Error).message);
@@ -434,39 +484,34 @@ export async function compositeProductAndLogo({
         }
 
         // 5. Headline + CTA banner at bottom (Rendered cleanly via resvg PNG)
-        if (applyText && (headlineText || ctaText || brandName)) {
-            const rawHead = (headlineText || '').trim();
-            const headLines = wrapTextToLines(rawHead, 30, 3);
-            const cta = (ctaText || '').trim().substring(0, 40);
-            const bn = (brandName || '').trim().substring(0, 32);
+        if (bannerHeight > 0) {
+            const startY = bnB ? 65 : 45;
 
-            const lineHeight = 42;
-            const textBlockHeight = headLines.length * lineHeight;
-            const bannerHeight = Math.max(220, 110 + textBlockHeight + (cta ? 60 : 0));
-            const startY = bn ? 65 : 45;
-
-            const tspanElements = headLines.map((line, idx) =>
-                `<tspan x="40" y="${startY + (idx * lineHeight)}" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="#ffffff">${escapeXml(line)}</tspan>`
+            const tspanElements = headLinesB.map((line, idx) =>
+                `<tspan x="40" y="${startY + (idx * lineHeightB)}" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="#ffffff">${escapeXml(line)}</tspan>`
             ).join('');
 
-            const ctaTop = startY + textBlockHeight + 15;
+            const ctaTop = startY + textBlockHeightB + 15;
+            const ctaFont = 18;
+            const ctaPillW = Math.min(width - 80, Math.max(200, Math.round(ctaB.length * ctaFont * 0.62) + 56));
+            const ctaTextX = 40 + ctaPillW / 2;
 
             const bannerSvg = `
             <svg width="${width}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                     <linearGradient id="bannerBg" x1="0%" y1="0%" x2="0%" y2="100%">
                         <stop offset="0%" stop-color="#0f172a" stop-opacity="0" />
-                        <stop offset="30%" stop-color="#0f172a" stop-opacity="0.93" />
+                        <stop offset="20%" stop-color="#0f172a" stop-opacity="0.9" />
                         <stop offset="100%" stop-color="#020617" stop-opacity="0.98" />
                     </linearGradient>
                 </defs>
                 <rect x="0" y="0" width="${width}" height="${bannerHeight}" fill="url(#bannerBg)"/>
                 <rect x="0" y="0" width="${width}" height="5" fill="${brand}"/>
-                ${bn ? `<text x="40" y="38" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="${brand}" letter-spacing="3">${escapeXml(bn.toUpperCase())}</text>` : ''}
-                ${headLines.length > 0 ? `<text>${tspanElements}</text>` : ''}
-                ${cta ? `
-                <rect x="40" y="${ctaTop}" width="300" height="50" rx="25" fill="${brand}"/>
-                <text x="190" y="${ctaTop + 33}" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#ffffff" text-anchor="middle">${escapeXml(cta)}</text>` : ''}
+                ${bnB ? `<text x="40" y="38" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="${brand}" letter-spacing="3">${escapeXml(bnB.toUpperCase())}</text>` : ''}
+                ${headLinesB.length > 0 ? `<text>${tspanElements}</text>` : ''}
+                ${ctaB ? `
+                <rect x="40" y="${ctaTop}" width="${ctaPillW}" height="50" rx="25" fill="${brand}"/>
+                <text x="${ctaTextX}" y="${ctaTop + 33}" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="${ctaFont}" font-weight="bold" fill="#ffffff" text-anchor="middle">${escapeXml(ctaB)}</text>` : ''}
             </svg>`;
             const bannerPng = await renderSvgToPngBuffer(bannerSvg, width);
             overlays.push({ input: bannerPng, top: height - bannerHeight, left: 0 });
@@ -488,6 +533,7 @@ export async function compositeProductAndLogo({
 export async function compositeStudioPro({
     sceneImage,
     logoUrlOrBase64,
+    productImageBase64,
     logoPosition = 'top-left',
     brandName,
     primaryColor = '#10b981',
@@ -509,6 +555,66 @@ export async function compositeStudioPro({
         const height = meta.height || 1024;
         let baseSharp = sharp(sceneBuffer).resize(width, height, { fit: 'cover' });
         const overlays: sharp.OverlayOptions[] = [];
+
+        // Precompute banner metrics FIRST so the product thumbnail can be
+        // positioned ABOVE the banner (never hidden or overlapping it).
+        const rawHeadP = stripEmoji((headlineText || '').trim());
+        const headLinesP = applyText ? wrapTextToLines(rawHeadP, 28, 3) : [];
+        const ctaP = applyText ? stripEmoji((ctaText || '').trim()).substring(0, 40) : '';
+        const bnP = applyText ? stripEmoji((brandName || '').trim()).substring(0, 32) : '';
+        const lineHeightP = 46;
+        const textBlockHeightP = headLinesP.length * lineHeightP;
+        const bannerHeightP = (applyText && (headLinesP.length > 0 || ctaP || bnP))
+            ? Math.max(260, 120 + textBlockHeightP + (ctaP ? 70 : 0))
+            : 0;
+
+        // 0. Product image card (bottom-right, ABOVE the text banner)
+        if (productImageBase64 && productImageBase64.length > 100) {
+            try {
+                const rawProduct = await withTimeout(fetchImageBuffer(productImageBase64), 12000, 'product thumb fetch');
+                const thumbSize = 300;
+                const borderW = 5;
+                const cardSize = thumbSize + borderW * 2;
+
+                const maskSvg = `<svg width="${thumbSize}" height="${thumbSize}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${thumbSize}" height="${thumbSize}" rx="22" fill="#fff"/></svg>`;
+                const maskPng = await renderSvgToPngBuffer(maskSvg, thumbSize);
+
+                const roundedThumb = await sharp(rawProduct)
+                    .resize(thumbSize, thumbSize, { fit: 'cover', position: 'centre' })
+                    .composite([{ input: maskPng, blend: 'dest-in' }])
+                    .png()
+                    .toBuffer();
+
+                const ringSvg = `
+                <svg width="${cardSize + 16}" height="${cardSize + 16}" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="0" y="0" width="${cardSize + 16}" height="${cardSize + 16}" rx="28" fill="${brand}"/>
+                    <rect x="${borderW + 4}" y="${borderW + 4}" width="${thumbSize}" height="${thumbSize}" rx="22" fill="#ffffff" fill-opacity="0.1"/>
+                </svg>`;
+                const ringPng = await renderSvgToPngBuffer(ringSvg, cardSize + 16);
+
+                const shadowW = Math.round(thumbSize * 0.85);
+                const shadowSvg = `
+                <svg width="${shadowW}" height="44" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <radialGradient id="pshadP" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="#000000" stop-opacity="0.55"/>
+                            <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+                        </radialGradient>
+                    </defs>
+                    <ellipse cx="${shadowW / 2}" cy="22" rx="${shadowW / 2}" ry="22" fill="url(#pshadP)"/>
+                </svg>`;
+                const shadowPng = await renderSvgToPngBuffer(shadowSvg, shadowW);
+
+                const thumbTop = height - bannerHeightP - thumbSize - 64;
+                const thumbLeft = width - thumbSize - 40;
+
+                overlays.push({ input: shadowPng, top: thumbTop + thumbSize + 26, left: thumbLeft + Math.round((thumbSize - shadowW) / 2) });
+                overlays.push({ input: ringPng, top: thumbTop - 8, left: thumbLeft - 8 });
+                overlays.push({ input: roundedThumb, top: thumbTop + borderW, left: thumbLeft + borderW });
+            } catch (e) {
+                console.warn('[Composer Pro] Product thumbnail failed:', (e as Error).message);
+            }
+        }
 
         // 1. Vignette
         if (vignette) {
@@ -581,29 +687,24 @@ export async function compositeStudioPro({
         }
 
         // 4. Premium glassmorphism headline + CTA banner at bottom
-        if (applyText && (headlineText || ctaText || brandName)) {
-            const rawHead = (headlineText || '').trim();
-            const headLines = wrapTextToLines(rawHead, 28, 3);
-            const cta = (ctaText || '').trim().substring(0, 40);
-            const bn = (brandName || '').trim().substring(0, 32);
+        if (bannerHeightP > 0) {
+            const startY = bnP ? 70 : 50;
 
-            const lineHeight = 46;
-            const textBlockHeight = headLines.length * lineHeight;
-            const bannerHeight = Math.max(260, 120 + textBlockHeight + (cta ? 70 : 0));
-            const startY = bn ? 70 : 50;
-
-            const tspanElements = headLines.map((line, idx) =>
-                `<tspan x="40" y="${startY + (idx * lineHeight)}" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="36" font-weight="bold" fill="#ffffff">${escapeXml(line)}</tspan>`
+            const tspanElements = headLinesP.map((line, idx) =>
+                `<tspan x="40" y="${startY + (idx * lineHeightP)}" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="36" font-weight="bold" fill="#ffffff">${escapeXml(line)}</tspan>`
             ).join('');
 
-            const ctaTop = startY + textBlockHeight + 20;
+            const ctaTop = startY + textBlockHeightP + 20;
+            const ctaFont = 20;
+            const ctaPillW = Math.min(width - 80, Math.max(220, Math.round(ctaP.length * ctaFont * 0.62) + 64));
+            const ctaTextX = 40 + ctaPillW / 2;
 
             const bannerSvg = `
-            <svg width="${width}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
+            <svg width="${width}" height="${bannerHeightP}" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                     <linearGradient id="bannerBgP" x1="0%" y1="0%" x2="0%" y2="100%">
                         <stop offset="0%" stop-color="#020617" stop-opacity="0" />
-                        <stop offset="30%" stop-color="#020617" stop-opacity="0.88" />
+                        <stop offset="20%" stop-color="#020617" stop-opacity="0.88" />
                         <stop offset="100%" stop-color="#000000" stop-opacity="0.98" />
                     </linearGradient>
                     <linearGradient id="ctaG" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -611,16 +712,16 @@ export async function compositeStudioPro({
                         <stop offset="100%" stop-color="${accent}" />
                     </linearGradient>
                 </defs>
-                <rect x="0" y="0" width="${width}" height="${bannerHeight}" fill="url(#bannerBgP)"/>
+                <rect x="0" y="0" width="${width}" height="${bannerHeightP}" fill="url(#bannerBgP)"/>
                 <rect x="0" y="0" width="${width}" height="6" fill="${brand}"/>
-                ${bn ? `<text x="40" y="42" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="${brand}" letter-spacing="4">${escapeXml(bn.toUpperCase())}</text>` : ''}
-                ${headLines.length > 0 ? `<text>${tspanElements}</text>` : ''}
-                ${cta ? `
-                <rect x="40" y="${ctaTop}" width="320" height="58" rx="29" fill="url(#ctaG)"/>
-                <text x="200" y="${ctaTop + 37}" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#ffffff" text-anchor="middle">${escapeXml(cta)}</text>` : ''}
+                ${bnP ? `<text x="40" y="42" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="${brand}" letter-spacing="4">${escapeXml(bnP.toUpperCase())}</text>` : ''}
+                ${headLinesP.length > 0 ? `<text>${tspanElements}</text>` : ''}
+                ${ctaP ? `
+                <rect x="40" y="${ctaTop}" width="${ctaPillW}" height="58" rx="29" fill="url(#ctaG)"/>
+                <text x="${ctaTextX}" y="${ctaTop + 37}" font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif" font-size="${ctaFont}" font-weight="bold" fill="#ffffff" text-anchor="middle">${escapeXml(ctaP)}</text>` : ''}
             </svg>`;
             const bannerPng = await renderSvgToPngBuffer(bannerSvg, width);
-            overlays.push({ input: bannerPng, top: height - bannerHeight, left: 0 });
+            overlays.push({ input: bannerPng, top: height - bannerHeightP, left: 0 });
         }
 
         if (overlays.length > 0) baseSharp = baseSharp.composite(overlays);

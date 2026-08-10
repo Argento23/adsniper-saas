@@ -97,37 +97,37 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
 
     const downloadImage = async () => {
         if (!imgSrc) return;
+        const filename = `AdSintesis-Ad-${Date.now()}.jpg`;
 
-        try {
-            let blob: Blob;
-            if (imgSrc.startsWith('data:')) {
-                const parts = imgSrc.split(';base64,');
-                const contentType = parts[0].split(':')[1] || 'image/jpeg';
-                const raw = window.atob(parts[1] || parts[0]);
-                const uNums = new Uint8Array(raw.length);
-                for (let i = 0; i < raw.length; i++) {
-                    uNums[i] = raw.charCodeAt(i);
-                }
-                blob = new Blob([uNums], { type: contentType });
-            } else {
-                const resp = await fetch(imgSrc);
-                blob = await resp.blob();
-            }
-
-            const url = URL.createObjectURL(blob);
+        const triggerDownload = (href: string) => {
             const a = document.createElement('a');
-            a.href = url;
-            a.download = `AdSíntesis-Ad-${Date.now()}.jpg`;
+            a.href = href;
+            a.download = filename;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
+        };
+
+        try {
+            if (imgSrc.startsWith('data:')) {
+                // Data URI → download directly (no CORS, no encoding issues)
+                triggerDownload(imgSrc);
+                return;
+            }
+            // Remote URL → fetch as blob (same-origin proxy URLs work fine)
+            const resp = await fetch(imgSrc);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            triggerDownload(url);
             setTimeout(() => URL.revokeObjectURL(url), 5000);
         } catch (err) {
+            // Last resort: open the image in a new tab so the user can save it manually
             console.error('Download error:', err);
             const a = document.createElement('a');
             a.href = imgSrc;
-            a.download = `AdSíntesis-Ad-${Date.now()}.jpg`;
             a.target = '_blank';
+            a.rel = 'noopener';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
