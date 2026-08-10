@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
-import { generateFalImage, generateBriaProductShot, generateFluxImageToImage } from '@/lib/fal';
+import { generateFalImage, generateBriaProductShot, generateFluxIPAdapter, generateFluxImageToImage } from '@/lib/fal';
 import { generateReplicateImage, generateReplicateFluxDev, generateReplicateFluxRedux } from '@/lib/replicate';
 import { compositeStudioPro, compositeUserLogoAsScene } from '@/lib/composer';
 
@@ -21,7 +21,7 @@ async function consumePremiumCredit(userId: string): Promise<{ canProceed: boole
     return { canProceed: true, isAdmin: false, meta };
 }
 
-// GROQ: Expand user prompt into an 8K Commercial Advertising Art Prompt with 3D Logo Synthesis
+// GROQ: Expand user prompt into an 8K Commercial Advertising Art Prompt
 async function enhancePromptForStudio8K(userScene: string, brandName?: string): Promise<string> {
     const apiKey = process.env.GROQ_API_KEY;
     try {
@@ -32,20 +32,19 @@ async function enhancePromptForStudio8K(userScene: string, brandName?: string): 
                 model: "llama-3.3-70b-versatile",
                 messages: [{
                     role: "system",
-                    content: `You are a world-class commercial ad photographer, 3D brand director, and visual art director.
-Your task is to take the user's scene description and transform it into a single-paragraph hyper-realistic 8K commercial image prompt in ENGLISH where flat logos/products are rendered as solid, physical, volumetric 3D objects integrated seamlessly into the scene.
+                    content: `You are a world-class commercial ad photographer and visual art director.
+Your task is to take the user's scene description and transform it into a single-paragraph hyper-realistic 8K commercial advertising photography prompt in ENGLISH.
 
-CRITICAL RULES FOR 3D LOGO & SCENE SYNTHESIS:
+CRITICAL RULES FOR ADVERTISING SCENE SYNTHESIS:
 1. YOU MUST WRITE ENTIRELY IN ENGLISH. NO SPANISH. NO MARKDOWN. NO INTROS OR OUTROS.
-2. ALWAYS describe the logo/emblem as a physical 3D volumetric tactile object (e.g. "a solid 3D sculpted translucent glowing acrylic emblem block", "a polished 3D metallic chrome brand sculpture", "a carved luminous 3D badge").
-3. Describe natural physical contact and lighting: how subject hands grip or cradle the 3D object, realistic caustics, soft shadows, warm highlights, ambient occlusion.
-4. ALWAYS specify high-end commercial quality: "photorealistic 8k professional advertising photography, 85mm Hasselblad portrait lens, cinematic studio lighting, shallow depth of field, sharp focus, 3D volumetric emblem render".
-5. Output MUST be under 70 words, single paragraph of raw prompt text only.
+2. Focus on creating a luxurious, photorealistic, professional commercial studio environment: "photorealistic 8k professional advertising photography, luxury studio display, 85mm lens, cinematic studio lighting, soft shadows, warm ambient highlights, shallow depth of field, sharp focus, ultra-detailed textures".
+3. Describe clean architectural elements, pedestals, natural studio light, elegant marble, wood, or soft gradient backdrops suitable for product placement.
+4. Output MUST be under 70 words, single paragraph of raw prompt text only.
 
 EXAMPLES:
-"niño sosteniendo el logo" → "A cute toddler carefully holding a physical 3D translucent glowing blue acrylic hexagonal brand emblem block in small hands, genuine curious facial expression, soft dark studio background, cinematic lighting, photorealistic 8k professional advertising photography, sharp focus, shallow depth of field"
-"podio de lujo" → "A sleek polished 3D metallic brand emblem resting on a minimalist white marble pedestal, soft golden spotlighting, architectural background, dramatic shadow reflections, photorealistic 8k commercial product photography"
-"dos emprendedores" → "Two smiling professionals in modern office holding a solid 3D illuminated brand sculpture, ambient glass reflections, golden hour sunlight, sharp focus, 8k advertising photography"`
+"podio de lujo" → "A luxury commercial product placement setting on a minimalist white marble pedestal, soft golden spotlighting, architectural studio backdrop, dramatic soft shadow reflections, photorealistic 8k commercial product photography, 85mm lens"
+"escenario de playa" → "A professional commercial product display on a smooth wooden table with tropical beach sand and ocean sunset in the background, golden hour sunlight, soft bokeh, 8k advertising photography"
+"estudio moderno" → "A sleek modern studio environment with dark slate background, warm ambient rim lighting, glass reflections, sharp focus, 8k commercial ad photography"`
                 }, {
                     role: "user",
                     content: `Brand: ${brandName || 'Brand'}. Desired scene: ${userScene}`
@@ -53,12 +52,11 @@ EXAMPLES:
             })
         });
         const data = await response.json();
-        const rawContent = data.choices[0].message.content.trim().replace(/^"|"$/g, '');
-        // Clean markdown if present
+        const rawContent = data.choices[0]?.message?.content?.trim().replace(/^"|"$/g, '') || '';
         const cleanPrompt = rawContent.replace(/[*#]/g, '').split('\n').filter((l: string) => l.trim().length > 0).pop() || rawContent;
-        return cleanPrompt;
+        return cleanPrompt || `Photorealistic 8k commercial advertising photo, luxury studio display, cinematic lighting, sharp focus, 85mm lens`;
     } catch {
-        return `A photorealistic 8k commercial advertising photo of a physical 3D translucent glowing brand emblem held in small hands, cinematic lighting, sharp focus, 85mm lens`;
+        return `Photorealistic 8k commercial advertising photo, luxury studio display, cinematic lighting, sharp focus, 85mm lens`;
     }
 }
 
@@ -86,30 +84,33 @@ export async function POST(req: Request) {
 
         console.log(`🎯 [Studio Pro 8K] User image: ${hasUserImage ? 'YES (3D Scene Integration Mode)' : 'NO'}`);
 
-        // 1. FLUX Redux 3D Logo Scene Synthesis via Replicate
+        // 1. REAL PRODUCT PLACEMENT VIA BRIA E-COMMERCE & IP-ADAPTER
         if (hasUserImage) {
-            try {
-                console.log('🎯 [Studio Pro 8K] Synthesizing 3D logo scene with FLUX Redux on Replicate...');
-                const reduxUrl = await generateReplicateFluxRedux(image_base64, enhancedPrompt);
-                if (reduxUrl) {
-                    generatedImageUrl = reduxUrl;
-                    console.log('✅ [Studio Pro 8K] FLUX Redux 3D synthesis succeeded!');
+            // Primary: Bria Native E-Commerce Product Shot via Fal.ai
+            if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
+                try {
+                    console.log('🎯 [Studio Pro 8K] Generating via Bria Product Shot (Real Product Placement)...');
+                    const briaUrl = await generateBriaProductShot(image_base64, enhancedPrompt);
+                    if (briaUrl) {
+                        generatedImageUrl = briaUrl;
+                        console.log('✅ [Studio Pro 8K] Bria Product Shot succeeded!');
+                    }
+                } catch (briaErr: any) {
+                    console.warn(`⚠️ [Studio Pro 8K] Bria Product Shot failed: ${briaErr.message}`);
                 }
-            } catch (reduxErr: any) {
-                console.warn(`⚠️ [Studio Pro 8K] FLUX Redux failed: ${reduxErr.message}`);
             }
 
-            // Fallback: IP-Adapter Image-guided 3D Synthesis if FAL available
+            // Secondary: FLUX IP-Adapter via Fal.ai (Image-Guided Scene Synthesis)
             if (!generatedImageUrl && (process.env.FAL_KEY || process.env.FAL_API_KEY)) {
                 try {
-                    console.log('🎯 [Studio Pro 8K] Trying Fal.ai FLUX Image-to-Image...');
-                    const ipUrl = await generateFluxImageToImage(image_base64, enhancedPrompt, 0.55);
+                    console.log('🎯 [Studio Pro 8K] Trying Fal.ai FLUX IP-Adapter...');
+                    const ipUrl = await generateFluxIPAdapter(image_base64, enhancedPrompt, 0.55);
                     if (ipUrl) {
                         generatedImageUrl = ipUrl;
-                        console.log('✅ [Studio Pro 8K] Fal.ai FLUX Image-to-Image succeeded');
+                        console.log('✅ [Studio Pro 8K] Fal.ai FLUX IP-Adapter succeeded');
                     }
                 } catch (ipErr: any) {
-                    console.warn(`⚠️ [Studio Pro 8K] Fal.ai Image-to-Image failed: ${ipErr.message}`);
+                    console.warn(`⚠️ [Studio Pro 8K] Fal.ai FLUX IP-Adapter failed: ${ipErr.message}`);
                 }
             }
         }

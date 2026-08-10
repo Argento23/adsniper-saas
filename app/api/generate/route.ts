@@ -692,20 +692,20 @@ export async function POST(request: Request) {
 
                 const baseGeneratedUrl = await (async () => {
 
-                    // B0. TRY FLUX REDUX (when user uploaded logo/product)
+                    // B0. TRY BRIA E-COMMERCE PRODUCT SHOT (when user uploaded logo/product)
                     if (hasUserImage) {
                         try {
-                            console.log(`🎯 [Standard] Trying FLUX Redux 3D synthesis for: ${scrapedTitle}`);
-                            const reduxUrl = await generateReplicateFluxRedux(manual_image_base64, fullPrompt);
-                            if (reduxUrl) return reduxUrl;
+                            console.log(`🎯 [Standard] Trying Bria Product Shot for: ${scrapedTitle}`);
+                            const briaUrl = await generateBriaProductShot(manual_image_base64, fullPrompt);
+                            if (briaUrl) return briaUrl;
                         } catch (e) {
-                            console.warn(`⚠️ FLUX Redux failed, falling back to IP-Adapter: ${(e as Error).message}`);
+                            console.warn(`⚠️ Bria Product Shot failed, falling back to IP-Adapter: ${(e as Error).message}`);
                         }
 
                         // B0b. TRY FLUX IP-ADAPTER (image-guided scene generation)
                         try {
                             console.log(`🎯 [Standard] Trying FLUX IP-Adapter for: ${scrapedTitle}`);
-                            const ipUrl = await generateFluxIPAdapter(manual_image_base64, fullPrompt, 0.65, "square_hd");
+                            const ipUrl = await generateFluxIPAdapter(manual_image_base64, fullPrompt, 0.55, "square_hd");
                             if (ipUrl) return ipUrl;
                         } catch (e) {
                             console.warn(`⚠️ IP-Adapter failed, falling back to text-to-image: ${(e as Error).message}`);
