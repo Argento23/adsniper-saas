@@ -97,33 +97,36 @@ const AdCard = ({ ad, index, brand, productImage, videosRemaining, onVideoGenera
 
     const downloadImage = async () => {
         if (!imgSrc) return;
-        
-        // Base64 direct download
-        if (imgSrc.startsWith('data:')) {
-            const a = document.createElement('a');
-            a.href = imgSrc;
-            a.download = `AdSíntesis-Ad-${Date.now()}.png`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            return;
-        }
 
         try {
-            const resp = await fetch(imgSrc);
-            const blob = await resp.blob();
+            let blob: Blob;
+            if (imgSrc.startsWith('data:')) {
+                const parts = imgSrc.split(';base64,');
+                const contentType = parts[0].split(':')[1] || 'image/jpeg';
+                const raw = window.atob(parts[1] || parts[0]);
+                const uNums = new Uint8Array(raw.length);
+                for (let i = 0; i < raw.length; i++) {
+                    uNums[i] = raw.charCodeAt(i);
+                }
+                blob = new Blob([uNums], { type: contentType });
+            } else {
+                const resp = await fetch(imgSrc);
+                blob = await resp.blob();
+            }
+
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `AdSíntesis-Ad-${Date.now()}.png`;
+            a.download = `AdSíntesis-Ad-${Date.now()}.jpg`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        } catch {
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+        } catch (err) {
+            console.error('Download error:', err);
             const a = document.createElement('a');
             a.href = imgSrc;
-            a.download = `AdSíntesis-Ad-${Date.now()}.png`;
+            a.download = `AdSíntesis-Ad-${Date.now()}.jpg`;
             a.target = '_blank';
             document.body.appendChild(a);
             a.click();

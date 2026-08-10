@@ -2,6 +2,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     output: 'standalone', // Optimizes for Docker/VPS
+    serverExternalPackages: ['@resvg/resvg-js', 'sharp'],
+    experimental: {
+        serverComponentsExternalPackages: ['@resvg/resvg-js', 'sharp'],
+    },
     typescript: {
         ignoreBuildErrors: true,
     },

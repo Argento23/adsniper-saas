@@ -178,14 +178,38 @@ export async function ensurePublicUrl(src: string): Promise<string> {
         return src;
     }
 
+    const cleanBase64 = src.includes(',') ? src.split(',')[1] : src;
+    const mimeType = src.includes('data:image/jpeg') ? 'image/jpeg' : (src.includes('data:image/webp') ? 'image/webp' : 'image/png');
+    const ext = mimeType === 'image/jpeg' ? 'jpg' : (mimeType === 'image/webp' ? 'webp' : 'png');
+
+    // 1. Try FreeImageHost (fast, free public API, accepts base64)
     try {
-        const cleanBase64 = src.includes(',') ? src.split(',')[1] : src;
-        const mimeType = src.includes('data:image/jpeg') ? 'image/jpeg' : (src.includes('data:image/webp') ? 'image/webp' : 'image/png');
-        const ext = mimeType === 'image/jpeg' ? 'jpg' : (mimeType === 'image/webp' ? 'webp' : 'png');
+        const formData = new FormData();
+        formData.append('key', '6d207e6419d15d40e5d84d1947234430'); // public API key
+        formData.append('action', 'upload');
+        formData.append('source', cleanBase64);
+        formData.append('format', 'json');
+
+        const res = await fetch('https://freeimage.host/api/1/upload', {
+            method: 'POST',
+            body: formData,
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (data?.image?.url) {
+                console.log(`✅ [ensurePublicUrl] Uploaded image to FreeImageHost: ${data.image.url}`);
+                return data.image.url;
+            }
+        }
+    } catch (e: any) {
+        console.warn('⚠️ [ensurePublicUrl] FreeImageHost upload error:', e.message);
+    }
+
+    // 2. Try Catbox upload fallback
+    try {
         const buffer = Buffer.from(cleanBase64, 'base64');
         const blob = new Blob([buffer], { type: mimeType });
-
-        // 1. Try Catbox upload first (fast, reliable public URL)
         const formData = new FormData();
         formData.append('reqtype', 'fileupload');
         formData.append('fileToUpload', blob, `image.${ext}`);
@@ -199,12 +223,11 @@ export async function ensurePublicUrl(src: string): Promise<string> {
             }
         }
     } catch (e: any) {
-        console.warn('⚠️ [ensurePublicUrl] Catbox upload error, trying tmpfiles fallback:', e.message);
+        console.warn('⚠️ [ensurePublicUrl] Catbox upload error:', e.message);
     }
 
-    // 2. Fallback to tmpfiles.org
+    // 3. Fallback to tmpfiles.org
     try {
-        const cleanBase64 = src.includes(',') ? src.split(',')[1] : src;
         const buffer = Buffer.from(cleanBase64, 'base64');
         const blob = new Blob([buffer], { type: 'image/png' });
         const formData = new FormData();
