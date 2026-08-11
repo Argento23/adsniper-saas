@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
-import { generateFalImage, generateBriaProductShot, generateFluxIPAdapter, generateFluxImageToImage } from '@/lib/fal';
+import { generateFalImage, generateBriaProductShot, generateFluxIPAdapter, generateFluxImageToImage, generateFluxReduxImage } from '@/lib/fal';
 import { generateReplicateImage, generateReplicateFluxDev, generateReplicateFluxRedux } from '@/lib/replicate';
 import { compositeStudioPro, compositeUserLogoAsScene } from '@/lib/composer';
 
@@ -37,14 +37,15 @@ Your task is to take the user's scene description and transform it into a single
 
 CRITICAL RULES FOR ADVERTISING SCENE SYNTHESIS:
 1. YOU MUST WRITE ENTIRELY IN ENGLISH. NO SPANISH. NO MARKDOWN. NO INTROS OR OUTROS.
-2. Focus on creating a luxurious, photorealistic, professional commercial studio environment: "photorealistic 8k professional advertising photography, luxury studio display, 85mm lens, cinematic studio lighting, soft shadows, warm ambient highlights, shallow depth of field, sharp focus, ultra-detailed textures".
-3. Describe clean architectural elements, pedestals, natural studio light, elegant marble, wood, or soft gradient backdrops suitable for product placement.
-4. Output MUST be under 70 words, single paragraph of raw prompt text only.
+2. FAITHFULLY PRESERVE every element the user described: people, animals, actions, locations, props, materials and lighting. NEVER replace the user's scene with a generic studio setting. If the user says "a boy looking at the logo on the wall", the scene MUST describe a boy looking at a wall where the product/logo is displayed.
+3. The uploaded product/logo must read as the natural focal point of the scene, integrated realistically in size, context, perspective and lighting.
+4. Describe realistic colors, lighting and environment matching the user's description. Add natural photorealism: "photorealistic 8k advertising photography, 85mm lens, cinematic lighting, sharp focus, ultra-detailed textures".
+5. Output MUST be under 70 words, single paragraph of raw prompt text only.
 
 EXAMPLES:
 "podio de lujo" → "A luxury commercial product placement setting on a minimalist white marble pedestal, soft golden spotlighting, architectural studio backdrop, dramatic soft shadow reflections, photorealistic 8k commercial product photography, 85mm lens"
 "escenario de playa" → "A professional commercial product display on a smooth wooden table with tropical beach sand and ocean sunset in the background, golden hour sunlight, soft bokeh, 8k advertising photography"
-"estudio moderno" → "A sleek modern studio environment with dark slate background, warm ambient rim lighting, glass reflections, sharp focus, 8k commercial ad photography"`
+"niño viendo el logo en la pared" → "A young boy standing in a cozy warm room looking up at the brand logo displayed on the wall, soft natural window light, realistic perspective and lighting, photorealistic 8k advertising photography, 85mm lens, sharp focus"`
                 }, {
                     role: "user",
                     content: `Brand: ${brandName || 'Brand'}. Desired scene: ${userScene}`
@@ -92,28 +93,57 @@ export async function POST(req: Request) {
         console.log(`🎯 [Studio Pro 8K] User image: ${hasUserImage ? 'YES (3D Scene Integration Mode)' : 'NO'}`);
 
         // ROBUST CASCADE: always build a STUDIO SCENE from the user's prompt first,
-        // then composite the user's image on top so the prompt IS respected.
+        // then integrate the user's image using the best model for its type.
         if (hasUserImage) {
-            // 1a. PRIMARY: Bria E-Commerce Product Shot via Fal.ai (best for clean product photos)
-            if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
+            // Detect if the uploaded image has transparency (likely a 2D logo/sticker)
+            let imageHasAlpha = false;
+            try {
+                const sharp = (await import('sharp')).default;
+                const b64 = image_base64.includes(',') ? image_base64.split(',')[1] : image_base64;
+                const meta = await sharp(Buffer.from(b64, 'base64')).metadata();
+                imageHasAlpha = !!meta.hasAlpha;
+            } catch { /* ignore */ }
+            diagnostics.push(`Detección imagen: ${imageHasAlpha ? 'logo 2D (transparente)' : 'foto/producto (opaca)'}`);
+
+            const tryBria = async (): Promise<boolean> => {
                 try {
-                    console.log('🎯 [Studio Pro 8K] Generating via Bria Product Shot (Real Product Placement)...');
+                    console.log('🎯 [Studio Pro 8K] Generating via Bria Product Shot...');
                     diagnostics.push('Bria: intentando (placement automatic)…');
-                    const briaUrl = await generateBriaProductShot(image_base64, enhancedPrompt);
-                    if (briaUrl) {
-                        generatedImageUrl = briaUrl;
+                    const url = await generateBriaProductShot(image_base64, enhancedPrompt);
+                    if (url) {
+                        generatedImageUrl = url;
                         imageGuided = true;
                         console.log('✅ [Studio Pro 8K] Bria Product Shot succeeded!');
                         diagnostics.push('Bria: OK (imagen generada con producto integrado)');
+                        return true;
                     }
                 } catch (briaErr: any) {
                     console.warn(`⚠️ [Studio Pro 8K] Bria Product Shot failed: ${briaErr.message}`);
                     diagnostics.push(`Bria: FALLO -> ${briaErr.message}`);
                 }
-            }
+                return false;
+            };
 
-            // 1b. SECONDARY: FLUX IP-Adapter via Fal.ai (Image-Guided Scene Synthesis)
-            if (!generatedImageUrl && (process.env.FAL_KEY || process.env.FAL_API_KEY)) {
+            const tryRedux = async (): Promise<boolean> => {
+                try {
+                    console.log('🎨 [Studio Pro 8K] Trying FLUX Redux (subject-preserving scene)...');
+                    diagnostics.push('FLUX Redux: intentando…');
+                    const url = await generateFluxReduxImage(image_base64, enhancedPrompt);
+                    if (url) {
+                        generatedImageUrl = url;
+                        imageGuided = true;
+                        console.log('✅ [Studio Pro 8K] FLUX Redux succeeded');
+                        diagnostics.push('FLUX Redux: OK (logo/producto integrado en la escena)');
+                        return true;
+                    }
+                } catch (reduxErr: any) {
+                    console.warn(`⚠️ [Studio Pro 8K] FLUX Redux failed: ${reduxErr.message}`);
+                    diagnostics.push(`FLUX Redux: FALLO -> ${reduxErr.message}`);
+                }
+                return false;
+            };
+
+            const tryIPAdapter = async (): Promise<boolean> => {
                 try {
                     console.log('🎯 [Studio Pro 8K] Trying Fal.ai FLUX IP-Adapter...');
                     diagnostics.push('IP-Adapter: intentando (flux-general + XLabs)…');
@@ -123,10 +153,31 @@ export async function POST(req: Request) {
                         imageGuided = true;
                         console.log('✅ [Studio Pro 8K] Fal.ai FLUX IP-Adapter succeeded');
                         diagnostics.push('IP-Adapter: OK (escena guiada por imagen)');
+                        return true;
                     }
                 } catch (ipErr: any) {
                     console.warn(`⚠️ [Studio Pro 8K] Fal.ai FLUX IP-Adapter failed: ${ipErr.message}`);
                     diagnostics.push(`IP-Adapter: FALLO -> ${ipErr.message}`);
+                }
+                return false;
+            };
+
+            if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
+                if (imageHasAlpha) {
+                    // 2D logo/sticker: subject-preserving models first (Redux/IP-Adapter),
+                    // Bria as last option (it treats logos as physical objects).
+                    if (!await tryRedux()) {
+                        if (!await tryIPAdapter()) {
+                            await tryBria();
+                        }
+                    }
+                } else {
+                    // Product photo: Bria first (clean product placement), then Redux/IP-Adapter.
+                    if (!await tryBria()) {
+                        if (!await tryRedux()) {
+                            await tryIPAdapter();
+                        }
+                    }
                 }
             }
 
@@ -143,6 +194,7 @@ export async function POST(req: Request) {
                     });
                     if (generatedImageUrl) {
                         console.log('✅ [Studio Pro 8K] Manual product-on-scene composite done');
+                        diagnostics.push('Composición manual: SÍ (ningún modelo integrado la imagen)');
                     }
                 } catch (compErr: any) {
                     console.warn(`⚠️ [Studio Pro 8K] Manual composite failed: ${compErr.message}`);

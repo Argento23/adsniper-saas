@@ -287,12 +287,14 @@ export async function generateBriaProductShot(
     const httpUrl = imageBase64.startsWith('http://') || imageBase64.startsWith('https://')
         ? imageBase64
         : await uploadBase64ToFalStorage(imageBase64);
+    // Bria supports English prompts only, excluding special characters
+    const cleanScene = (sceneDescription || '').replace(/[()\[\]"'`\\]/g, '').trim();
 
     // Try 1: automatic placement (Bria decides the best natural position in the scene)
     try {
         const result = await runFalAsync('https://fal.run/fal-ai/bria/product-shot', {
             image_url: httpUrl,
-            scene_description: sceneDescription,
+            scene_description: cleanScene,
             placement_type: "automatic",
             optimize_description: true,
             num_results: 1
@@ -305,7 +307,7 @@ export async function generateBriaProductShot(
     // Try 2: manual padding around the product (keeps product central)
     const result = await runFalAsync('https://fal.run/fal-ai/bria/product-shot', {
         image_url: httpUrl,
-        scene_description: sceneDescription,
+        scene_description: cleanScene,
         placement_type: "manual_padding",
         padding_values: [200, 200, 200, 200],
         optimize_description: true,
