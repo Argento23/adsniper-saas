@@ -164,10 +164,10 @@ export async function POST(req: Request) {
 
             if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
                 if (imageHasAlpha) {
-                    // 2D logo/sticker: subject-preserving models first (Redux/IP-Adapter),
-                    // Bria as last option (it treats logos as physical objects).
-                    if (!await tryRedux()) {
-                        if (!await tryIPAdapter()) {
+                    // 2D logo/sticker: IP-Adapter first (best at placing the logo
+                    // INTO the scene described by the prompt), then Redux, Bria last.
+                    if (!await tryIPAdapter()) {
+                        if (!await tryRedux()) {
                             await tryBria();
                         }
                     }
