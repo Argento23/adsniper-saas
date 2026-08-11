@@ -204,9 +204,12 @@ export async function generateFluxIPAdapter(
         guidance_scale: 3.5,
         num_images: 1,
         enable_safety_checker: true,
-        ip_adapter: [{
-            ip_adapter_image_url: httpUrl,
-            ip_adapter_scale: ipAdapterScale
+        ip_adapters: [{
+            path: 'XLabs-AI/flux-ip-adapter',
+            weight_name: 'ip_adapter.safetensors',
+            image_encoder_path: 'openai/clip-vit-large-patch14',
+            image_url: httpUrl,
+            scale: ipAdapterScale
         }]
     });
     return result.images[0].url;
@@ -248,7 +251,7 @@ export async function generateBriaProductShot(
         image_url: httpUrl,
         scene_description: sceneDescription,
         placement_type: "manual_padding",
-        padding: [300, 300, 300, 300],
+        padding_values: [300, 300, 300, 300],
         optimize_description: true,
         num_results: 1
     });
