@@ -674,21 +674,19 @@ export async function POST(request: Request) {
 
             const processedAds = [];
             for (const ad of data.ads) {
-                let basePrompt = ad.image_prompt || manual_image_prompt || manual_title || scrapedTitle;
+                // Strip "typography rendering" instructions: AI models (FLUX/Pollinations)
+                // draw garbage boxes/lines instead of real text. Real text is added
+                // afterwards by the SVG composer with proper fonts.
+                let basePrompt = (ad.image_prompt || manual_image_prompt || manual_title || scrapedTitle || '')
+                    .replace(/typography rendering:\s*["']?[^"',.]*["']?/gi, '')
+                    .replace(/typography[^,.;]*/gi, '')
+                    .replace(/\s{2,}/g, ' ')
+                    .trim();
                 if (manual_image_prompt && !ad.image_prompt) {
                     basePrompt = `${basePrompt}, ${manual_image_prompt}`;
                 }
 
-                const cleanHeadline = (ad.headline || "")
-                    .replace(/["']/g, "")
-                    .normalize("NFD")
-                    .replace(/[\u0300-\u036f]/g, "")
-                    .replace(/[¿¡]/g, "");
-
                 let fullPrompt = `A beautiful physical ${scrapedTitle}, ${basePrompt}, professional product photography, 8k, cinematic lighting, high quality, studio setup`;
-                if (applyText && cleanHeadline) {
-                    fullPrompt += `, typography rendering: "${cleanHeadline}"`;
-                }
 
                 let imageGuided = false;
                 let baseGeneratedUrl: string | null = null;

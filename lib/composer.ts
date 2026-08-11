@@ -1,4 +1,6 @@
 import sharp from 'sharp';
+import path from 'path';
+import fs from 'fs';
 
 // NOTE: @resvg/resvg-js is loaded dynamically to avoid native .node bundling issues
 // in Vercel's webpack pipeline. It's required at runtime inside renderSvgToPngBuffer().
@@ -6,56 +8,93 @@ import sharp from 'sharp';
 // ─────────────────────────────────────────────────────────────────────────────
 // Font Loading (Inter Regular + Bold) — required for SVG text rendering on
 // Linux/Vercel where there are no installed system fonts. Without this,
-// characters render as tofu boxes (□□□) inside the generated banners.
-// Fonts are downloaded once from a public CDN and cached in-memory.
+// characters render as tofu boxes (□□□) or nothing at all.
+// resvg's `font.fontFiles` expects LOCAL FILE PATHS (not Buffers), so the fonts
+// are bundled in the repo at public/fonts/ and ALWAYS present at runtime.
+// If the bundle is missing (local edge cases), a multi-CDN /tmp download runs.
 // ─────────────────────────────────────────────────────────────────────────────
-type FontBuffers = { regular: Buffer; bold: Buffer } | null;
-let fontCache: FontBuffers = null;
-let fontLoadPromise: Promise<FontBuffers> | null = null;
+const BUNDLED_FONTS = [
+    { label: 'Regular', file: 'Inter-Regular.otf' },
+    { label: 'Bold', file: 'Inter-Bold.otf' },
+];
 
-const FONT_URLS = {
-    regular: 'https://cdn.jsdelivr.net/gh/rsms/inter@master/docs/font-files/Inter-Regular.otf',
-    bold:    'https://cdn.jsdelivr.net/gh/rsms/inter@master/docs/font-files/Inter-Bold.otf',
+const FONT_DOWNLOAD_URLS: Record<string, string[]> = {
+    Regular: [
+        'https://cdn.jsdelivr.net/gh/rsms/inter@v3.19/docs/font-files/Inter-Regular.otf',
+        'https://raw.githubusercontent.com/rsms/inter/v3.19/docs/font-files/Inter-Regular.otf',
+    ],
+    Bold: [
+        'https://cdn.jsdelivr.net/gh/rsms/inter@v3.19/docs/font-files/Inter-Bold.otf',
+        'https://raw.githubusercontent.com/rsms/inter/v3.19/docs/font-files/Inter-Bold.otf',
+    ],
 };
 
-async function downloadFont(url: string, label: string): Promise<Buffer> {
-    console.log(`🔤 [Composer] Downloading font ${label} from ${url}`);
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 10000);
+let fontPathsCache: string[] | null = null;
+let fontPathsPromise: Promise<string[] | null> | null = null;
+
+function bundledFontPaths(): string[] | null {
     try {
-        const res = await fetch(url, {
-            signal: controller.signal,
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-        });
-        clearTimeout(t);
-        if (!res.ok) throw new Error(`Font HTTP ${res.status}`);
-        const ab = await res.arrayBuffer();
-        return Buffer.from(ab);
-    } catch (e: any) {
-        clearTimeout(t);
-        throw new Error(`Failed to download ${label}: ${e.message}`);
+        const root = process.cwd();
+        const paths = BUNDLED_FONTS.map(f => path.join(root, 'public', 'fonts', f.file));
+        if (paths.every(p => fs.existsSync(p))) {
+            console.log(`✅ [Composer] Using bundled fonts: ${paths.join(', ')}`);
+            return paths;
+        }
+        console.warn('⚠️ [Composer] Bundled fonts not found, falling back to /tmp download...');
+        return null;
+    } catch {
+        return null;
     }
 }
 
-async function ensureFontsLoaded(): Promise<FontBuffers> {
-    if (fontCache) return fontCache;
-    if (fontLoadPromise) return fontLoadPromise;
-    fontLoadPromise = (async () => {
+async function downloadFontToTmp(label: string, urls: string[]): Promise<string> {
+    const tmpDir = process.env.TMPDIR || process.env.TMP || '/tmp';
+    const target = path.join(tmpDir, `Inter-${label}.otf`);
+    if (fs.existsSync(target)) return target;
+
+    for (const url of urls) {
         try {
-            const [regular, bold] = await Promise.all([
-                downloadFont(FONT_URLS.regular, 'Inter Regular'),
-                downloadFont(FONT_URLS.bold, 'Inter Bold'),
-            ]);
-            fontCache = { regular, bold };
-            console.log(`✅ [Composer] Fonts loaded (regular: ${regular.length}B, bold: ${bold.length}B)`);
-            return fontCache;
+            const controller = new AbortController();
+            const t = setTimeout(() => controller.abort(), 12000);
+            const res = await fetch(url, {
+                signal: controller.signal,
+                headers: { 'User-Agent': 'Mozilla/5.0' },
+            });
+            clearTimeout(t);
+            if (!res.ok) continue;
+            const buf = Buffer.from(await res.arrayBuffer());
+            if (buf.length < 10000) continue; // reject error pages
+            fs.writeFileSync(target, buf);
+            console.log(`✅ [Composer] Font ${label} downloaded to ${target}`);
+            return target;
         } catch (e: any) {
-            console.warn(`⚠️ [Composer] Font download failed: ${e.message}. Falling back to system fonts.`);
-            fontCache = null;
+            console.warn(`⚠️ [Composer] Font download ${label} failed (${url}): ${e.message}`);
+        }
+    }
+    throw new Error(`All font downloads failed for ${label}`);
+}
+
+async function ensureFontPaths(): Promise<string[] | null> {
+    if (fontPathsCache) return fontPathsCache;
+    if (fontPathsPromise) return fontPathsPromise;
+    fontPathsPromise = (async () => {
+        try {
+            const bundled = bundledFontPaths();
+            if (bundled) {
+                fontPathsCache = bundled;
+                return fontPathsCache;
+            }
+            const regular = await downloadFontToTmp('Regular', FONT_DOWNLOAD_URLS.Regular);
+            const bold = await downloadFontToTmp('Bold', FONT_DOWNLOAD_URLS.Bold);
+            fontPathsCache = [regular, bold];
+            return fontPathsCache;
+        } catch (e: any) {
+            console.warn(`⚠️ [Composer] No fonts available, SVG text may render empty: ${e.message}`);
+            fontPathsCache = null;
             return null;
         }
     })();
-    return fontLoadPromise;
+    return fontPathsPromise;
 }
 
 interface CompositeOptions {
@@ -115,11 +154,12 @@ async function renderSvgToPngBuffer(svgString: string, targetWidth: number): Pro
         // Dynamic require avoids webpack trying to bundle the native .node binary
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { Resvg } = require('@resvg/resvg-js');
-        const fonts = await ensureFontsLoaded();
+        const fontPaths = await ensureFontPaths();
         const resvg = new Resvg(svgString, {
             fitTo: { mode: 'width', value: Math.round(targetWidth) },
             background: 'transparent',
-            font: fonts ? { fontFiles: [fonts.regular, fonts.bold], loadSystemFonts: true, defaultFontFamily: 'Inter' } : { loadSystemFonts: true },
+            // fontFiles MUST be file paths (Buffers are not supported by resvg-js)
+            font: fontPaths ? { fontFiles: fontPaths, loadSystemFonts: true, defaultFontFamily: 'Inter' } : { loadSystemFonts: true },
         });
         return resvg.render().asPng();
     } catch (e: any) {
@@ -449,12 +489,19 @@ export async function compositeProductAndLogo({
                 </svg>`;
                 const ringPng = await renderSvgToPngBuffer(ringSvg, logoSize + 16);
 
-                const maskSvg = `<svg width="${logoSize}" height="${logoSize}" xmlns="http://www.w3.org/2000/svg"><circle cx="${logoSize / 2}" cy="${logoSize / 2}" r="${logoSize / 2}" fill="#fff"/></svg>`;
-                const maskPng = await renderSvgToPngBuffer(maskSvg, logoSize);
-
-                const roundedLogo = await sharp(rawLogo)
-                    .resize(logoSize, logoSize, { fit: 'cover' })
-                    .composite([{ input: maskPng, blend: 'dest-in' }])
+                // Contain (not crop): wide/tall logos fit INSIDE the circle without damage
+                const logoFit = Math.round(logoSize * 0.72);
+                const logoResized = await sharp(rawLogo)
+                    .resize(logoFit, logoFit, { fit: 'inside', withoutEnlargement: true })
+                    .png()
+                    .toBuffer();
+                const logoMeta2 = await sharp(logoResized).metadata();
+                const lw = logoMeta2.width || logoFit;
+                const lh = logoMeta2.height || logoFit;
+                const roundedLogo = await sharp({
+                    create: { width: logoSize, height: logoSize, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }
+                })
+                    .composite([{ input: logoResized, top: Math.round((logoSize - lh) / 2), left: Math.round((logoSize - lw) / 2) }])
                     .png()
                     .toBuffer();
 
@@ -645,12 +692,19 @@ export async function compositeStudioPro({
                 </svg>`;
                 const ringPng = await renderSvgToPngBuffer(ringSvg, logoSize + 32);
 
-                const maskSvg = `<svg width="${logoSize}" height="${logoSize}" xmlns="http://www.w3.org/2000/svg"><circle cx="${logoSize / 2}" cy="${logoSize / 2}" r="${logoSize / 2}" fill="#fff"/></svg>`;
-                const maskPng = await renderSvgToPngBuffer(maskSvg, logoSize);
-
-                const roundedLogo = await sharp(rawLogo)
-                    .resize(logoSize, logoSize, { fit: 'cover' })
-                    .composite([{ input: maskPng, blend: 'dest-in' }])
+                // Contain (not crop): wide/tall logos fit INSIDE the circle without damage
+                const logoFit = Math.round(logoSize * 0.72);
+                const logoResized = await sharp(rawLogo)
+                    .resize(logoFit, logoFit, { fit: 'inside', withoutEnlargement: true })
+                    .png()
+                    .toBuffer();
+                const logoMeta2 = await sharp(logoResized).metadata();
+                const lw = logoMeta2.width || logoFit;
+                const lh = logoMeta2.height || logoFit;
+                const roundedLogo = await sharp({
+                    create: { width: logoSize, height: logoSize, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }
+                })
+                    .composite([{ input: logoResized, top: Math.round((logoSize - lh) / 2), left: Math.round((logoSize - lw) / 2) }])
                     .png()
                     .toBuffer();
 
