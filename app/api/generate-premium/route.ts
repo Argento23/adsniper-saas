@@ -81,6 +81,9 @@ export async function POST(req: Request) {
 
         let generatedImageUrl: string | null = null;
         const hasUserImage = image_base64 && image_base64.length > 100;
+        const diagnostics: string[] = [];
+        diagnostics.push(`FAL_KEY configurada: ${!!(process.env.FAL_KEY || process.env.FAL_API_KEY)}`);
+        diagnostics.push(`Imagen usuario: ${hasUserImage ? 'SÍ' : 'NO'}`);
         // True when an image-guided model (Bria/IP-Adapter) successfully placed the
         // user's product INTO the scene. False = scene is bare text-to-image, so we
         // MUST composite the user's image manually afterwards.
@@ -95,14 +98,17 @@ export async function POST(req: Request) {
             if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
                 try {
                     console.log('🎯 [Studio Pro 8K] Generating via Bria Product Shot (Real Product Placement)...');
+                    diagnostics.push('Bria: intentando (placement automatic)…');
                     const briaUrl = await generateBriaProductShot(image_base64, enhancedPrompt);
                     if (briaUrl) {
                         generatedImageUrl = briaUrl;
                         imageGuided = true;
                         console.log('✅ [Studio Pro 8K] Bria Product Shot succeeded!');
+                        diagnostics.push('Bria: OK (imagen generada con producto integrado)');
                     }
                 } catch (briaErr: any) {
                     console.warn(`⚠️ [Studio Pro 8K] Bria Product Shot failed: ${briaErr.message}`);
+                    diagnostics.push(`Bria: FALLO -> ${briaErr.message}`);
                 }
             }
 
@@ -110,14 +116,17 @@ export async function POST(req: Request) {
             if (!generatedImageUrl && (process.env.FAL_KEY || process.env.FAL_API_KEY)) {
                 try {
                     console.log('🎯 [Studio Pro 8K] Trying Fal.ai FLUX IP-Adapter...');
+                    diagnostics.push('IP-Adapter: intentando (flux-general + XLabs)…');
                     const ipUrl = await generateFluxIPAdapter(image_base64, enhancedPrompt, 0.45);
                     if (ipUrl) {
                         generatedImageUrl = ipUrl;
                         imageGuided = true;
                         console.log('✅ [Studio Pro 8K] Fal.ai FLUX IP-Adapter succeeded');
+                        diagnostics.push('IP-Adapter: OK (escena guiada por imagen)');
                     }
                 } catch (ipErr: any) {
                     console.warn(`⚠️ [Studio Pro 8K] Fal.ai FLUX IP-Adapter failed: ${ipErr.message}`);
+                    diagnostics.push(`IP-Adapter: FALLO -> ${ipErr.message}`);
                 }
             }
 
@@ -213,6 +222,8 @@ export async function POST(req: Request) {
             } catch (manualErr: any) {
                 console.warn(`⚠️ [Studio Pro 8K] Manual compositor failed: ${manualErr.message}`);
             }
+        } else if (hasUserImage && imageGuided) {
+            diagnostics.push('Composición manual: NO (Bria/IP-Adapter ya integraron el producto en la escena)');
         }
 
 
@@ -241,7 +252,8 @@ export async function POST(req: Request) {
             success: true,
             final_composition: finalUrl,
             original_extracted: image_base64 || '',
-            prompt_used: enhancedPrompt
+            prompt_used: enhancedPrompt,
+            diagnostics
         });
 
     } catch (error: any) {

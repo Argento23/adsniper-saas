@@ -530,6 +530,7 @@ export default function Dashboard() {
     const [productImage, setProductImage] = useState('');
     const [productTitle, setProductTitle] = useState('');
     const [error, setError] = useState('');
+    const [diagnostics, setDiagnostics] = useState<any[]>([]);
 
     // Ensure admin gets 9999 credits as soon as user object loads
     useEffect(() => {
@@ -614,6 +615,7 @@ export default function Dashboard() {
 
         setLoading(true);
         setError('');
+        setDiagnostics([]);
         setAds([]);
         setScripts([]); // Studio mode doesn't generate scripts yet, but we clear them
 
@@ -642,6 +644,7 @@ export default function Dashboard() {
 
             // Successfully generated Premium Image
             setPremiumCredits(prev => prev - 1);
+            setDiagnostics(data.diagnostics || []);
 
             // Format to match standard AdCard structure
             setAds([{
@@ -1194,6 +1197,18 @@ export default function Dashboard() {
                                 <div className="w-2 h-2 bg-red-500 rounded-full shadow-[0_0_10px_#ef4444]"></div>
                                 <span className="font-medium">Error:</span> {error}
                             </div>
+                        )}
+
+                        {/* Provider Diagnostics (Studio) */}
+                        {diagnostics.length > 0 && (
+                            <details className="max-w-3xl mx-auto mt-4 p-4 bg-slate-900/60 border border-slate-800 text-slate-300 rounded-xl backdrop-blur-sm">
+                                <summary className="font-medium text-slate-200 cursor-pointer select-none">Diagnóstico de proveedores AI (para debugging)</summary>
+                                <div className="mt-3 space-y-1 text-[13px] font-mono leading-relaxed">
+                                    {diagnostics.map((d: any, i: number) => (
+                                        <div key={i} className={typeof d === 'string' && (d.includes('FALLO') || d.includes('no configurada')) ? 'text-red-300' : 'text-emerald-300'}>{d}</div>
+                                    ))}
+                                </div>
+                            </details>
                         )}
 
                         {/* Results Tabs */}
