@@ -119,53 +119,71 @@ export async function uploadBase64ToFalStorage(imageBase64: string): Promise<str
         return imageBase64;
     }
 
-    const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
+    const apiKey = (process.env.FAL_KEY || process.env.FAL_API_KEY || '').replace(/["'\s]/g, '');
     if (!apiKey) throw new Error('FAL_KEY not configured');
 
     const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
     const buffer = Buffer.from(base64Data, 'base64');
     const contentType = imageBase64.startsWith('data:image/jpeg') ? 'image/jpeg' : (imageBase64.startsWith('data:image/webp') ? 'image/webp' : 'image/png');
     const fileName = contentType === 'image/jpeg' ? 'product.jpg' : 'product.png';
+    const dataUri = imageBase64.startsWith('data:') ? imageBase64 : `data:${contentType};base64,${base64Data}`;
 
     console.log('📤 [Fal Storage] Initiating image upload...');
 
-    const initiateResponse = await fetch('https://rest.fal.ai/storage/upload/initiate', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Key ${apiKey}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            file_name: fileName,
-            content_type: contentType
-        })
-    });
+    try {
+        const initiateResponse = await fetch('https://rest.fal.ai/storage/upload/initiate', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Key ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                file_name: fileName,
+                content_type: contentType
+            })
+        });
 
-    if (!initiateResponse.ok) {
-        const errText = await initiateResponse.text();
-        throw new Error(`FAL storage initiate failed (${initiateResponse.status}): ${errText}`);
+        if (!initiateResponse.ok) {
+            throw new Error(`FAL storage initiate failed (${initiateResponse.status}): ${await initiateResponse.text()}`);
+        }
+
+        const initiateData = await initiateResponse.json();
+        const { upload_url, file_url } = initiateData;
+
+        if (!upload_url || !file_url) {
+            throw new Error('FAL storage initiate: missing upload_url/file_url in response');
+        }
+
+        const putResponse = await fetch(upload_url, {
+            method: 'PUT',
+            headers: { 'Content-Type': contentType },
+            body: new Uint8Array(buffer)
+        });
+
+        if (!putResponse.ok) {
+            throw new Error(`FAL storage PUT failed (${putResponse.status}): ${await putResponse.text()}`);
+        }
+
+        console.log(`✅ [Fal Storage] Image uploaded successfully: ${file_url}`);
+        return file_url;
+    } catch (e: any) {
+        console.warn(`⚠️ [Fal Storage] Upload failed (${e.message}). Using Data URI / public uploader fallback...`);
     }
 
-    const initiateData = await initiateResponse.json();
-    const { upload_url, file_url } = initiateData;
-
-    if (!upload_url || !file_url) {
-        throw new Error('FAL storage initiate: missing upload_url/file_url in response');
+    // Fallback 1: public uploaders (FreeImageHost / Catbox / tmpfiles)
+    try {
+        const { ensurePublicUrl } = await import('@/lib/replicate');
+        const pubUrl = await ensurePublicUrl(imageBase64);
+        if (pubUrl && pubUrl.startsWith('http')) {
+            console.log(`✅ [Fal Storage] Public uploader URL: ${pubUrl}`);
+            return pubUrl;
+        }
+    } catch (pubErr) {
+        console.warn('[Fal Storage] Public uploader fallback failed:', pubErr);
     }
 
-    const putResponse = await fetch(upload_url, {
-        method: 'PUT',
-        headers: { 'Content-Type': contentType },
-        body: new Uint8Array(buffer)
-    });
-
-    if (!putResponse.ok) {
-        const errText = await putResponse.text();
-        throw new Error(`FAL storage PUT failed (${putResponse.status}): ${errText}`);
-    }
-
-    console.log(`✅ [Fal Storage] Image uploaded successfully: ${file_url}`);
-    return file_url;
+    // Fallback 2: FAL models accept raw data URIs
+    return dataUri;
 }
 
 export async function generateFluxReduxImage(
@@ -192,27 +210,47 @@ export async function generateFluxIPAdapter(
     imageSize: "square_hd" | "square" | "portrait_4_3" | "landscape_4_3" = "square_hd"
 ): Promise<string> {
     console.log(`🎨 [Fal FLUX Redux/Adapter] Integrating reference logo/product into scene...`);
-    const httpUrl = referenceImageUrl.startsWith('data:') ? await uploadBase64ToFalStorage(referenceImageUrl) : referenceImageUrl;
-    
-    // Use flux-general with image conditioning (IP-Adapter)
-    // We skip Redux here because Redux enforces structural similarity too strictly 
-    // and ignores scene prompts (like placing the logo in hands).
-    const result = await runFalAsync('https://fal.run/fal-ai/flux-general', {
+    const httpUrl = referenceImageUrl.startsWith('http://') || referenceImageUrl.startsWith('https://')
+        ? referenceImageUrl
+        : await uploadBase64ToFalStorage(referenceImageUrl);
+
+    // Try 1: flux-general + XLabs IP-Adapter
+    try {
+        const result = await runFalAsync('https://fal.run/fal-ai/flux-general', {
+            prompt,
+            image_size: imageSize,
+            num_inference_steps: 28,
+            guidance_scale: 3.5,
+            num_images: 1,
+            enable_safety_checker: true,
+            use_real_cfg: true,
+            ip_adapters: [{
+                path: 'XLabs-AI/flux-ip-adapter',
+                weight_name: 'ip_adapter.safetensors',
+                image_encoder_path: 'openai/clip-vit-large-patch14',
+                image_url: httpUrl,
+                scale: ipAdapterScale
+            }]
+        });
+        if (result?.images?.[0]?.url) return result.images[0].url;
+    } catch (e: any) {
+        console.warn(`⚠️ [IP-Adapter] XLabs IP-Adapter failed (${e.message}). Trying reference_image_url...`);
+    }
+
+    // Try 2: flux-general native reference guidance (no IP-Adapter weights needed)
+    const resultRef = await runFalAsync('https://fal.run/fal-ai/flux-general', {
         prompt,
         image_size: imageSize,
         num_inference_steps: 28,
         guidance_scale: 3.5,
         num_images: 1,
         enable_safety_checker: true,
-        ip_adapters: [{
-            path: 'XLabs-AI/flux-ip-adapter',
-            weight_name: 'ip_adapter.safetensors',
-            image_encoder_path: 'openai/clip-vit-large-patch14',
-            image_url: httpUrl,
-            scale: ipAdapterScale
-        }]
+        reference_image_url: httpUrl,
+        reference_strength: 0.6,
+        reference_start: 0,
+        reference_end: 1
     });
-    return result.images[0].url;
+    return resultRef.images[0].url;
 }
 
 export async function generateFluxImageToImage(
@@ -246,12 +284,30 @@ export async function generateBriaProductShot(
     imageBase64: string,
     sceneDescription: string
 ): Promise<string> {
-    const httpUrl = imageBase64.startsWith('data:') ? await uploadBase64ToFalStorage(imageBase64) : imageBase64;
+    const httpUrl = imageBase64.startsWith('http://') || imageBase64.startsWith('https://')
+        ? imageBase64
+        : await uploadBase64ToFalStorage(imageBase64);
+
+    // Try 1: automatic placement (Bria decides the best natural position in the scene)
+    try {
+        const result = await runFalAsync('https://fal.run/fal-ai/bria/product-shot', {
+            image_url: httpUrl,
+            scene_description: sceneDescription,
+            placement_type: "automatic",
+            optimize_description: true,
+            num_results: 1
+        });
+        if (result?.images?.[0]?.url) return result.images[0].url;
+    } catch (err: any) {
+        console.warn(`⚠️ [Bria] Automatic placement failed (${err.message}). Trying manual padding...`);
+    }
+
+    // Try 2: manual padding around the product (keeps product central)
     const result = await runFalAsync('https://fal.run/fal-ai/bria/product-shot', {
         image_url: httpUrl,
         scene_description: sceneDescription,
         placement_type: "manual_padding",
-        padding_values: [300, 300, 300, 300],
+        padding_values: [200, 200, 200, 200],
         optimize_description: true,
         num_results: 1
     });

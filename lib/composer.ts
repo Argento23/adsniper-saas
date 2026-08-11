@@ -310,7 +310,11 @@ export async function compositeUserLogoAsScene({
             .toBuffer();
 
         const logoRaw = await fetchImageBuffer(logoBase64);
-        const logoSize = Math.round(width * 0.65);
+        // When compositing onto an already-generated AI scene (backgroundScene), use a
+        // much smaller logo so it enhances the scene instead of covering it (65% dominated
+        // the frame and hid the background entirely).
+        const isOverlayingOnScene = !!backgroundScene;
+        const logoSize = Math.round(width * (isOverlayingOnScene ? 0.38 : 0.55));
         const logoProcessed = await sharp(logoRaw)
             .resize(logoSize, logoSize, { fit: 'inside', withoutEnlargement: false })
             .png()
@@ -321,7 +325,7 @@ export async function compositeUserLogoAsScene({
         const logoH = logoMeta.height || logoSize;
 
         const logoCenterX = Math.round((width - logoW) / 2);
-        const logoCenterY = Math.round((height - logoH) / 2) - Math.round(height * 0.04);
+        const logoCenterY = Math.round((height - logoH) / 2) - Math.round(height * (isOverlayingOnScene ? 0.1 : 0.04));
 
         const glowSize = Math.max(logoW, logoH) + 80;
         const glowX = Math.round((width - glowSize) / 2);
