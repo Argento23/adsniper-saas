@@ -524,12 +524,16 @@ export default function Dashboard() {
         user?.primaryEmailAddress?.emailAddress?.toLowerCase().trim() === 'gustavodornhofer@gmail.com' ||
         plan === 'Infinity';
 
+    const isAdminDiag = userEmails.includes('gustavodornhofer@gmail.com') ||
+        user?.primaryEmailAddress?.emailAddress?.toLowerCase().trim() === 'gustavodornhofer@gmail.com';
+
     // Data State
     const [ads, setAds] = useState<any[]>([]);
     const [scripts, setScripts] = useState<any[]>([]);
     const [productImage, setProductImage] = useState('');
     const [productTitle, setProductTitle] = useState('');
     const [error, setError] = useState('');
+    const [diagnostics, setDiagnostics] = useState<any[]>([]);
 
     // Ensure admin gets 9999 credits as soon as user object loads
     useEffect(() => {
@@ -614,6 +618,7 @@ export default function Dashboard() {
 
         setLoading(true);
         setError('');
+        setDiagnostics([]);
         setAds([]);
         setScripts([]); // Studio mode doesn't generate scripts yet, but we clear them
 
@@ -642,6 +647,7 @@ export default function Dashboard() {
 
             // Successfully generated Premium Image
             setPremiumCredits(prev => prev - 1);
+            if (data.diagnostics) setDiagnostics(data.diagnostics);
 
             // Format to match standard AdCard structure
             setAds([{
@@ -1196,7 +1202,17 @@ export default function Dashboard() {
                             </div>
                         )}
 
-                        {/* Provider Diagnostics (Studio) */}
+                        {/* Provider Diagnostics (Studio) — visible solo para el admin */}
+                        {isAdminDiag && diagnostics.length > 0 && (
+                            <details className="max-w-3xl mx-auto mt-2 mb-2 p-3 bg-slate-900/60 border border-slate-800 text-slate-300 rounded-xl backdrop-blur-sm">
+                                <summary className="font-medium text-slate-200 cursor-pointer select-none text-xs">Diagnóstico de proveedores AI (solo admin)</summary>
+                                <div className="mt-2 space-y-1 text-[12px] font-mono leading-relaxed">
+                                    {diagnostics.map((d: any, i: number) => (
+                                        <div key={i} className={typeof d === 'string' && (d.includes('FALLO') || d.includes('no configurada') || d.includes('falló') || d.includes('Error')) ? 'text-red-300' : 'text-emerald-300'}>{d}</div>
+                                    ))}
+                                </div>
+                            </details>
+                        )}
 
                         {/* Results Tabs */}
                         {(ads.length > 0 || scripts.length > 0) && (
