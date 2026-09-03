@@ -41,6 +41,8 @@ require('../.test-build/tests/video-composer.test.js');
 require('../.test-build/tests/subtitles.test.js');
 require('../.test-build/tests/export.test.js');
 require('../.test-build/tests/storage.test.js');
+require('../.test-build/tests/fake-redis.js');
+require('../.test-build/tests/jobs.test.js');
 
 const { run } = require('../.test-build/tests/harness.js');
 run().then(r => process.exit(r.failed === 0 ? 0 : 1));

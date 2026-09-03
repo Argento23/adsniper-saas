@@ -155,7 +155,7 @@ export async function POST(request: Request) {
             );
         }
 
-        const job = getJobQueue().enqueue({
+        const job = await getJobQueue().enqueue({
             userId,
             projectId: input.projectId,
             sceneId: input.sceneId,

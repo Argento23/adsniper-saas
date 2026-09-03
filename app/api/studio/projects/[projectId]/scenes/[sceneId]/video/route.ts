@@ -82,7 +82,7 @@ export async function POST(request: Request, { params }: RouteContext) {
             );
         }
 
-        const job = getJobQueue().enqueue({
+        const job = await getJobQueue().enqueue({
             userId,
             projectId: params.projectId,
             sceneId: params.sceneId,

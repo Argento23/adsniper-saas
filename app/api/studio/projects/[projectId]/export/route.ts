@@ -46,7 +46,7 @@ export async function POST(_request: Request, { params }: RouteContext) {
             return NextResponse.json({ error: pre.errors.join(' '), kind: pre.kind, errors: pre.errors }, { status });
         }
 
-        const job = getJobQueue().enqueue({
+        const job = await getJobQueue().enqueue({
             userId,
             projectId: params.projectId,
             type: 'export',
@@ -64,20 +64,20 @@ export async function POST(_request: Request, { params }: RouteContext) {
         runExport(job, {
             loadTimeline: (pid) => getTimelineStore().getTimeline(pid),
             loadScenes: (pid) => getSceneStore().listScenes(pid),
-            markProcessing: (jobId) => { getJobQueue().markProcessing(jobId); },
+            markProcessing: (jobId) => { void getJobQueue().markProcessing(jobId); },
             markCompleted: (jobId, output) => {
-                getJobQueue().markCompleted(jobId, {
+                void getJobQueue().markCompleted(jobId, {
                     outputUrl: output.outputUrl,
                     outputAssetId: output.outputAssetId,
                 });
             },
-            markFailed: (jobId, error) => { getJobQueue().markFailed(jobId, error); },
+            markFailed: (jobId, error) => { void getJobQueue().markFailed(jobId, error); },
             storage,
             resolveWorkDir: (jobId) => join(process.cwd(), 'public', 'exports', `${jobId}_work`),
         }).catch((e) => {
             // Defensive: should never reach here because runExport
             // catches its own errors and calls markFailed.
-            try { getJobQueue().markFailed(job.id, e instanceof Error ? e.message : 'unknown error'); } catch { /* ignore */ }
+            try { void getJobQueue().markFailed(job.id, e instanceof Error ? e.message : 'unknown error'); } catch { /* ignore */ }
         });
 
         return NextResponse.json({ jobId: job.id, status: job.status }, { status: 202 });
@@ -98,9 +98,8 @@ export async function GET(_request: Request, { params }: RouteContext) {
         const access = requireProject(userId, params.projectId);
         if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
-        const jobs = getJobQueue()
-            .listByUser(userId)
-            .filter(j => j.type === 'export' && j.projectId === params.projectId);
+        const allUserJobs = await getJobQueue().listByUser(userId);
+        const jobs = allUserJobs.filter(j => j.type === 'export' && j.projectId === params.projectId);
         return NextResponse.json({ jobs });
     } catch {
         return NextResponse.json({ error: 'internal error' }, { status: 500 });

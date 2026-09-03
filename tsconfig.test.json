@@ -15,7 +15,9 @@
     "baseUrl": "."
   },
   "include": [
+    "tests/*.ts",
     "tests/**/*.test.ts",
+    "tests/fake-redis.ts",
     "lib/projects/**/*.ts",
     "lib/providers/**/*.ts",
     "lib/jobs/**/*.ts",

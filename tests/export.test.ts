@@ -84,7 +84,6 @@ test('export: describeJobStatus maps every status to a human label', () => {
     assert.equal(describeJobStatus('processing'), 'Processing...');
     assert.equal(describeJobStatus('completed'), 'Completed');
     assert.equal(describeJobStatus('failed'), 'Failed');
-    assert.equal(describeJobStatus('cancelled'), 'Cancelled');
 });
 
 // ── pre-flight: no_timeline ─────────────────────────────────────────────
@@ -324,16 +323,17 @@ test('export: marks failed when pre-flight rejects (missing video)', async () =>
 });
 
 // ── integration: queue ──────────────────────────────────────────────────
-test('queue: export jobs are filtered separately from video jobs', () => {
-    const { getJobQueue } = require('../lib/jobs/queue');
+test('queue: export jobs are filtered separately from video jobs', async () => {
+    const { getJobQueue, resetJobQueue } = require('../lib/jobs/queue');
+    resetJobQueue();
     const queue = getJobQueue();
-    const a = queue.enqueue({
+    const a = await queue.enqueue({
         userId: 'userA',
         projectId: 'p1',
         type: 'export',
         input: { timelineId: 'tl' },
     });
-    const b = queue.enqueue({
+    const b = await queue.enqueue({
         userId: 'userA',
         projectId: 'p1',
         type: 'video',
@@ -343,15 +343,16 @@ test('queue: export jobs are filtered separately from video jobs', () => {
     assert.equal(a.type, 'export');
     assert.equal(b.type, 'video');
     assert.equal(a.status, 'queued');
-    const exports = queue.listByUser('userA').filter((j: { type: string }) => j.type === 'export');
+    const exports = (await queue.listByUser('userA')).filter((j: { type: string }) => j.type === 'export');
     assert.equal(exports.length, 1);
     assert.equal(exports[0].id, a.id);
 });
 
-test('queue: markProcessing → markCompleted is idempotent', () => {
-    const { getJobQueue } = require('../lib/jobs/queue');
+test('queue: markProcessing → markCompleted is idempotent', async () => {
+    const { getJobQueue, resetJobQueue } = require('../lib/jobs/queue');
+    resetJobQueue();
     const queue = getJobQueue();
-    const job = queue.enqueue({
+    const job = await queue.enqueue({
         userId: 'userB',
         projectId: 'p1',
         type: 'export',
@@ -360,7 +361,7 @@ test('queue: markProcessing → markCompleted is idempotent', () => {
     queue.markProcessing(job.id);
     queue.markCompleted(job.id, { outputUrl: '/exports/x.mp4' });
     queue.markCompleted(job.id, { outputUrl: '/exports/y.mp4' }); // idempotent
-    const fetched = queue.get(job.id);
+    const fetched = await queue.get(job.id);
     assert.equal(fetched.status, 'completed');
     assert.equal(fetched.outputUrl, '/exports/y.mp4');
 });

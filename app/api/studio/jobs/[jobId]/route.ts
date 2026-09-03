@@ -16,7 +16,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const job = getJobQueue().get(params.jobId);
+        const job = await getJobQueue().get(params.jobId);
         if (!job) {
             return NextResponse.json({ error: 'job not found' }, { status: 404 });
         }
@@ -40,9 +40,9 @@ export async function GET(_request: Request, { params }: RouteContext) {
                             error: s.error,
                         };
                         if (s.state === 'completed' && s.outputUrl) {
-                            getJobQueue().markCompleted(job.id, { outputUrl: s.outputUrl });
+                            void getJobQueue().markCompleted(job.id, { outputUrl: s.outputUrl });
                         } else if (s.state === 'failed') {
-                            getJobQueue().markFailed(job.id, s.error ?? 'provider reported failure');
+                            void getJobQueue().markFailed(job.id, s.error ?? 'provider reported failure');
                         }
                     } catch {
                         /* provider temporarily unavailable */
@@ -51,7 +51,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
             }
         }
 
-        const updated = getJobQueue().get(job.id);
+        const updated = await getJobQueue().get(job.id);
         return NextResponse.json({
             job: updated,
             providerStatus,

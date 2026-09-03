@@ -352,7 +352,6 @@ export function describeJobStatus(status: JobStatus): string {
         case 'processing': return 'Processing...';
         case 'completed':  return 'Completed';
         case 'failed':     return 'Failed';
-        case 'cancelled':  return 'Cancelled';
     }
 }
 
