@@ -23,6 +23,7 @@
     "lib/api/**/*.ts",
     "lib/timeline-editor/**/*.ts",
     "lib/video/**/*.ts",
+    "lib/storage/**/*.ts",
     "lib/fal.ts",
     "lib/replicate.ts"
   ],

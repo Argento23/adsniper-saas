@@ -22,8 +22,10 @@ Module._resolveFilename = function (request, parent, ...rest) {
     // module cache works correctly (no double-evaluation).
     if (typeof request === 'string' && request.startsWith('@/')) {
         const rel = request.slice(2);
-        request = path.join(ROOT, rel);
-        if (!request.endsWith('.js')) request += '.js';
+        const abs = path.join(ROOT, rel);
+        // Try as exact file first, then as directory + /index.js.
+        // Let Node's native resolver handle the extension lookup.
+        request = abs;
     }
     return originalResolveFilename.call(this, request, parent, ...rest);
 };
@@ -38,6 +40,7 @@ require('../.test-build/tests/scene-timeline-integration.test.js');
 require('../.test-build/tests/video-composer.test.js');
 require('../.test-build/tests/subtitles.test.js');
 require('../.test-build/tests/export.test.js');
+require('../.test-build/tests/storage.test.js');
 
 const { run } = require('../.test-build/tests/harness.js');
 run().then(r => process.exit(r.failed === 0 ? 0 : 1));

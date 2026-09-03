@@ -1,5 +1,5 @@
 /**
- * Export runner — Phase 6G.
+ * Export runner — Phase 6G + Production storage layer.
  *
  * Orchestrates the full export pipeline:
  *
@@ -11,7 +11,9 @@
  *     ↓
  *   buildSubtitles (writes SRT to workDir)
  *     ↓
- *   spawn ffmpeg
+ *   spawn ffmpeg → writes MP4 to local workDir
+ *     ↓
+ *   storage.upload(key, body) → S3 bucket OR public/exports/
  *     ↓
  *   markCompleted (with outputUrl) | markFailed (with stderr)
  *
@@ -19,10 +21,10 @@
  * Reuses `composeTimeline` + `buildFfmpegCommand` from Phase 6E.
  * Reuses `buildSubtitles` + `buildSubtitleFilter` from Phase 6F.
  *
- * Storage: outputs are written under `public/exports/{jobId}.mp4`,
- * served at `/exports/{jobId}.mp4`. No new storage abstraction is
- * introduced — `public/` is the existing static asset path used by
- * Next.js.
+ * Storage is fully injectable via `deps.storage` so the runner is
+ * backend-agnostic:
+ *   - dev/test → `LocalStorageAdapter` (writes public/exports/)
+ *   - prod    → `S3StorageAdapter` (S3 / Cloudflare R2 / MinIO)
  */
 
 import { join } from 'node:path';
@@ -39,6 +41,7 @@ import {
     buildSubtitles,
     buildSubtitleArgs,
 } from '@/lib/video/subtitles';
+import { StorageAdapter, LocalStorageAdapter, getStorage } from '@/lib/storage';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -51,8 +54,18 @@ export interface ExportRunnerDeps {
     markProcessing: (jobId: string) => void;
     markCompleted: (jobId: string, output: { outputUrl: string; outputAssetId?: string }) => void;
     markFailed: (jobId: string, error: string) => void;
-    /** Resolve the absolute path of `public/exports/`. */
-    resolveOutputDir: () => string;
+    /**
+     * Storage adapter for the final MP4. Required.
+     * Use `getStorage()` from `@/lib/storage` to construct the
+     * environment-appropriate adapter.
+     */
+    storage: StorageAdapter;
+    /**
+     * Resolve the absolute path of the local workdir used for
+     * intermediate artifacts (concat list, SRT, downloaded sources,
+     * local MP4 before upload). Default: `os.tmpdir()/export-{jobId}`.
+     */
+    resolveWorkDir?: (jobId: string) => string;
     /** Spawn ffmpeg. Default: `child_process.spawn('ffmpeg', args)`. */
     spawn?: (cmd: string, args: string[]) => SpawnedProcess;
     /** Override `globalThis.fetch` (for tests). */
@@ -61,6 +74,8 @@ export interface ExportRunnerDeps {
     writeFile?: (path: string, data: string | Uint8Array) => Promise<void>;
     /** Make a directory (default: fs.promises.mkdir). */
     mkdir?: (path: string, opts: { recursive: boolean }) => Promise<void>;
+    /** Read a file from disk (default: fs.promises.readFile). */
+    readFile?: (path: string) => Promise<Buffer>;
 }
 
 export interface SpawnedProcess {
@@ -163,16 +178,15 @@ export async function runExport(job: GenerationJob, deps: ExportRunnerDeps): Pro
         return;
     }
 
-    const outputDir = deps.resolveOutputDir();
+    const workDir = (deps.resolveWorkDir ?? defaultWorkDir)(job.id);
     try {
-        await (deps.mkdir ?? defaultMkdir)(outputDir, { recursive: true });
+        await (deps.mkdir ?? defaultMkdir)(workDir, { recursive: true });
     } catch (e) {
-        deps.markFailed(job.id, `failed to create output dir: ${e instanceof Error ? e.message : String(e)}`);
+        deps.markFailed(job.id, `failed to create work dir: ${e instanceof Error ? e.message : String(e)}`);
         return;
     }
 
-    const outputPath = `${outputDir}/${job.id}.mp4`;
-    const workDir = `${outputDir}/${job.id}_work`;
+    const outputPath = `${workDir}/${job.id}.mp4`;
     const srtPath = `${workDir}/subs.srt`;
     const concatListPath = `${workDir}/concat.txt`;
 
@@ -238,8 +252,28 @@ export async function runExport(job: GenerationJob, deps: ExportRunnerDeps): Pro
         return;
     }
 
-    const outputUrl = `/exports/${job.id}.mp4`;
-    deps.markCompleted(job.id, { outputUrl, outputAssetId: `asset_${job.id}` });
+    // Read the local MP4 from workDir and upload via storage adapter.
+    let body: Buffer;
+    try {
+        body = await (deps.readFile ?? defaultReadFile)(outputPath);
+    } catch (e) {
+        deps.markFailed(job.id, `failed to read local output: ${e instanceof Error ? e.message : String(e)}`);
+        return;
+    }
+
+    const key = `${job.id}.mp4`;
+    let uploadResult: { key: string; url: string };
+    try {
+        uploadResult = await deps.storage.upload(key, body, 'video/mp4');
+    } catch (e) {
+        deps.markFailed(job.id, `storage upload failed: ${e instanceof Error ? e.message : String(e)}`);
+        return;
+    }
+
+    deps.markCompleted(job.id, {
+        outputUrl: uploadResult.url,
+        outputAssetId: uploadResult.key,
+    });
 }
 
 // ── ffmpeg spawn (default impl + injected for tests) ────────────────────
@@ -294,6 +328,19 @@ async function defaultMkdir(path: string, opts: { recursive: boolean }): Promise
     await fs.mkdir(path, opts);
 }
 
+async function defaultReadFile(path: string): Promise<Buffer> {
+    if (typeof window !== 'undefined') {
+        throw new Error('readFile not available in browser');
+    }
+    const fs = await import('node:fs/promises');
+    return await fs.readFile(path);
+}
+
+function defaultWorkDir(jobId: string): string {
+    const tmp = process.env.TMPDIR ?? process.env.TMP ?? (typeof window !== 'undefined' ? '/tmp' : require('node:os').tmpdir());
+    return join(tmp, `export-${jobId}`);
+}
+
 // ── State helpers ───────────────────────────────────────────────────────
 
 /**
@@ -310,13 +357,27 @@ export function describeJobStatus(status: JobStatus): string {
 }
 
 /**
- * Returns a relative public URL for a finished export's MP4.
- * Kept here so tests + UI agree on the URL format.
+ * Synchronous URL helper for code paths that don't await (tests, UI).
+ * Returns the local-dev public URL (`/exports/{jobId}.mp4`). For
+ * production (S3) URLs use `await storage.urlFor(key)`.
  */
 export function publicUrlForJob(jobId: string): string {
     return `/exports/${jobId}.mp4`;
 }
 
+/**
+ * Convenience: build a default deps object for local dev using the
+ * `LocalStorageAdapter` that writes to `public/exports/`. Tests should
+ * construct their own deps; this is for the API handler only.
+ */
+export function buildDefaultExportDeps(partial: Partial<ExportRunnerDeps> & Pick<ExportRunnerDeps, 'loadTimeline' | 'loadScenes' | 'markProcessing' | 'markCompleted' | 'markFailed'>): ExportRunnerDeps {
+    return {
+        ...partial,
+        storage: partial.storage ?? getStorage({ driver: 'local' }),
+    };
+}
+
 // ── Re-exports for tests ────────────────────────────────────────────────
 
 export type { Composition };
+export { LocalStorageAdapter };

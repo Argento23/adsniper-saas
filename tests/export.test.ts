@@ -22,6 +22,7 @@ import {
 } from '../lib/video/export-runner';
 import { Timeline, TimelineClip } from '../lib/projects/timeline';
 import { Scene } from '../lib/projects/types';
+import { createFakeStorage, FakeStorageAdapter } from '../lib/storage/fake';
 
 // ── helpers ──────────────────────────────────────────────────────────────
 function mkTimeline(clips: TimelineClip[]): Timeline {
@@ -186,6 +187,7 @@ test('preflight: returns ok with timeline + scenes when everything is ready', as
 // ── runExport: state transitions ────────────────────────────────────────
 test('export: state transitions queued → processing → completed', async () => {
     const transitions: string[] = [];
+    const storage = createFakeStorage();
     const t = mkTimeline([
         mkClip('c1', 's1', 0, 4, 'data:video/mp4;base64,AAAAAA=='),
         mkClip('c2', 's2', 4, 5, 'data:video/mp4;base64,AAAAAA=='),
@@ -203,16 +205,23 @@ test('export: state transitions queued → processing → completed', async () =
         markProcessing: (id) => transitions.push(`processing:${id}`),
         markCompleted: (id, out) => transitions.push(`completed:${id}:${out.outputUrl}`),
         markFailed: (id, err) => transitions.push(`failed:${id}:${err}`),
-        resolveOutputDir: () => '/tmp/exports',
+        resolveWorkDir: () => '/tmp/work',
+        storage,
         spawn: () => fakeProc as unknown as ReturnType<NonNullable<Parameters<typeof runExport>[1]['spawn']>>,
         writeFile: async () => undefined,
         mkdir: async () => undefined,
+        readFile: async () => Buffer.from('fake-mp4-bytes'),
     });
-    assert.deepEqual(transitions, ['processing:job_1', 'completed:job_1:/exports/job_1.mp4']);
+    assert.deepEqual(transitions, ['processing:job_1', 'completed:job_1:/fake/job_1.mp4']);
+    assert.equal(storage.uploads.length, 1);
+    assert.equal(storage.uploads[0].key, 'job_1.mp4');
+    assert.equal(storage.uploads[0].contentType, 'video/mp4');
+    assert.equal(storage.uploads[0].bodySize, 'fake-mp4-bytes'.length);
 });
 
 test('export: state transitions queued → processing → failed when ffmpeg errors', async () => {
     const transitions: string[] = [];
+    const storage = createFakeStorage();
     const t = mkTimeline([
         mkClip('c1', 's1', 0, 4, 'data:video/mp4;base64,AAAAAA=='),
     ]);
@@ -228,18 +237,22 @@ test('export: state transitions queued → processing → failed when ffmpeg err
         markProcessing: (id) => transitions.push(`processing:${id}`),
         markCompleted: (id) => transitions.push(`completed:${id}`),
         markFailed: (id, err) => transitions.push(`failed:${id}:${err}`),
-        resolveOutputDir: () => '/tmp/exports',
+        resolveWorkDir: () => '/tmp/work',
+        storage,
         spawn: () => fakeProc as unknown as ReturnType<NonNullable<Parameters<typeof runExport>[1]['spawn']>>,
         writeFile: async () => undefined,
         mkdir: async () => undefined,
+        readFile: async () => Buffer.from('unused'),
     });
     assert.equal(transitions.length, 2);
     assert.equal(transitions[0], 'processing:job_2');
     assert.ok(transitions[1].startsWith('failed:job_2:'));
+    assert.equal(storage.uploads.length, 0);
 });
 
 test('export: marks failed when job type is not export', async () => {
     const transitions: string[] = [];
+    const storage = createFakeStorage();
     const job = { ...mkJob('job_3', 'p1'), type: 'video' as const };
     await runExport(job, {
         loadTimeline: () => null,
@@ -247,15 +260,18 @@ test('export: marks failed when job type is not export', async () => {
         markProcessing: () => undefined,
         markCompleted: () => undefined,
         markFailed: (id, err) => transitions.push(`failed:${id}:${err}`),
-        resolveOutputDir: () => '/tmp/exports',
+        resolveWorkDir: () => '/tmp/work',
+        storage,
     });
     assert.equal(transitions.length, 1);
     assert.ok(transitions[0].startsWith('failed:job_3:'));
     assert.ok(transitions[0].includes('not an export'));
+    assert.equal(storage.uploads.length, 0);
 });
 
 test('export: marks failed when job is missing projectId', async () => {
     const transitions: string[] = [];
+    const storage = createFakeStorage();
     const job = { ...mkJob('job_4', 'p1'), projectId: undefined };
     await runExport(job, {
         loadTimeline: () => null,
@@ -263,7 +279,8 @@ test('export: marks failed when job is missing projectId', async () => {
         markProcessing: () => undefined,
         markCompleted: () => undefined,
         markFailed: (id, err) => transitions.push(`failed:${id}:${err}`),
-        resolveOutputDir: () => '/tmp/exports',
+        resolveWorkDir: () => '/tmp/work',
+        storage,
     });
     assert.equal(transitions.length, 1);
     assert.ok(transitions[0].includes('projectId'));
@@ -271,13 +288,15 @@ test('export: marks failed when job is missing projectId', async () => {
 
 test('export: marks failed when pre-flight rejects (no clips)', async () => {
     const transitions: string[] = [];
+    const storage = createFakeStorage();
     await runExport(mkJob('job_5', 'p1'), {
         loadTimeline: () => mkTimeline([]),
         loadScenes: () => [],
         markProcessing: (id) => transitions.push(`processing:${id}`),
         markCompleted: () => undefined,
         markFailed: (id, err) => transitions.push(`failed:${id}:${err}`),
-        resolveOutputDir: () => '/tmp/exports',
+        resolveWorkDir: () => '/tmp/work',
+        storage,
     });
     // markProcessing is called first (job started), then markFailed after pre-flight.
     assert.equal(transitions.length, 2);
@@ -288,6 +307,7 @@ test('export: marks failed when pre-flight rejects (no clips)', async () => {
 
 test('export: marks failed when pre-flight rejects (missing video)', async () => {
     const transitions: string[] = [];
+    const storage = createFakeStorage();
     const t = mkTimeline([{ id: 'c1', sceneId: 's1', start: 0, duration: 4 }]); // no sourceUrl
     await runExport(mkJob('job_6', 'p1'), {
         loadTimeline: () => t,
@@ -295,7 +315,8 @@ test('export: marks failed when pre-flight rejects (missing video)', async () =>
         markProcessing: (id) => transitions.push(`processing:${id}`),
         markCompleted: () => undefined,
         markFailed: (id, err) => transitions.push(`failed:${id}:${err}`),
-        resolveOutputDir: () => '/tmp/exports',
+        resolveWorkDir: () => '/tmp/work',
+        storage,
     });
     assert.equal(transitions.length, 2);
     assert.equal(transitions[0], 'processing:job_6');
@@ -369,6 +390,97 @@ test('auth: timeline store rejects cross-user reads (cross-check via requireProj
     const r = requireProject('userA', 'pB');
     assert.equal(r.ok, false);
     if (!r.ok) assert.equal(r.status, 404);
+});
+
+// ── storage layer integration ───────────────────────────────────────────
+test('storage: marks failed when storage upload throws', async () => {
+    const transitions: string[] = [];
+    const storage = createFakeStorage();
+    storage.failNextUpload = 'S3 unreachable';
+    const t = mkTimeline([
+        mkClip('c1', 's1', 0, 4, 'data:video/mp4;base64,AAAAAA=='),
+    ]);
+    const scenes = [mkScene('s1')];
+    const fakeProc = {
+        on(event: 'exit' | 'error', cb: (...args: unknown[]) => void) {
+            if (event === 'exit') setImmediate(() => cb(0, null));
+        },
+    };
+    await runExport(mkJob('job_upload_fail', 'p1'), {
+        loadTimeline: () => t,
+        loadScenes: () => scenes,
+        markProcessing: (id) => transitions.push(`processing:${id}`),
+        markCompleted: () => undefined,
+        markFailed: (id, err) => transitions.push(`failed:${id}:${err}`),
+        resolveWorkDir: () => '/tmp/work',
+        storage,
+        spawn: () => fakeProc as unknown as ReturnType<NonNullable<Parameters<typeof runExport>[1]['spawn']>>,
+        writeFile: async () => undefined,
+        mkdir: async () => undefined,
+        readFile: async () => Buffer.from('fake-mp4'),
+    });
+    assert.equal(transitions.length, 2);
+    assert.equal(transitions[0], 'processing:job_upload_fail');
+    assert.ok(transitions[1].includes('S3 unreachable'));
+});
+
+test('storage: marks failed when readFile fails after ffmpeg succeeds', async () => {
+    const transitions: string[] = [];
+    const storage = createFakeStorage();
+    const t = mkTimeline([
+        mkClip('c1', 's1', 0, 4, 'data:video/mp4;base64,AAAAAA=='),
+    ]);
+    const scenes = [mkScene('s1')];
+    const fakeProc = {
+        on(event: 'exit' | 'error', cb: (...args: unknown[]) => void) {
+            if (event === 'exit') setImmediate(() => cb(0, null));
+        },
+    };
+    await runExport(mkJob('job_read_fail', 'p1'), {
+        loadTimeline: () => t,
+        loadScenes: () => scenes,
+        markProcessing: (id) => transitions.push(`processing:${id}`),
+        markCompleted: () => undefined,
+        markFailed: (id, err) => transitions.push(`failed:${id}:${err}`),
+        resolveWorkDir: () => '/tmp/work',
+        storage,
+        spawn: () => fakeProc as unknown as ReturnType<NonNullable<Parameters<typeof runExport>[1]['spawn']>>,
+        writeFile: async () => undefined,
+        mkdir: async () => undefined,
+        readFile: async () => { throw new Error('ENOENT'); },
+    });
+    assert.equal(transitions.length, 2);
+    assert.equal(transitions[0], 'processing:job_read_fail');
+    assert.ok(transitions[1].includes('ENOENT'));
+    assert.equal(storage.uploads.length, 0);
+});
+
+test('storage: outputUrl in markCompleted comes from storage.urlFor', async () => {
+    const transitions: string[] = [];
+    const storage = createFakeStorage({ urlTemplate: (k) => `https://cdn.example.com/exports/${k}?token=xyz` });
+    const t = mkTimeline([
+        mkClip('c1', 's1', 0, 4, 'data:video/mp4;base64,AAAAAA=='),
+    ]);
+    const scenes = [mkScene('s1')];
+    const fakeProc = {
+        on(event: 'exit' | 'error', cb: (...args: unknown[]) => void) {
+            if (event === 'exit') setImmediate(() => cb(0, null));
+        },
+    };
+    await runExport(mkJob('job_url', 'p1'), {
+        loadTimeline: () => t,
+        loadScenes: () => scenes,
+        markProcessing: (id) => transitions.push(`processing:${id}`),
+        markCompleted: (id, out) => transitions.push(`completed:${id}:${out.outputUrl}`),
+        markFailed: (id, err) => transitions.push(`failed:${id}:${err}`),
+        resolveWorkDir: () => '/tmp/work',
+        storage,
+        spawn: () => fakeProc as unknown as ReturnType<NonNullable<Parameters<typeof runExport>[1]['spawn']>>,
+        writeFile: async () => undefined,
+        mkdir: async () => undefined,
+        readFile: async () => Buffer.from('bytes'),
+    });
+    assert.equal(transitions[1], 'completed:job_url:https://cdn.example.com/exports/job_url.mp4?token=xyz');
 });
 
 export {};

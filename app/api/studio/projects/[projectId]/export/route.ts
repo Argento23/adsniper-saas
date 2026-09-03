@@ -8,8 +8,8 @@ import { getSceneStore } from '@/lib/projects/scenes';
 import {
     runExportPreFlight,
     runExport,
-    publicUrlForJob,
 } from '@/lib/video/export-runner';
+import { getStorage } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,19 +60,20 @@ export async function POST(_request: Request, { params }: RouteContext) {
         });
 
         // Fire and forget — the runner updates the job state.
-        const outputDir = join(process.cwd(), 'public', 'exports');
+        const storage = getStorage();
         runExport(job, {
             loadTimeline: (pid) => getTimelineStore().getTimeline(pid),
             loadScenes: (pid) => getSceneStore().listScenes(pid),
             markProcessing: (jobId) => { getJobQueue().markProcessing(jobId); },
             markCompleted: (jobId, output) => {
                 getJobQueue().markCompleted(jobId, {
-                    outputUrl: output.outputUrl ?? publicUrlForJob(jobId),
+                    outputUrl: output.outputUrl,
                     outputAssetId: output.outputAssetId,
                 });
             },
             markFailed: (jobId, error) => { getJobQueue().markFailed(jobId, error); },
-            resolveOutputDir: () => outputDir,
+            storage,
+            resolveWorkDir: (jobId) => join(process.cwd(), 'public', 'exports', `${jobId}_work`),
         }).catch((e) => {
             // Defensive: should never reach here because runExport
             // catches its own errors and calls markFailed.
