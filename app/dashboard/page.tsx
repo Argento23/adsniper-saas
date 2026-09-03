@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { FaStar, FaLayerGroup, FaBolt, FaFire, FaSpinner, FaArrowRight, FaExternalLinkAlt, FaHeart, FaComments, FaPaperPlane, FaBookmark, FaRegCopy, FaCheck, FaGlobe, FaImage, FaCog, FaVideo, FaPen, FaMagic, FaCloudUploadAlt, FaTrash, FaCrown } from 'react-icons/fa';
 import { UserButton, useUser } from "@clerk/nextjs";
 import BrandSetup from './components/BrandSetup';
@@ -785,6 +786,14 @@ export default function Dashboard() {
                     </div>
 
                     <div className="flex items-center gap-4">
+                        {/* Studio Access Button */}
+                        <Link
+                            href="/dashboard/studio"
+                            className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-lg hover:brightness-110 transition-all border border-emerald-400/30"
+                        >
+                            <FaMagic className="w-3 h-3" /> 🚀 Abrir Studio
+                        </Link>
+
                         {/* Publicar Ads Button */}
                         <button
                             onClick={() => {

@@ -1,0 +1,140 @@
+'use client';
+
+import { useState } from 'react';
+import { FaCheck, FaTimes, FaEdit } from 'react-icons/fa';
+import { CreativeSpec } from '@/lib/creative-director';
+import { Scene } from '@/lib/projects/types';
+
+interface StoryboardReviewProps {
+    spec: CreativeSpec;
+    drafts: Scene[];
+    projectId: string;
+    onCancel: () => void;
+    onCommitted: (scenes: Scene[]) => void;
+}
+
+export default function StoryboardReview({ spec, drafts, projectId, onCancel, onCommitted }: StoryboardReviewProps) {
+    const [committing, setCommitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [editedDrafts, setEditedDrafts] = useState<Scene[]>(drafts);
+
+    function updateDraft(idx: number, patch: Partial<Scene>) {
+        setEditedDrafts(prev => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+    }
+
+    async function commit() {
+        setCommitting(true);
+        setError(null);
+        try {
+            const created: Scene[] = [];
+            for (const scene of editedDrafts) {
+                const res = await fetch(`/api/studio/projects/${projectId}/scenes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: scene.title,
+                        description: scene.description,
+                        prompt: scene.prompt,
+                        visualPrompt: scene.visualPrompt,
+                        negativePrompt: scene.negativePrompt,
+                        camera: scene.camera,
+                        voiceover: scene.voiceover,
+                        onScreenText: scene.onScreenText,
+                        durationSec: scene.durationSec,
+                        transitionIn: scene.transitionIn,
+                        order: scene.order,
+                    }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+                created.push(data.scene as Scene);
+            }
+            onCommitted(created);
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : 'failed');
+        } finally {
+            setCommitting(false);
+        }
+    }
+
+    return (
+        <div className="space-y-5">
+            <div className="text-xs text-slate-400">Paso 2 de 2 · Storyboard editable</div>
+
+            <div className="bg-slate-950/60 border border-white/10 rounded-xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                    <h4 className="text-base font-bold text-white">{spec.campaignTitle}</h4>
+                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">{spec.scenes.length} escenas</span>
+                </div>
+                <p className="text-sm text-emerald-300"><strong>Concepto:</strong> {spec.concept}</p>
+                <p className="text-sm text-amber-300"><strong>Hook:</strong> {spec.hook}</p>
+                <p className="text-sm text-slate-300">{spec.narrative}</p>
+                <div className="text-xs text-slate-500 pt-2 border-t border-white/5">
+                    <strong className="text-slate-300">Caption:</strong> {spec.caption}
+                </div>
+                {spec.hashtags.length > 0 && (
+                    <div className="text-xs text-cyan-300">{spec.hashtags.map(h => `#${h}`).join(' ')}</div>
+                )}
+            </div>
+
+            <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                {editedDrafts.map((s, idx) => (
+                    <div key={idx} className="bg-slate-950/60 border border-white/10 rounded-xl p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                                    Escena {idx + 1} · {s.durationSec}s · {s.transitionIn}
+                                </span>
+                            </div>
+                            <FaEdit className="text-slate-500 w-3 h-3" />
+                        </div>
+                        <input
+                            type="text"
+                            value={s.title ?? ''}
+                            onChange={e => updateDraft(idx, { title: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm focus:border-emerald-500/50 outline-none"
+                        />
+                        <textarea
+                            rows={2}
+                            value={s.onScreenText ?? ''}
+                            onChange={e => updateDraft(idx, { onScreenText: e.target.value })}
+                            placeholder="Texto en pantalla"
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white text-xs focus:border-emerald-500/50 outline-none resize-none"
+                        />
+                        <textarea
+                            rows={2}
+                            value={s.voiceover ?? ''}
+                            onChange={e => updateDraft(idx, { voiceover: e.target.value })}
+                            placeholder="Voz en off"
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white text-xs focus:border-emerald-500/50 outline-none resize-none"
+                        />
+                        <details className="text-xs text-slate-400">
+                            <summary className="cursor-pointer hover:text-slate-300">Prompt visual</summary>
+                            <p className="mt-2 text-slate-500 leading-relaxed">{s.visualPrompt}</p>
+                        </details>
+                    </div>
+                ))}
+            </div>
+
+            {error && (
+                <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                    {error}
+                </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+                <button onClick={onCancel} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold text-slate-400 hover:text-white">
+                    <FaTimes className="w-3 h-3" /> Cancelar
+                </button>
+                <button
+                    onClick={commit}
+                    disabled={committing}
+                    className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-emerald-500 to-cyan-600 text-white shadow-lg hover:brightness-110 disabled:opacity-50"
+                >
+                    <FaCheck className="w-3 h-3" />
+                    {committing ? 'Creando escenas...' : 'Aprobar y crear escenas'}
+                </button>
+            </div>
+        </div>
+    );
+}
