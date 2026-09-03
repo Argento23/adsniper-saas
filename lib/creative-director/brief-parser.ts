@@ -44,7 +44,39 @@ export interface GroqChatResponse {
 
 export type GroqClient = (req: GroqChatRequest) => Promise<GroqChatResponse>;
 
+/**
+ * First model tried. Kept as a constant for test assertions and
+ * backward compatibility — runtime callers should use
+ * `getGroqModelChain()` which includes fallbacks.
+ */
 export const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile';
+
+/**
+ * Ordered list of Groq models to try when a call to the previous
+ * one fails with a model-not-found / not-authorized error (HTTP
+ * 404 or 400 with `code: "model_not_found"`). The first entry is
+ * the preferred one; later entries are progressively smaller /
+ * more widely available.
+ *
+ * Update this when Groq deprecates a model — order matters.
+ */
+export const GROQ_MODEL_CHAIN: readonly string[] = [
+    'llama-3.3-70b-versatile',
+    'llama-3.1-70b-versatile',
+    'llama-3.1-8b-instant',
+] as const;
+
+/**
+ * Returns the model chain to try at runtime. Honours the
+ * `GROQ_MODEL` env var (if set) by placing it first so users
+ * can pin a specific model without editing code.
+ */
+export function getGroqModelChain(): string[] {
+    const override = process.env.GROQ_MODEL;
+    if (!override) return [...GROQ_MODEL_CHAIN];
+    // Dedupe + put override first.
+    return [override, ...GROQ_MODEL_CHAIN.filter(m => m !== override)];
+}
 
 export const VALID_OBJECTIVES: CreativeObjective[] = ['ventas', 'branding', 'lanzamiento', 'engagement'];
 export const VALID_PLATFORMS: CreativePlatform[] = ['reels', 'tiktok', 'shorts'];
@@ -137,6 +169,60 @@ export function realGroqClient(apiKey: string, baseUrl = 'https://api.groq.com/o
             throw new Error(`Groq error: ${r.status} ${await r.text()}`);
         }
         return await r.json() as GroqChatResponse;
+    };
+}
+
+/**
+ * Whether a Groq error response indicates the model name was
+ * rejected (not found, deprecated, or not authorized for this
+ * account). Used by the fallback chain to decide whether to try
+ * the next model vs. fail immediately.
+ */
+export function isModelNotFoundError(status: number, body: string): boolean {
+    if (status === 404) return true;
+    if (status === 400 && /model_not_found|model_not_available/i.test(body)) return true;
+    return false;
+}
+
+/**
+ * Real Groq client with automatic model fallback. Tries each
+ * model in `getGroqModelChain()` in order; on `isModelNotFoundError`
+ * advances to the next model. Other errors (401, 429, 5xx) are
+ * surfaced immediately — those aren't model issues.
+ *
+ * If every model fails, throws the last model-not-found error
+ * (which contains the diagnostic from Groq for the user).
+ */
+export function realGroqClientWithFallback(
+    apiKey: string,
+    baseUrl = 'https://api.groq.com/openai/v1/chat/completions',
+): GroqClient {
+    return async (req) => {
+        const chain = getGroqModelChain();
+        let lastError: Error | undefined;
+        for (const model of chain) {
+            const r = await fetch(baseUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ ...req, model }),
+            });
+            if (r.ok) {
+                return await r.json() as GroqChatResponse;
+            }
+            const text = await r.text();
+            if (isModelNotFoundError(r.status, text)) {
+                // Try next model in the chain.
+                lastError = new Error(`Groq model "${model}" unavailable: ${r.status} ${text}`);
+                continue;
+            }
+            // Auth / rate / server errors: fail fast, no point in
+            // trying another model with the same credentials.
+            throw new Error(`Groq error: ${r.status} ${text}`);
+        }
+        throw lastError ?? new Error('Groq: no models configured');
     };
 }
 

@@ -266,5 +266,116 @@ test('slot titles: every defined role has a title', () => {
     }
 });
 
+// ── Groq model fallback (Phase 7 hotfix) ────────────────────────────────
+
+import {
+    GROQ_MODEL_CHAIN,
+    getGroqModelChain,
+    isModelNotFoundError,
+    realGroqClientWithFallback,
+} from '../lib/creative-director';
+
+test('fallback: model chain is non-empty and starts with the default', () => {
+    assert.ok(GROQ_MODEL_CHAIN.length >= 2);
+    assert.equal(GROQ_MODEL_CHAIN[0], 'llama-3.3-70b-versatile');
+});
+
+test('fallback: getGroqModelChain honours GROQ_MODEL override', () => {
+    const saved = process.env.GROQ_MODEL;
+    try {
+        delete process.env.GROQ_MODEL;
+        const def = getGroqModelChain();
+        assert.deepEqual(def, [...GROQ_MODEL_CHAIN]);
+
+        process.env.GROQ_MODEL = 'custom-model-x';
+        const ov = getGroqModelChain();
+        assert.equal(ov[0], 'custom-model-x');
+        // Override must be deduplicated from the fallback chain.
+        assert.equal(ov.filter(m => m === 'custom-model-x').length, 1);
+    } finally {
+        if (saved === undefined) delete process.env.GROQ_MODEL;
+        else process.env.GROQ_MODEL = saved;
+    }
+});
+
+test('fallback: isModelNotFoundError recognises 404 and model_not_found bodies', () => {
+    assert.equal(isModelNotFoundError(404, '{"error":{"code":"model_not_found"}}'), true);
+    assert.equal(isModelNotFoundError(400, '{"error":{"code":"model_not_found"}}'), true);
+    assert.equal(isModelNotFoundError(400, '{"error":{"code":"model_not_available"}}'), true);
+    // 401 (auth) is NOT a model error — must surface immediately.
+    assert.equal(isModelNotFoundError(401, '{"error":{"code":"invalid_api_key"}}'), false);
+    // 429 (rate limit) is NOT a model error.
+    assert.equal(isModelNotFoundError(429, 'rate limit exceeded'), false);
+});
+
+test('fallback: realGroqClientWithFallback tries the next model after 404', async () => {
+    let firstSeen: string | undefined;
+    let secondSeen: string | undefined;
+    const fetchImpl = async (url: string, init: { body: string }) => {
+        const body = JSON.parse(init.body) as { model: string };
+        if (!firstSeen) {
+            firstSeen = body.model;
+            return new Response('{"error":{"code":"model_not_found"}}', { status: 404 });
+        }
+        secondSeen = body.model;
+        return new Response(
+            JSON.stringify({ choices: [{ message: { content: '{"ok":true}' } }] }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+    };
+    const client = realGroqClientWithFallback('test-key');
+    // Patch global fetch to capture calls.
+    const realFetch = globalThis.fetch;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).fetch = fetchImpl;
+    try {
+        const res = await client({ model: 'ignored', messages: [] });
+        assert.ok(res.choices?.[0]?.message?.content);
+    } finally {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (globalThis as any).fetch = realFetch;
+    }
+    assert.equal(firstSeen, GROQ_MODEL_CHAIN[0]);
+    assert.equal(secondSeen, GROQ_MODEL_CHAIN[1]);
+});
+
+test('fallback: surfaces non-model errors (401) immediately', async () => {
+    let attempts = 0;
+    const realFetch = globalThis.fetch;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).fetch = async () => {
+        attempts++;
+        return new Response('{"error":{"code":"invalid_api_key"}}', { status: 401 });
+    };
+    try {
+        const client = realGroqClientWithFallback('bad-key');
+        await assert.rejects(
+            () => client({ model: 'x', messages: [] }),
+            /401/,
+        );
+        assert.equal(attempts, 1, 'should NOT try other models on 401');
+    } finally {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (globalThis as any).fetch = realFetch;
+    }
+});
+
+test('fallback: throws the last model error when all models are unavailable', async () => {
+    const realFetch = globalThis.fetch;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).fetch = async () =>
+        new Response('{"error":{"code":"model_not_found"}}', { status: 404 });
+    try {
+        const client = realGroqClientWithFallback('test-key');
+        await assert.rejects(
+            () => client({ model: 'x', messages: [] }),
+            /model_not_found/,
+        );
+    } finally {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (globalThis as any).fetch = realFetch;
+    }
+});
+
 // Test registration only. Real execution is driven by tests/run.js.
 export {};

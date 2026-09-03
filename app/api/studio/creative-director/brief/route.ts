@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import {
     parseBrief,
-    realGroqClient,
+    realGroqClientWithFallback,
     validateBrief,
 } from '@/lib/creative-director';
 
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
         }
 
         try {
-            const result = await parseBrief(v.value, realGroqClient(apiKey), projectId);
+            const result = await parseBrief(v.value, realGroqClientWithFallback(apiKey), projectId);
             return NextResponse.json({
                 success: true,
                 spec: result.spec,
