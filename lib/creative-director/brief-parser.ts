@@ -49,7 +49,7 @@ export type GroqClient = (req: GroqChatRequest) => Promise<GroqChatResponse>;
  * backward compatibility — runtime callers should use
  * `getGroqModelChain()` which includes fallbacks.
  */
-export const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile';
+export const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-120b';
 
 /**
  * Ordered list of Groq models to try when a call to the previous
@@ -58,12 +58,19 @@ export const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile';
  * the preferred one; later entries are progressively smaller /
  * more widely available.
  *
+ * History:
+ *   - Groq deprecated all `llama-3.x-*` and `mixtral-*` models.
+ *   - Current lineup (as of 2025+): `openai/gpt-oss-*`,
+ *     `groq/compound*`, `qwen/qwen3.*`, `meta-llama/llama-prompt-guard-*`,
+ *     `whisper-*` (ASR), `allam-2-7b` (deprecated soon).
+ *
  * Update this when Groq deprecates a model — order matters.
  */
 export const GROQ_MODEL_CHAIN: readonly string[] = [
-    'llama-3.3-70b-versatile',
-    'llama-3.1-70b-versatile',
-    'llama-3.1-8b-instant',
+    'openai/gpt-oss-120b',   // OpenAI GPT OSS 120B — best JSON quality
+    'openai/gpt-oss-20b',    // smaller, faster
+    'groq/compound',         // Groq's multi-model orchestrator
+    'qwen/qwen3.8-27b',      // Qwen 27B as last resort
 ] as const;
 
 /**

@@ -150,7 +150,7 @@ test('prompt builder: slot hint differs between hook and cta', () => {
 function makeMockGroq(brief: CreativeBrief): GroqClient {
     return async (req) => {
         // Sanity: validate the prompt structure
-        assert.equal(req.model, 'llama-3.3-70b-versatile');
+        assert.equal(req.model, 'openai/gpt-oss-120b');
         assert.equal(req.messages.length, 2);
         assert.equal(req.messages[0].role, 'system');
         assert.equal(req.messages[1].role, 'user');
@@ -277,7 +277,7 @@ import {
 
 test('fallback: model chain is non-empty and starts with the default', () => {
     assert.ok(GROQ_MODEL_CHAIN.length >= 2);
-    assert.equal(GROQ_MODEL_CHAIN[0], 'llama-3.3-70b-versatile');
+    assert.equal(GROQ_MODEL_CHAIN[0], 'openai/gpt-oss-120b');
 });
 
 test('fallback: getGroqModelChain honours GROQ_MODEL override', () => {
