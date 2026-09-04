@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { FaArrowLeft, FaPlus, FaTrash, FaImage, FaVideo, FaSpinner, FaMagic, FaFilm } from 'react-icons/fa';
 import { Scene } from '@/lib/projects/types';
+import { getProjectStore } from '@/lib/projects/store';
 import SceneCard from './SceneCard';
 import NewSceneForm from './NewSceneForm';
 import CreativeDirectorWizard from './CreativeDirectorWizard';
@@ -26,7 +27,7 @@ export default function ProjectDetailView() {
     const [showTimeline, setShowTimeline] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    async function load() {
+    async function loadScenes() {
         if (!projectId) return;
         setLoading(true);
         setError(null);
@@ -34,7 +35,8 @@ export default function ProjectDetailView() {
             const res = await fetch(`/api/studio/projects/${projectId}/scenes`);
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
-                throw new Error(data.error || `HTTP ${res.status}`);
+                const apiError = data.error || `HTTP ${res.status}`;
+                throw new Error(apiError);
             }
             const data = await res.json();
             setScenes(data.scenes ?? []);
@@ -46,24 +48,25 @@ export default function ProjectDetailView() {
     }
 
     useEffect(() => {
-        if (isLoaded && user && projectId) {
-            load();
-            try {
-                const raw = window.localStorage.getItem('AdSíntesisStudio.projects');
-                if (raw) {
-                    const map = JSON.parse(raw) as Record<string, { name: string; format?: string }[]>;
-                    const list = map[user.id] ?? [];
-                    const p = list.find(x => x && typeof x.name === 'string');
-                    if (p) {
-                        setProjectName(p.name);
-                        if (typeof p.format === 'string') setFormat(p.format);
-                    }
-                }
-            } catch {
-                /* ignore */
-            }
+        if (!isLoaded || !user || !projectId) return;
+
+        // First, read the project from the same store the API uses
+        const projectStore = getProjectStore();
+        const project = projectStore.getProject(user.id, projectId);
+
+        if (!project) {
+            // Project genuinely not found in the persistence store
+            setError('project not found');
+            setLoading(false);
+            return;
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+
+        // Project exists - set UI data from the project
+        setProjectName(project.name);
+        if (typeof project.format === 'string') setFormat(project.format);
+
+        // Then fetch scenes from the API
+        loadScenes();
     }, [isLoaded, user, projectId]);
 
     async function handleDelete(sceneId: string) {
