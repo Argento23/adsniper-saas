@@ -45,3 +45,5 @@ next-env.d.ts
 /public/exports/
 /tmp/
 
+
+.env.local
