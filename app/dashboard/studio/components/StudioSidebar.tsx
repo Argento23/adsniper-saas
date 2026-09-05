@@ -20,17 +20,17 @@ interface NavItem {
 
 const creativeItems: NavItem[] = [
     { label: 'Proyectos', href: '/dashboard/studio', icon: FaProjectDiagram },
-    { label: 'Assets', icon: FaImages, disabled: true, badge: 'Próximamente' },
+    { label: 'Assets', href: '/dashboard/studio/assets', icon: FaImages },
 ];
 
 const createItems: NavItem[] = [
     { label: 'Nuevo proyecto', href: '/dashboard/studio', icon: FaPlus },
 ];
 
-const futureItems: NavItem[] = [
-    { label: 'Timeline', icon: FaFilm, disabled: true, badge: 'Próximamente' },
-    { label: 'Exportaciones', icon: FaDownload, disabled: true, badge: 'Próximamente' },
-    { label: 'Publicaciones', icon: FaShareAlt, disabled: true, badge: 'Próximamente' },
+const productionItems: NavItem[] = [
+    { label: 'Timeline', href: '/dashboard/studio/timeline', icon: FaFilm },
+    { label: 'Exportaciones', href: '/dashboard/studio/export', icon: FaDownload },
+    { label: 'Publicaciones', href: '/dashboard/studio/publish', icon: FaShareAlt },
 ];
 
 function NavGroup({ title, items }: { title: string; items: NavItem[] }) {
@@ -86,7 +86,7 @@ export default function StudioSidebar() {
 
             <NavGroup title="Creative" items={creativeItems} />
             <NavGroup title="Create" items={createItems} />
-            <NavGroup title="Future" items={futureItems} />
+            <NavGroup title="Production" items={productionItems} />
         </aside>
     );
 }
