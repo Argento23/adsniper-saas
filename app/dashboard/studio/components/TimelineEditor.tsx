@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import {
-    FaPlay, FaPause, FaSave, FaTrash, FaArrowLeft, FaArrowRight, FaFilm, FaSpinner, FaTimes, FaSync, FaCheckCircle, FaClock, FaExclamationTriangle, FaCircle, FaDownload,
+    FaPlay, FaPause, FaSave, FaTrash, FaArrowLeft, FaArrowRight, FaFilm, FaSpinner, FaTimes, FaSync, FaCheckCircle, FaClock, FaExclamationTriangle, FaCircle, FaDownload, FaCopy, FaPlus, FaEdit,
 } from 'react-icons/fa';
 import { Timeline, TimelineClip } from '@/lib/projects/timeline';
 import { Scene } from '@/lib/projects/types';
 import { getTimelineStore } from '@/lib/projects/timeline-store';
+import { getSceneStore } from '@/lib/projects/scenes';
+import { getProjectStore } from '@/lib/projects/store';
 import {
     TimelineEditorState,
     initialState,
@@ -20,6 +22,7 @@ import {
     getSceneVideoStatus,
     syncTimelineWithScenes,
 } from '@/lib/projects/scene-integration';
+import { useToast } from './Toast';
 
 interface TimelineEditorProps {
     projectId: string;
@@ -40,10 +43,48 @@ interface TimelineEditorProps {
  *   - Save button that PATCHes the timeline
  *   - Status legend (pending / generating / ready / failed)
  */
-export default function TimelineEditor({ projectId, scenes, aspectRatio, onClose }: TimelineEditorProps) {
+export default function TimelineEditor({ projectId, scenes, aspectRatio, onClose, project }: TimelineEditorProps) {
     const [state, dispatch] = useReducer(reducer, initialState);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+    const { showToast } = useToast();
+
+    // Autosave timer
+    useEffect(() => {
+        if (!state.dirty || !state.timeline) return;
+        const timer = setTimeout(() => {
+            onSave();
+        }, 2000);
+        return () => clearTimeout(timer);
+    }, [state.dirty, state.timeline]);
+
+    // Keyboard shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                onSave();
+            }
+            if (e.key === ' ') {
+                if (document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+                    e.preventDefault();
+                    dispatch({ type: state.isPlaying ? 'PAUSE' : 'PLAY' });
+                }
+            }
+            if (e.key === 'ArrowLeft') {
+                if (document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+                    onSeekStart();
+                }
+            }
+            if (e.key === 'ArrowRight') {
+                if (document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+                    onSeekEnd();
+                }
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [state.isPlaying]);
 
     // ── Load timeline on mount ──────────────────────────────────────────
     useEffect(() => {
@@ -155,6 +196,39 @@ export default function TimelineEditor({ projectId, scenes, aspectRatio, onClose
         }
     }, [projectId, state.timeline]);
 
+    const onDuplicate = useCallback((clipId: string) => {
+        if (!state.timeline) return;
+        const clip = state.timeline.clips.find(c => c.id === clipId);
+        if (!clip) return;
+
+        const timelineStore = getTimelineStore();
+        const sceneStore = getSceneStore();
+
+        // Duplicate the scene in localStorage
+        const originalScene = sceneStore.getScene(projectId, clip.sceneId);
+        if (!originalScene) return;
+
+        const newScene = sceneStore.createScene({
+            projectId,
+            order: originalScene.order + 1,
+            visualPrompt: originalScene.visualPrompt,
+            durationSec: originalScene.durationSec,
+            title: originalScene.title ? `${originalScene.title} (copy)` : undefined,
+            description: originalScene.description,
+            prompt: originalScene.prompt,
+            negativePrompt: originalScene.negativePrompt,
+            camera: originalScene.camera,
+            voiceover: originalScene.voiceover,
+            onScreenText: originalScene.onScreenText,
+            aspectRatio: originalScene.aspectRatio,
+            transitionIn: originalScene.transitionIn,
+        });
+
+        // Re-sync timeline with new scene
+        onRebuildFromScenes();
+        showToast('success', `Escena duplicada: ${newScene.title ?? 'Sin título'}`);
+    }, [projectId, state.timeline, scenes, aspectRatio]);
+
     const onSave = useCallback(() => {
         if (!state.timeline) return;
         dispatch({ type: 'SAVE_START' });
@@ -171,8 +245,10 @@ export default function TimelineEditor({ projectId, scenes, aspectRatio, onClose
                 saved = timelineStore.upsertTimeline({ ...state.timeline, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
             }
             dispatch({ type: 'SAVE_SUCCESS', timeline: saved });
+            showToast('success', 'Proyecto guardado');
         } catch (e: unknown) {
             dispatch({ type: 'SAVE_FAIL', error: e instanceof Error ? e.message : 'save failed' });
+            showToast('error', 'Error al guardar');
         }
     }, [projectId, state.timeline]);
 
@@ -237,7 +313,7 @@ export default function TimelineEditor({ projectId, scenes, aspectRatio, onClose
     const selected = getSelectedClip(state);
     const hasSourceUrl = t.clips.some(c => c.sourceUrl);
 
-    return (
+return (
         <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-6 backdrop-blur-xl space-y-5" data-testid="timeline-editor">
             {/* Header */}
             <div className="flex items-center justify-between">
@@ -251,6 +327,24 @@ export default function TimelineEditor({ projectId, scenes, aspectRatio, onClose
                         <span className="text-xs text-amber-400 font-bold">● Sin guardar</span>
                     )}
                     <button
+                        onClick={() => {
+                            const sceneStore = getSceneStore();
+                            const newScene = sceneStore.createScene({
+                                projectId,
+                                order: t.clips.length,
+                                visualPrompt: 'Nueva escena',
+                                durationSec: 5,
+                                title: 'Nueva escena',
+                            });
+                            onRebuildFromScenes();
+                            showToast('success', `Escena creada: ${newScene.title}`);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-600 text-white text-xs font-bold shadow-lg hover:brightness-110"
+                        title="Agregar nueva escena"
+                    >
+                        <FaPlus /> Nueva escena
+                   </button>
+                    <button
                         onClick={onRebuildFromScenes}
                         disabled={scenes.length === 0}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-white/10 disabled:opacity-40"
@@ -261,7 +355,7 @@ export default function TimelineEditor({ projectId, scenes, aspectRatio, onClose
                     {onClose && (
                         <button onClick={onClose} className="text-slate-500 hover:text-white p-1">
                             <FaTimes />
-                      </button>
+                       </button>
                     )}
               </div>
           </div>
@@ -357,12 +451,22 @@ export default function TimelineEditor({ projectId, scenes, aspectRatio, onClose
             <StatusLegend scenes={scenes} />
 
             {/* Selected clip inspector */}
-            {selected ? (
+{selected ? (
                 <div className="bg-slate-950 border border-white/10 rounded-xl p-4 space-y-3">
                     <div className="text-xs text-slate-400 uppercase tracking-wider font-bold">Clip seleccionado</div>
-                    <div className="grid sm:grid-cols-3 gap-3 text-sm">
+                    <div className="grid sm:grid-cols-4 gap-3 text-sm">
                         <div>
-                            <label className="block text-xs text-slate-500 mb-1">Duración (s</label>
+                            <label className="block text-xs text-slate-500 mb-1">Título</label>
+                            <input
+                                type="text"
+                                value={selected.title ?? ''}
+                                onChange={e => dispatch({ type: 'UPDATE_CLIP', clipId: selected.id, patch: { title: e.target.value } })}
+                                placeholder="Sin título"
+                                className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-white focus:border-emerald-500/50 outline-none"
+                            />
+                       </div>
+                        <div>
+                            <label className="block text-xs text-slate-500 mb-1">Duración (s)</label>
                             <input
                                 type="number"
                                 min={1}
@@ -383,20 +487,26 @@ export default function TimelineEditor({ projectId, scenes, aspectRatio, onClose
                                 <option value="fade">Fade</option>
                                 <option value="dissolve">Dissolve</option>
                            </select>
-                       </div>
-                        <div className="flex items-end">
+                        </div>
+                        <div className="flex items-end gap-2">
+                            <button
+                                onClick={() => onDuplicate(selected.id)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-white/10"
+                            >
+                                <FaCopy /> Duplicar
+                           </button>
                             <button
                                 onClick={() => onDelete(selected.id)}
                                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 text-sm"
                             >
                                 <FaTrash /> Eliminar
                            </button>
-                       </div>
-                   </div>
-                    <div className="text-xs text-slate-500 font-mono">
+                        </div>
+                    </div>
+                     <div className="text-xs text-slate-500 font-mono">
                         sceneId: {selected.sceneId} · start: {selected.start}s · duration: {selected.duration}s
                    </div>
-               </div>
+                </div>
             ) : (
                 <div className="text-center text-slate-500 text-sm py-3 border border-dashed border-white/5 rounded-xl">
                     Hacé click en un clip para editarlo
@@ -409,6 +519,7 @@ export default function TimelineEditor({ projectId, scenes, aspectRatio, onClose
     project={project ?? null}
     timeline={state.timeline}
     scenes={scenes.map(s => ({ id: s.id, projectId: s.projectId, durationSec: s.durationSec, videoAssetId: s.videoAssetId, visualPrompt: s.visualPrompt }))}
+    showToast={showToast}
 />
       </div>
     );
@@ -536,12 +647,13 @@ interface ExportState {
 
 interface ExportPanelProps {
     projectId: string;
-    project: { id: string; userId: string; name: string; format: string };
+    project: { id: string; userId: string; name: string; format: string } | null;
     timeline: { id: string; projectId: string; duration: number; clips: any[]; aspectRatio: string; fps: number; createdAt: string; updatedAt: string };
     scenes: { id: string; projectId: string; durationSec: number; videoAssetId?: string; visualPrompt: string }[];
+    showToast: (type: 'success' | 'error' | 'info' | 'warning', message: string, duration?: number) => void;
 }
 
-function ExportPanel({ projectId, project, timeline, scenes }: ExportPanelProps) {
+function ExportPanel({ projectId, project, timeline, scenes, showToast }: ExportPanelProps) {
     const [state, setState] = useState<ExportState>({
         jobId: null, status: 'idle', error: null, outputUrl: null,
     });
@@ -574,6 +686,10 @@ function ExportPanel({ projectId, project, timeline, scenes }: ExportPanelProps)
     }, [state.jobId, state.status]);
 
     async function handleExport() {
+        if (!project) {
+            showToast('error', 'Proyecto no disponible');
+            return;
+        }
         setSubmitting(true);
         setState({ jobId: null, status: 'idle', error: null, outputUrl: null });
         try {

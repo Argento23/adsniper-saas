@@ -4,11 +4,12 @@ import { useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { FaArrowLeft, FaDownload, FaFilm, FaProjectDiagram, FaCheckCircle, FaClock, FaExclamationTriangle } from 'react-icons/fa';
+import { FaArrowLeft, FaDownload, FaFilm, FaProjectDiagram, FaCheckCircle, FaClock, FaExclamationTriangle, FaSpinner } from 'react-icons/fa';
 import { getProjectStore } from '@/lib/projects/store';
 import { getSceneStore } from '@/lib/projects/scenes';
 import { getTimelineStore } from '@/lib/projects/timeline-store';
-import { Project, Scene, Timeline } from '@/lib/projects/types';
+import { Project, Scene } from '@/lib/projects/types';
+import { Timeline } from '@/lib/projects/timeline';
 import ExportModal from '@/app/dashboard/studio/components/ExportModal';
 
 export default function ExportPage() {
@@ -45,7 +46,7 @@ export default function ExportPage() {
     }, [selectedProjectId]);
 
     const handleExport = async () => {
-        if (!selectedProjectId || !timeline) return;
+        if (!selectedProjectId || !timeline || !user) return;
         setExporting(true);
         setExportProgress(0);
         setModalOpen(false);

@@ -5,6 +5,7 @@ import { generateReplicateImage, generateReplicateFluxDev, generateReplicateFlux
 import { generateFalImage, generateBriaProductShot, generateFluxIPAdapter } from '@/lib/fal';
 import { compositeProductAndLogo, compositeUserLogoAsScene } from '@/lib/composer';
 import { checkAndTrackUsage } from '@/lib/usageTracker';
+import { DEFAULT_GROQ_MODEL } from '@/lib/groq-config';
 
 export const dynamic = 'force-dynamic';
 
@@ -230,7 +231,8 @@ async function generateGroqAds(productName: string, desc: string, count: number,
         return [{ type: "ERROR", headline: "GROQ KEY MISSING IN ENV", primary_text: "Check .env.local", image_prompt: "error" }];
     }
     try {
-        console.log(`🦙 Generating ${count} ads with Llama 3 (70b-8192) on Groq...`);
+        console.log(`🦙 Generating ${count} ads with ${DEFAULT_GROQ_MODEL} on Groq...`);
+        console.log("[GROQ] Using model:", DEFAULT_GROQ_MODEL);
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -238,7 +240,7 @@ async function generateGroqAds(productName: string, desc: string, count: number,
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                model: "llama-3.3-70b-versatile", // Revert to LATEST STABLE
+                model: DEFAULT_GROQ_MODEL, // Use centralized Groq model config
                 messages: [
                     {
                         role: "system",
@@ -331,6 +333,7 @@ async function generateGroqScripts(productName: string, desc: string, lang: stri
 
     try {
         console.log(`🎬 Generating AI video scripts with Groq for: ${productName}`);
+        console.log("[GROQ] Using model:", DEFAULT_GROQ_MODEL);
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -338,7 +341,7 @@ async function generateGroqScripts(productName: string, desc: string, lang: stri
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                model: "llama-3.3-70b-versatile",
+                model: DEFAULT_GROQ_MODEL, // Use centralized Groq model config
                 messages: [
                     {
                         role: "system",

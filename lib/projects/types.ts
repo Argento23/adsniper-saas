@@ -44,6 +44,19 @@ export interface Project {
     timeline: TimelineState;
     createdAt: string;
     updatedAt: string;
+
+    // Extended fields for Studio MVP
+    scenes?: Scene[];
+    lastExport?: {
+        date: string;
+        resolution: string;
+        fps: number;
+        status: 'completed' | 'failed';
+    };
+    published?: boolean;
+    publishedAt?: string;
+    platform?: string;
+    description?: string;
 }
 
 export type SceneStatus =

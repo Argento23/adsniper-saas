@@ -183,7 +183,7 @@ export default function ProjectDetailView() {
                             scenes={scenes}
                             aspectRatio={format}
                             onClose={() => setShowTimeline(false)}
-                            project={projectName ? { id: projectId, userId: user.id, name: projectName, format } : null}
+                            project={projectName && user ? { id: projectId, userId: user.id, name: projectName, format } : null}
                         />
                     )}
                     {!showTimeline && (

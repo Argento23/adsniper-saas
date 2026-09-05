@@ -5,6 +5,7 @@ import {
     BrandSnapshot,
     TimelineState,
     ProjectStatus,
+    Scene,
 } from './types';
 import { newProjectId } from './id';
 
@@ -27,6 +28,12 @@ export interface UpdateProjectPatch {
     duration?: number;
     status?: ProjectStatus;
     timeline?: TimelineState;
+    scenes?: Scene[];
+    lastExport?: Project['lastExport'];
+    published?: boolean;
+    publishedAt?: string;
+    platform?: string;
+    description?: string;
 }
 
 export interface ProjectStore {
@@ -47,13 +54,33 @@ function emptyTimeline(): TimelineState {
     };
 }
 
+function migrateProject(project: any): Project {
+    // Migration for older projects that don't have the new fields
+    return {
+        ...project,
+        scenes: project.scenes ?? [],
+        lastExport: project.lastExport ?? undefined,
+        published: project.published ?? false,
+        publishedAt: project.publishedAt ?? undefined,
+        platform: project.platform ?? undefined,
+        description: project.description ?? undefined,
+    };
+}
+
 function readRaw(): Record<string, Project[]> {
     if (typeof window === 'undefined') return {};
     try {
         const raw = window.localStorage.getItem(STORAGE_KEY);
         if (!raw) return {};
         const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') return parsed as Record<string, Project[]>;
+        if (parsed && typeof parsed === 'object') {
+            // Apply migration to all projects
+            const migrated: Record<string, Project[]> = {};
+            for (const [userId, projects] of Object.entries(parsed)) {
+                migrated[userId] = (projects as any[]).map(migrateProject);
+            }
+            return migrated;
+        }
         return {};
     } catch {
         return {};
@@ -96,6 +123,12 @@ export const localStorageProjectStore: ProjectStore = {
             timeline: emptyTimeline(),
             createdAt: now,
             updatedAt: now,
+            scenes: [],
+            lastExport: undefined,
+            published: false,
+            publishedAt: undefined,
+            platform: undefined,
+            description: undefined,
         };
         const map = readRaw();
         const list = map[input.userId] ?? [];

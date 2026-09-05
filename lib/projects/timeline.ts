@@ -24,6 +24,7 @@ export interface TimelineClip {
     volume?: number;
     muted?: boolean;
     metadata?: Record<string, unknown>;
+    title?: string;
 }
 
 export interface Timeline {

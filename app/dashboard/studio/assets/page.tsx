@@ -2,15 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { FaImage, FaVideo, FaFilm, FaSearch, FaFilter, FaTimes } from 'react-icons/fa';
+import { FaImage, FaVideo, FaFilm, FaSearch, FaFilter, FaTimes, FaImages } from 'react-icons/fa';
 import { getProjectStore } from '@/lib/projects/store';
 import { getSceneStore } from '@/lib/projects/scenes';
 import { Project, Scene } from '@/lib/projects/types';
 
+interface SceneWithProject extends Scene {
+    projectName: string;
+    projectId: string;
+}
+
 export default function AssetsPage() {
     const { user, isLoaded } = useUser();
-    const [allScenes, setAllScenes] = useState<Scene[]>([]);
-    const [filteredScenes, setFilteredScenes] = useState<Scene[]>([]);
+    const [allScenes, setAllScenes] = useState<SceneWithProject[]>([]);
+    const [filteredScenes, setFilteredScenes] = useState<SceneWithProject[]>([]);
     const [search, setSearch] = useState('');
     const [filterType, setFilterType] = useState<'all' | 'image' | 'video'>('all');
     const [loading, setLoading] = useState(true);
@@ -22,10 +27,10 @@ export default function AssetsPage() {
         const sceneStore = getSceneStore();
         const projects = projectStore.listProjects(user.id);
 
-        const scenes: Scene[] = [];
+        const scenes: SceneWithProject[] = [];
         for (const project of projects) {
             const projectScenes = sceneStore.listScenes(project.id);
-            scenes.push(...projectScenes.map(s => ({ ...s, projectName: project.name, projectId: project.id } as Scene & { projectName: string; projectId: string })));
+            scenes.push(...projectScenes.map(s => ({ ...s, projectName: project.name, projectId: project.id } as SceneWithProject)));
         }
 
         setAllScenes(scenes);

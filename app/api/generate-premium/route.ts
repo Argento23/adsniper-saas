@@ -4,6 +4,7 @@ import { getClerkUser, updateClerkMetadata } from '@/lib/clerkHelper';
 import { generateFalImage, generateBriaProductShot, generateFluxIPAdapter, generateFluxImageToImage, generateFluxReduxImage } from '@/lib/fal';
 import { generateReplicateImage, generateReplicateFluxDev, generateReplicateFluxRedux } from '@/lib/replicate';
 import { compositeStudioPro, compositeUserLogoAsScene } from '@/lib/composer';
+import { DEFAULT_GROQ_MODEL } from '@/lib/groq-config';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,11 +26,12 @@ async function consumePremiumCredit(userId: string): Promise<{ canProceed: boole
 async function enhancePromptForStudio8K(userScene: string, brandName?: string): Promise<string> {
     const apiKey = process.env.GROQ_API_KEY;
     try {
+        console.log("[GROQ] Using model:", DEFAULT_GROQ_MODEL);
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
             body: JSON.stringify({
-                model: "llama-3.3-70b-versatile",
+                model: DEFAULT_GROQ_MODEL,
                 messages: [{
                     role: "system",
                     content: `You are a world-class commercial ad photographer and visual art director.
