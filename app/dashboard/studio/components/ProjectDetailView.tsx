@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { FaArrowLeft, FaPlus, FaTrash, FaImage, FaVideo, FaSpinner, FaMagic, FaFilm } from 'react-icons/fa';
 import { Scene } from '@/lib/projects/types';
 import { getProjectStore } from '@/lib/projects/store';
+import { getSceneStore } from '@/lib/projects/scenes';
 import SceneCard from './SceneCard';
 import NewSceneForm from './NewSceneForm';
 import CreativeDirectorWizard from './CreativeDirectorWizard';
@@ -27,19 +28,15 @@ export default function ProjectDetailView() {
     const [showTimeline, setShowTimeline] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    async function loadScenes() {
+    function loadScenesFromStore() {
         if (!projectId) return;
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch(`/api/studio/projects/${projectId}/scenes`);
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                const apiError = data.error || `HTTP ${res.status}`;
-                throw new Error(apiError);
-            }
-            const data = await res.json();
-            setScenes(data.scenes ?? []);
+            // Read scenes directly from localStorage (client-side) - same store API would use
+            const sceneStore = getSceneStore();
+            const projectScenes = sceneStore.listScenes(projectId);
+            setScenes(projectScenes);
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : 'failed to load');
         } finally {
@@ -50,7 +47,7 @@ export default function ProjectDetailView() {
     useEffect(() => {
         if (!isLoaded || !user || !projectId) return;
 
-        // First, read the project from the same store the API uses
+        // First, read the project from localStorage (client-side)
         const projectStore = getProjectStore();
         const project = projectStore.getProject(user.id, projectId);
 
@@ -65,16 +62,19 @@ export default function ProjectDetailView() {
         setProjectName(project.name);
         if (typeof project.format === 'string') setFormat(project.format);
 
-        // Then fetch scenes from the API
-        loadScenes();
+        // Then load scenes directly from localStorage (client-side)
+        loadScenesFromStore();
     }, [isLoaded, user, projectId]);
 
     async function handleDelete(sceneId: string) {
         if (!confirm('¿Eliminar esta escena?')) return;
-        const res = await fetch(`/api/studio/projects/${projectId}/scenes/${sceneId}`, {
-            method: 'DELETE',
-        });
-        if (res.ok) setScenes(prev => prev.filter(s => s.id !== sceneId));
+        try {
+            const sceneStore = getSceneStore();
+            const ok = sceneStore.deleteScene(projectId, sceneId);
+            if (ok) setScenes(prev => prev.filter(s => s.id !== sceneId));
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : 'failed to delete');
+        }
     }
 
     function handleCreated(scene: Scene) {
@@ -183,6 +183,7 @@ export default function ProjectDetailView() {
                             scenes={scenes}
                             aspectRatio={format}
                             onClose={() => setShowTimeline(false)}
+                            project={projectName ? { id: projectId, userId: user.id, name: projectName, format } : null}
                         />
                     )}
                     {!showTimeline && (

@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { FaArrowLeft, FaDownload, FaFilm, FaProjectDiagram, FaCheckCircle, FaClock } from 'react-icons/fa';
+import { FaArrowLeft, FaDownload, FaFilm, FaProjectDiagram, FaCheckCircle, FaClock, FaExclamationTriangle } from 'react-icons/fa';
 import { getProjectStore } from '@/lib/projects/store';
 import { getSceneStore } from '@/lib/projects/scenes';
-import { Project, Scene } from '@/lib/projects/types';
+import { getTimelineStore } from '@/lib/projects/timeline-store';
+import { Project, Scene, Timeline } from '@/lib/projects/types';
 import ExportModal from '@/app/dashboard/studio/components/ExportModal';
 
 export default function ExportPage() {
@@ -16,6 +17,7 @@ export default function ExportPage() {
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
     const [scenes, setScenes] = useState<Scene[]>([]);
+    const [timeline, setTimeline] = useState<Timeline | null>(null);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [exporting, setExporting] = useState(false);
@@ -35,12 +37,15 @@ export default function ExportPage() {
     useEffect(() => {
         if (!selectedProjectId) return;
         const sceneStore = getSceneStore();
+        const timelineStore = getTimelineStore();
         const projectScenes = sceneStore.listScenes(selectedProjectId);
+        const projectTimeline = timelineStore.getTimeline(selectedProjectId);
         setScenes(projectScenes);
+        setTimeline(projectTimeline);
     }, [selectedProjectId]);
 
     const handleExport = async () => {
-        if (!selectedProjectId) return;
+        if (!selectedProjectId || !timeline) return;
         setExporting(true);
         setExportProgress(0);
         setModalOpen(false);
@@ -57,33 +62,48 @@ export default function ExportPage() {
         }, 500);
 
         try {
-            // Call the actual export API
+            // Call the actual export API with project, timeline, and scenes
+            const projectStore = getProjectStore();
+            const project = projectStore.getProject(user.id, selectedProjectId);
+            if (!project) {
+                throw new Error('Proyecto no encontrado en localStorage');
+            }
+
             const res = await fetch(`/api/studio/projects/${selectedProjectId}/export`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({})
+                body: JSON.stringify({
+                    project: {
+                        id: project.id,
+                        userId: project.userId,
+                        name: project.name,
+                        format: project.format,
+                    },
+                    timeline,
+                    scenes,
+                })
             });
             const data = await res.json();
             clearInterval(interval);
             setExportProgress(100);
             if (res.ok && data.jobId) {
                 // Poll for completion
-                pollExport(selectedProjectId, data.jobId);
+                pollExport(selectedProjectId, data.jobId, project.userId);
             } else {
                 alert(data.error || 'Error al iniciar exportación');
                 setExporting(false);
             }
         } catch (err) {
             clearInterval(interval);
-            alert('Error de conexión');
+            alert(err instanceof Error ? err.message : 'Error de conexión');
             setExporting(false);
         }
     };
 
-    const pollExport = async (projectId: string, jobId: string) => {
+    const pollExport = async (projectId: string, jobId: string, projectUserId: string) => {
         const interval = setInterval(async () => {
             try {
-                const res = await fetch(`/api/studio/projects/${projectId}/export/${jobId}`);
+                const res = await fetch(`/api/studio/projects/${projectId}/export/${jobId}?projectUserId=${projectUserId}`);
                 const data = await res.json();
                 if (data.status === 'completed') {
                     clearInterval(interval);

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { FaCheck, FaTimes, FaEdit } from 'react-icons/fa';
 import { CreativeSpec } from '@/lib/creative-director';
 import { Scene } from '@/lib/projects/types';
+import { getSceneStore, CreateSceneInput } from '@/lib/projects/scenes';
 
 interface StoryboardReviewProps {
     spec: CreativeSpec;
@@ -26,28 +27,26 @@ export default function StoryboardReview({ spec, drafts, projectId, onCancel, on
         setCommitting(true);
         setError(null);
         try {
+            const sceneStore = getSceneStore();
             const created: Scene[] = [];
             for (const scene of editedDrafts) {
-                const res = await fetch(`/api/studio/projects/${projectId}/scenes`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        title: scene.title,
-                        description: scene.description,
-                        prompt: scene.prompt,
-                        visualPrompt: scene.visualPrompt,
-                        negativePrompt: scene.negativePrompt,
-                        camera: scene.camera,
-                        voiceover: scene.voiceover,
-                        onScreenText: scene.onScreenText,
-                        durationSec: scene.durationSec,
-                        transitionIn: scene.transitionIn,
-                        order: scene.order,
-                    }),
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-                created.push(data.scene as Scene);
+                const input: CreateSceneInput = {
+                    projectId,
+                    order: scene.order,
+                    visualPrompt: scene.visualPrompt,
+                    durationSec: scene.durationSec,
+                };
+                if (scene.title) input.title = scene.title;
+                if (scene.description) input.description = scene.description;
+                if (scene.prompt) input.prompt = scene.prompt;
+                if (scene.negativePrompt) input.negativePrompt = scene.negativePrompt;
+                if (scene.camera) input.camera = scene.camera;
+                if (scene.voiceover) input.voiceover = scene.voiceover;
+                if (scene.onScreenText) input.onScreenText = scene.onScreenText;
+                if (scene.transitionIn) input.transitionIn = scene.transitionIn;
+                if (scene.aspectRatio) input.aspectRatio = scene.aspectRatio;
+                const createdScene = sceneStore.createScene(input);
+                created.push(createdScene);
             }
             onCommitted(created);
         } catch (e: unknown) {

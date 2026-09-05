@@ -86,11 +86,12 @@ export default function TimelinePage() {
             </header>
 
             {selectedProjectId ? (
-                <TimelineEditor
-                    projectId={selectedProjectId}
-                    scenes={scenes}
-                    aspectRatio={projects.find(p => p.id === selectedProjectId)?.format || '9:16'}
-                />
+<TimelineEditor
+    projectId={selectedProjectId}
+    scenes={scenes}
+    aspectRatio={projects.find(p => p.id === selectedProjectId)?.format || '9:16'}
+    project={projects.find(p => p.id === selectedProjectId) ?? null}
+/>
             ) : (
                 <div className="border border-dashed border-white/10 rounded-3xl p-12 text-center bg-slate-900/30">
                     <FaFilm className="w-16 h-16 mx-auto mb-4 text-slate-600" />

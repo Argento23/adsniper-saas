@@ -6,11 +6,7 @@ import {
 } from 'react-icons/fa';
 import { Timeline, TimelineClip } from '@/lib/projects/timeline';
 import { Scene } from '@/lib/projects/types';
-import {
-    createTimeline,
-    deleteClip as apiDeleteClip,
-    patchTimeline,
-} from '@/lib/api/timeline';
+import { getTimelineStore } from '@/lib/projects/timeline-store';
 import {
     TimelineEditorState,
     initialState,
@@ -30,6 +26,7 @@ interface TimelineEditorProps {
     scenes: Scene[];
     aspectRatio: string;
     onClose?: () => void;
+    project?: { id: string; userId: string; name: string; format: string } | null;
 }
 
 /**
@@ -54,8 +51,9 @@ export default function TimelineEditor({ projectId, scenes, aspectRatio, onClose
         (async () => {
             dispatch({ type: 'LOAD_START' });
             try {
-                const { fetchTimeline } = await import('@/lib/api/timeline');
-                const t = await fetchTimeline(projectId);
+                // Load timeline directly from localStorage (client-side)
+                const timelineStore = getTimelineStore();
+                const t = timelineStore.getTimeline(projectId);
                 if (cancelled) return;
                 if (t) {
                     dispatch({ type: 'LOAD_SUCCESS', timeline: t });
@@ -144,34 +142,33 @@ export default function TimelineEditor({ projectId, scenes, aspectRatio, onClose
         dispatch({ type: 'UPDATE_CLIP', clipId, patch: { transition: value } });
     }, []);
 
-    const onDelete = useCallback(async (clipId: string) => {
+    const onDelete = useCallback((clipId: string) => {
         if (!state.timeline) return;
         if (!confirm('¿Eliminar este clip?')) return;
-        // Try API delete first; fall back to local mutation if timeline not yet saved.
-        try {
-            const updated = await apiDeleteClip(projectId, clipId);
+        // Delete clip directly from localStorage
+        const timelineStore = getTimelineStore();
+        const updated = timelineStore.deleteClip(projectId, clipId);
+        if (updated) {
             dispatch({ type: 'LOAD_SUCCESS', timeline: updated });
-        } catch {
+        } else {
             dispatch({ type: 'DELETE_CLIP', clipId });
         }
     }, [projectId, state.timeline]);
 
-    const onSave = useCallback(async () => {
+    const onSave = useCallback(() => {
         if (!state.timeline) return;
         dispatch({ type: 'SAVE_START' });
         try {
-            const exists = state.timeline.createdAt && state.timeline.updatedAt
-                && state.timeline.createdAt !== new Date(state.timeline.updatedAt).toISOString().slice(0, 10) + 'T00:00:00.000Z';
-            // Simpler: try PATCH, if 404 then POST.
+            const timelineStore = getTimelineStore();
+            // Check if timeline exists by trying to get it
+            const existing = timelineStore.getTimeline(projectId);
             let saved: Timeline;
-            try {
-                saved = await patchTimeline(projectId, state.timeline.clips);
-            } catch (e: unknown) {
-                if (e instanceof Error && e.message.includes('not found')) {
-                    saved = await createTimeline(projectId, state.timeline);
-                } else {
-                    throw e;
-                }
+            if (existing) {
+                // Update existing timeline
+                saved = timelineStore.upsertTimeline({ ...state.timeline, updatedAt: new Date().toISOString() });
+            } else {
+                // Create new timeline
+                saved = timelineStore.upsertTimeline({ ...state.timeline, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
             }
             dispatch({ type: 'SAVE_SUCCESS', timeline: saved });
         } catch (e: unknown) {
@@ -407,7 +404,12 @@ export default function TimelineEditor({ projectId, scenes, aspectRatio, onClose
             )}
 
             {/* Export panel */}
-            <ExportPanel projectId={projectId} />
+            <ExportPanel
+    projectId={projectId}
+    project={project ?? null}
+    timeline={state.timeline}
+    scenes={scenes.map(s => ({ id: s.id, projectId: s.projectId, durationSec: s.durationSec, videoAssetId: s.videoAssetId, visualPrompt: s.visualPrompt }))}
+/>
       </div>
     );
 }
@@ -532,7 +534,14 @@ interface ExportState {
     outputUrl: string | null;
 }
 
-function ExportPanel({ projectId }: { projectId: string }) {
+interface ExportPanelProps {
+    projectId: string;
+    project: { id: string; userId: string; name: string; format: string };
+    timeline: { id: string; projectId: string; duration: number; clips: any[]; aspectRatio: string; fps: number; createdAt: string; updatedAt: string };
+    scenes: { id: string; projectId: string; durationSec: number; videoAssetId?: string; visualPrompt: string }[];
+}
+
+function ExportPanel({ projectId, project, timeline, scenes }: ExportPanelProps) {
     const [state, setState] = useState<ExportState>({
         jobId: null, status: 'idle', error: null, outputUrl: null,
     });
@@ -568,7 +577,11 @@ function ExportPanel({ projectId }: { projectId: string }) {
         setSubmitting(true);
         setState({ jobId: null, status: 'idle', error: null, outputUrl: null });
         try {
-            const res = await fetch(`/api/studio/projects/${projectId}/export`, { method: 'POST' });
+            const res = await fetch(`/api/studio/projects/${projectId}/export`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ project, timeline, scenes })
+            });
             const data = await res.json();
             if (!res.ok) {
                 setState({ jobId: null, status: 'failed', error: data.error ?? `HTTP ${res.status}`, outputUrl: null });

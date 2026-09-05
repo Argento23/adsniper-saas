@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
 import { join } from 'node:path';
 import { auth } from '@clerk/nextjs/server';
-import { requireProject } from '@/lib/projects/access';
 import { getJobQueue } from '@/lib/jobs/queue';
-import { getTimelineStore } from '@/lib/projects/timeline-store';
-import { getSceneStore } from '@/lib/projects/scenes';
 import {
     runExportPreFlight,
     runExport,
 } from '@/lib/video/export-runner';
 import { getStorage } from '@/lib/storage';
+import { getAuthenticatedUserId, validateOwnership, createUnauthorizedResponse, createForbiddenResponse, createBadRequestResponse, createInternalErrorResponse } from '@/lib/projects/server-auth';
+import { Timeline } from '@/lib/projects/timeline';
+import { Scene } from '@/lib/projects/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,29 +17,60 @@ interface RouteContext {
     params: { projectId: string };
 }
 
+interface ExportPreFlightInput {
+    project: {
+        id: string;
+        userId: string;
+        name: string;
+        format: string;
+    };
+    timeline: Timeline;
+    scenes: Scene[];
+}
+
 /**
  * POST /api/studio/projects/[projectId]/export
  *
  * 1. authenticate user (Clerk)
- * 2. verify project access (requireProject)
- * 3. pre-flight: timeline exists, all clips have sourceUrl
- * 4. enqueue an `export` job (reuse InMemoryJobQueue from lib/jobs/queue)
- * 5. fire-and-forget the runner (it updates the job state)
- * 6. respond with the job id (client polls /api/studio/jobs/[jobId])
+ * 2. receive project, timeline, scenes from client (client reads from localStorage)
+ * 3. validate ownership (Clerk userId matches project.userId)
+ * 4. pre-flight: timeline exists, all clips have sourceUrl
+ * 5. enqueue an `export` job
+ * 6. fire-and-forget the runner
+ * 7. respond with the job id (client polls /api/studio/jobs/[jobId])
  */
-export async function POST(_request: Request, { params }: RouteContext) {
+export async function POST(request: Request, { params }: RouteContext) {
     try {
-        const { userId } = await auth();
-        if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+        const authUserId = await getAuthenticatedUserId();
 
-        const access = requireProject(userId, params.projectId);
-        if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+        let body: ExportPreFlightInput;
+        try {
+            body = await request.json();
+        } catch {
+            return createBadRequestResponse('invalid JSON');
+        }
 
-        // Pre-flight using the same helpers the runner uses.
+        const { project, timeline, scenes } = body;
+
+        if (!project || !timeline || !scenes) {
+            return createBadRequestResponse('project, timeline, and scenes are required');
+        }
+
+        // Validate ownership: Clerk userId must match project.userId
+        if (!validateOwnership(authUserId, project.userId)) {
+            return createForbiddenResponse();
+        }
+
+        // Verify projectId matches
+        if (project.id !== params.projectId) {
+            return createBadRequestResponse('projectId mismatch');
+        }
+
+        // Pre-flight using the provided data (no localStorage access)
         const pre = await runExportPreFlight({
             projectId: params.projectId,
-            loadTimeline: (pid) => getTimelineStore().getTimeline(pid),
-            loadScenes: (pid) => getSceneStore().listScenes(pid),
+            loadTimeline: () => timeline,
+            loadScenes: () => scenes,
         });
         if (!pre.ok) {
             const status = pre.kind === 'no_timeline' || pre.kind === 'no_clips' ? 400 : 422;
@@ -47,7 +78,7 @@ export async function POST(_request: Request, { params }: RouteContext) {
         }
 
         const job = await getJobQueue().enqueue({
-            userId,
+            userId: authUserId,
             projectId: params.projectId,
             type: 'export',
             input: {
@@ -59,11 +90,10 @@ export async function POST(_request: Request, { params }: RouteContext) {
             },
         });
 
-        // Fire and forget — the runner updates the job state.
         const storage = getStorage();
         runExport(job, {
-            loadTimeline: (pid) => getTimelineStore().getTimeline(pid),
-            loadScenes: (pid) => getSceneStore().listScenes(pid),
+            loadTimeline: () => timeline,
+            loadScenes: () => scenes,
             markProcessing: (jobId) => { void getJobQueue().markProcessing(jobId); },
             markCompleted: (jobId, output) => {
                 void getJobQueue().markCompleted(jobId, {
@@ -75,33 +105,39 @@ export async function POST(_request: Request, { params }: RouteContext) {
             storage,
             resolveWorkDir: (jobId) => join(process.cwd(), 'public', 'exports', `${jobId}_work`),
         }).catch((e) => {
-            // Defensive: should never reach here because runExport
-            // catches its own errors and calls markFailed.
             try { void getJobQueue().markFailed(job.id, e instanceof Error ? e.message : 'unknown error'); } catch { /* ignore */ }
         });
 
         return NextResponse.json({ jobId: job.id, status: job.status }, { status: 202 });
-    } catch {
-        return NextResponse.json({ error: 'internal error' }, { status: 500 });
+    } catch (e) {
+        if (e instanceof Error && e.message === 'unauthorized') {
+            return createUnauthorizedResponse();
+        }
+        return createInternalErrorResponse();
     }
 }
 
 /**
- * GET — list the most recent export jobs for this project. Useful for
- * the UI to show "last export: ..." without polling each jobId.
+ * GET — list the most recent export jobs for this project.
+ * Client sends project.userId in query params for ownership validation.
  */
-export async function GET(_request: Request, { params }: RouteContext) {
+export async function GET(request: Request, { params }: RouteContext) {
     try {
-        const { userId } = await auth();
-        if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+        const authUserId = await getAuthenticatedUserId();
+        const { searchParams } = new URL(request.url);
+        const projectUserId = searchParams.get('projectUserId');
 
-        const access = requireProject(userId, params.projectId);
-        if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+        if (!projectUserId || !validateOwnership(authUserId, projectUserId)) {
+            return createForbiddenResponse();
+        }
 
-        const allUserJobs = await getJobQueue().listByUser(userId);
+        const allUserJobs = await getJobQueue().listByUser(authUserId);
         const jobs = allUserJobs.filter(j => j.type === 'export' && j.projectId === params.projectId);
         return NextResponse.json({ jobs });
-    } catch {
-        return NextResponse.json({ error: 'internal error' }, { status: 500 });
+    } catch (e) {
+        if (e instanceof Error && e.message === 'unauthorized') {
+            return createUnauthorizedResponse();
+        }
+        return createInternalErrorResponse();
     }
 }

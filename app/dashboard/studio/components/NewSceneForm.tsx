@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { FaTimes } from 'react-icons/fa';
 import { Scene, AspectRatio } from '@/lib/projects/types';
+import { getSceneStore, CreateSceneInput } from '@/lib/projects/scenes';
 
 interface NewSceneFormProps {
     projectId: string;
@@ -25,21 +26,18 @@ export default function NewSceneForm({ projectId, nextOrder, onCancel, onCreated
         setSubmitting(true);
         setError(null);
         try {
-            const res = await fetch(`/api/studio/projects/${projectId}/scenes`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    title: title.trim() || undefined,
-                    visualPrompt: visualPrompt.trim(),
-                    camera: camera.trim() || undefined,
-                    durationSec,
-                    aspectRatio,
-                    order: nextOrder,
-                }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-            onCreated(data.scene as Scene);
+            const sceneStore = getSceneStore();
+            const input: CreateSceneInput = {
+                projectId,
+                order: nextOrder,
+                visualPrompt: visualPrompt.trim(),
+                durationSec,
+            };
+            if (title.trim()) input.title = title.trim();
+            if (camera.trim()) input.camera = camera.trim();
+            input.aspectRatio = aspectRatio;
+            const scene = sceneStore.createScene(input);
+            onCreated(scene);
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : 'failed');
         } finally {
