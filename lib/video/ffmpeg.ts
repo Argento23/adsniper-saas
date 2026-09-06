@@ -160,9 +160,9 @@ export function buildConcatListContent(clipPaths: string[]): string {
  * Resolve a clip's transition to the corresponding xfade transition name.
  * Returns `null` for `cut` (no xfade needed at that boundary).
  */
-export function xfadeTransitionName(transition: 'cut' | 'fade' | 'dissolve' | undefined): string | null {
+export function xfadeTransitionName(transition: 'cut' | 'fade' | 'fade-black' | 'dissolve' | undefined): string | null {
     if (!transition || transition === 'cut') return null;
-    if (transition === 'fade') return 'fade';
+    if (transition === 'fade' || transition === 'fade-black') return 'fade';
     if (transition === 'dissolve') return 'dissolve';
     return null;
 }

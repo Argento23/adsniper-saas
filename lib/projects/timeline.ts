@@ -20,9 +20,13 @@ export interface TimelineClip {
     start: number;
     duration: number;
     sourceUrl?: string;
-    transition?: 'cut' | 'fade' | 'dissolve';
+    transition?: 'cut' | 'fade' | 'fade-black' | 'dissolve';
+    transitionDuration?: number;
+    type?: 'video' | 'audio' | 'image';
     volume?: number;
     muted?: boolean;
+    fadeIn?: number;
+    fadeOut?: number;
     metadata?: Record<string, unknown>;
     title?: string;
 }

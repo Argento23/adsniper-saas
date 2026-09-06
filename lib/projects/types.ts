@@ -32,6 +32,54 @@ export interface TimelineState {
     textTrack: { text: string; startSec: number; durationSec: number; position?: string }[];
 }
 
+export interface MediaAssetRef {
+    id: string;
+    name: string;
+    type: 'video' | 'audio' | 'image';
+    duration: number;
+    width: number;
+    height: number;
+    thumbnail: string;
+    fileId: string;
+    createdAt: string;
+}
+
+export interface TextOverlay {
+    id: string;
+    text: string;
+    fontFamily: string;
+    fontSize: number;
+    color: string;
+    position: { x: number; y: number }; // percentage 0-1
+    startTime: number;
+    duration: number;
+    fontWeight?: string;
+    textAlign?: 'left' | 'center' | 'right';
+    strokeColor?: string;
+    strokeWidth?: number;
+}
+
+export interface AudioTrack {
+    id: string;
+    assetId: string;
+    name: string;
+    startTime: number;
+    duration: number;
+    volume: number;
+    fadeIn: number;
+    fadeOut: number;
+    trimStart: number;
+    trimEnd: number;
+}
+
+export interface Transition {
+    id: string;
+    type: 'cut' | 'fade' | 'fade-black';
+    duration: number; // seconds
+    fromClipId: string;
+    toClipId: string;
+}
+
 export interface Project {
     id: string;
     userId: string;
@@ -57,6 +105,12 @@ export interface Project {
     publishedAt?: string;
     platform?: string;
     description?: string;
+
+    // New Studio fields
+    mediaAssets?: MediaAssetRef[];
+    textOverlays?: TextOverlay[];
+    audioTracks?: AudioTrack[];
+    transitions?: Transition[];
 }
 
 export type SceneStatus =
