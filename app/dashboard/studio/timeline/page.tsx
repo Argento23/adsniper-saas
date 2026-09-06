@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -8,15 +8,21 @@ import { FaArrowLeft, FaFilm, FaProjectDiagram } from 'react-icons/fa';
 import { getProjectStore } from '@/lib/projects/store';
 import { getSceneStore } from '@/lib/projects/scenes';
 import { Project, Scene } from '@/lib/projects/types';
+import { MediaAsset } from '@/lib/storage/indexed-media';
 import TimelineEditor from '@/app/dashboard/studio/components/TimelineEditor';
+import MediaImportPanel from '@/app/dashboard/studio/components/MediaImportPanel';
+import { useToast } from '@/app/dashboard/studio/components/Toast';
+import { TimelineClip } from '@/lib/projects/timeline';
 
 export default function TimelinePage() {
     const { user, isLoaded } = useUser();
     const router = useRouter();
+    const { showToast } = useToast();
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
     const [scenes, setScenes] = useState<Scene[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showMediaImport, setShowMediaImport] = useState(false);
 
     useEffect(() => {
         if (!isLoaded || !user) return;
@@ -35,6 +41,37 @@ export default function TimelinePage() {
         const projectScenes = sceneStore.listScenes(selectedProjectId);
         setScenes(projectScenes);
     }, [selectedProjectId]);
+
+    const handleAddToTimeline = useCallback((asset: MediaAsset) => {
+        if (!selectedProjectId) {
+            showToast('error', 'Selecciona un proyecto primero');
+            return;
+        }
+        
+        // Create a timeline clip from the media asset
+        const clip: TimelineClip = {
+            id: `clip_${asset.id}`,
+            assetId: asset.id,
+            sceneId: undefined, // Media asset, not a scene
+            start: 0, // Will be set by reducer
+            duration: asset.duration,
+            sourceUrl: undefined, // Will be resolved at export/preview time from IndexedDB
+            sourceStart: 0,
+            sourceEnd: asset.duration,
+            type: asset.type,
+            title: asset.name,
+            transition: 'cut',
+        };
+
+        // We need to dispatch ADD_MEDIA_CLIP to the timeline reducer
+        // Since we can't directly dispatch from here, we'll use a custom event
+        // that the TimelineEditor can listen to, or we can pass a callback
+        window.dispatchEvent(new CustomEvent('add-media-to-timeline', { 
+            detail: { projectId: selectedProjectId, clip } 
+        }));
+        
+        showToast('success', `Agregado al timeline: ${asset.name}`);
+    }, [selectedProjectId, showToast]);
 
     if (!isLoaded || loading) {
         return <div className="flex h-screen items-center justify-center text-slate-500">Cargando...</div>;
@@ -82,16 +119,31 @@ export default function TimelinePage() {
                             <option key={p.id} value={p.id}>{p.name}</option>
                         ))}
                     </select>
+                    <button
+                        onClick={() => setShowMediaImport(!showMediaImport)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium border border-white/10"
+                    >
+                        <FaFilm /> {showMediaImport ? 'Ocultar' : 'Importar'} Media
+                    </button>
                 </div>
             </header>
 
+            {showMediaImport && selectedProjectId && (
+                <div className="mb-6" data-testid="media-import-panel">
+                    <MediaImportPanel
+                        projectId={selectedProjectId}
+                        onAddToTimeline={handleAddToTimeline}
+                    />
+                </div>
+            )}
+
             {selectedProjectId ? (
-<TimelineEditor
-    projectId={selectedProjectId}
-    scenes={scenes}
-    aspectRatio={projects.find(p => p.id === selectedProjectId)?.format || '9:16'}
-    project={projects.find(p => p.id === selectedProjectId) ?? null}
-/>
+                <TimelineEditor
+                    projectId={selectedProjectId}
+                    scenes={scenes}
+                    aspectRatio={projects.find(p => p.id === selectedProjectId)?.format || '9:16'}
+                    project={projects.find(p => p.id === selectedProjectId) ?? null}
+                />
             ) : (
                 <div className="border border-dashed border-white/10 rounded-3xl p-12 text-center bg-slate-900/30">
                     <FaFilm className="w-16 h-16 mx-auto mb-4 text-slate-600" />

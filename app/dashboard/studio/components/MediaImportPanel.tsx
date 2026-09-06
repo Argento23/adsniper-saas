@@ -2,13 +2,14 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { FaFileVideo, FaFileAudio, FaFileImage, FaUpload, FaTrash, FaEye, FaInfo, FaSpinner } from 'react-icons/fa';
+import { FaFileVideo, FaFileAudio, FaFileImage, FaUpload, FaTrash, FaEye, FaInfo, FaSpinner, FaPlus } from 'react-icons/fa';
 import { MediaAsset, saveMediaAsset, generateVideoThumbnail, generateAudioThumbnail, formatFileSize, formatDuration } from '@/lib/storage/indexed-media';
 import { useToast } from './Toast';
 
 interface ImportMediaPanelProps {
     projectId: string;
     onAssetsChange?: (assets: MediaAsset[]) => void;
+    onAddToTimeline?: (asset: MediaAsset) => void;
     className?: string;
 }
 
@@ -34,7 +35,7 @@ function generateId(): string {
     return `media_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
-export default function ImportMediaPanel({ projectId, onAssetsChange, className = '' }: ImportMediaPanelProps) {
+export default function ImportMediaPanel({ projectId, onAssetsChange, onAddToTimeline, className = '' }: ImportMediaPanelProps) {
     const [uploading, setUploading] = useState<Record<string, { progress: number; error?: string }>>({});
     const [assets, setAssets] = useState<MediaAsset[]>([]);
     const { showToast } = useToast();
@@ -342,6 +343,15 @@ export default function ImportMediaPanel({ projectId, onAssetsChange, className 
                                                 {asset.duration > 0 ? `${Math.floor(asset.duration / 60)}:${String(Math.floor(asset.duration % 60)).padStart(2, '0')}` : '--:--'}
                                             </span>
                                         </div>
+                                        {onAddToTimeline && asset.type === 'video' && (
+                                            <button
+                                                onClick={() => onAddToTimeline(asset)}
+                                                className="w-full mt-2 px-3 py-1.5 text-xs font-bold text-white bg-emerald-500/20 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/30 transition-colors"
+                                                title="Agregar al timeline"
+                                            >
+                                                <FaPlus className="w-3 h-3 mr-1" /> Agregar al timeline
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             ))}

@@ -38,6 +38,7 @@ export type TimelineEditorAction =
     | { type: 'REORDER'; fromIndex: number; toIndex: number }
     | { type: 'UPDATE_CLIP'; clipId: string; patch: Partial<TimelineClip> }
     | { type: 'DELETE_CLIP'; clipId: string }
+    | { type: 'ADD_MEDIA_CLIP'; clip: TimelineClip }
     | { type: 'PLAY' }
     | { type: 'PAUSE' }
     | { type: 'SEEK'; timeSec: number }
@@ -126,6 +127,24 @@ export function reducer(state: TimelineEditorState, action: TimelineEditorAction
                 ...state,
                 timeline: next,
                 selectedClipId: state.selectedClipId === action.clipId ? null : state.selectedClipId,
+                dirty: true,
+            };
+        }
+        case 'ADD_MEDIA_CLIP': {
+            if (!state.timeline) return state;
+            // Compute start time at the end of existing clips
+            const newStart = state.timeline.duration;
+            const newClip: TimelineClip = {
+                ...action.clip,
+                start: newStart,
+                // If no sourceStart/sourceEnd provided, default to full asset duration
+                sourceStart: action.clip.sourceStart ?? 0,
+                sourceEnd: action.clip.sourceEnd ?? action.clip.duration,
+            };
+            const clips = [...state.timeline.clips, newClip];
+            return {
+                ...state,
+                timeline: withClipsRecomputed(state.timeline, clips),
                 dirty: true,
             };
         }

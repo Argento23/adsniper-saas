@@ -83,6 +83,18 @@ export default function TimelineEditor({ projectId, scenes, aspectRatio, onClose
         return () => clearTimeout(timer);
     }, [state.dirty, state.timeline, onSave]);
 
+    // ── Listen for add-media-to-timeline events ───────────────────────────
+    useEffect(() => {
+        const handleAddMedia = (e: CustomEvent) => {
+            const { projectId: eventProjectId, clip } = e.detail;
+            if (eventProjectId === projectId) {
+                dispatch({ type: 'ADD_MEDIA_CLIP', clip });
+            }
+        };
+        window.addEventListener('add-media-to-timeline', handleAddMedia as EventListener);
+        return () => window.removeEventListener('add-media-to-timeline', handleAddMedia as EventListener);
+    }, [projectId]);
+
     // ── Keyboard shortcuts ────────────────────────────────────────────
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -171,25 +183,79 @@ export default function TimelineEditor({ projectId, scenes, aspectRatio, onClose
 
     // ── Video element sync ──────────────────────────────────────────────
     const currentClip = getCurrentClip(state);
+    const prevClipRef = useRef<TimelineClip | null>(null);
+    const loadedMetadataHandlerRef = useRef<((e: Event) => void) | null>(null);
+    
+    // Handle clip change - seek to sourceStart
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
         if (currentClip?.sourceUrl) {
-            if (v.src !== currentClip.sourceUrl) v.src = currentClip.sourceUrl;
+            if (v.src !== currentClip.sourceUrl) {
+                v.src = currentClip.sourceUrl;
+            }
+            // When clip changes, wait for metadata then seek to sourceStart
+            const handleLoadedMetadata = () => {
+                const sourceStart = currentClip.sourceStart ?? 0;
+                if (v.currentTime !== sourceStart) {
+                    v.currentTime = sourceStart;
+                }
+                v.removeEventListener('loadedmetadata', handleLoadedMetadata);
+            };
+            loadedMetadataHandlerRef.current = handleLoadedMetadata;
+            if (v.readyState >= 1) {
+                // Metadata already loaded
+                const sourceStart = currentClip.sourceStart ?? 0;
+                v.currentTime = sourceStart;
+            } else {
+                v.addEventListener('loadedmetadata', handleLoadedMetadata);
+            }
         } else if (v.src) {
             v.removeAttribute('src');
             v.load();
         }
-    }, [currentClip?.sourceUrl]);
+        return () => {
+            if (loadedMetadataHandlerRef.current) {
+                v.removeEventListener('loadedmetadata', loadedMetadataHandlerRef.current);
+            }
+        };
+    }, [currentClip?.id, currentClip?.sourceUrl, currentClip?.sourceStart]);
 
+    // Handle playback sync and sourceEnd detection
     useEffect(() => {
         const v = videoRef.current;
         if (!v || !currentClip) return;
-        const localTime = state.currentTimeSec - currentClip.start;
-        if (Math.abs(v.currentTime - localTime) > 0.25) v.currentTime = localTime;
-        if (state.isPlaying && v.paused) v.play().catch(() => undefined);
-        if (!state.isPlaying && !v.paused) v.pause();
-    }, [state.currentTimeSec, state.isPlaying, currentClip?.id]);
+        
+        const sourceStart = currentClip.sourceStart ?? 0;
+        const sourceEnd = currentClip.sourceEnd ?? currentClip.duration;
+        const clipEndTime = currentClip.start + (sourceEnd - sourceStart);
+        
+        // Calculate the correct video time based on timeline position
+        const timelinePosInClip = state.currentTimeSec - currentClip.start;
+        const targetVideoTime = sourceStart + timelinePosInClip;
+        
+        // Sync video time
+        if (Math.abs(v.currentTime - targetVideoTime) > 0.25) {
+            v.currentTime = targetVideoTime;
+        }
+        
+        // Check if we've reached the end of this clip's trim range
+        const atClipEnd = targetVideoTime >= sourceEnd - 0.1;
+        const atTimelineEnd = state.currentTimeSec >= clipEndTime - 0.1;
+        
+        if (state.isPlaying && v.paused) {
+            v.play().catch(() => undefined);
+        }
+        if (!state.isPlaying && !v.paused) {
+            v.pause();
+        }
+        
+        // Auto-advance to next clip when sourceEnd is reached
+        if (state.isPlaying && atClipEnd && !atTimelineEnd) {
+            // The TICK will naturally advance currentTimeSec, which will change currentClip
+            // This is handled by the reducer's TICK action and getCurrentClip
+        }
+    }, [state.currentTimeSec, state.isPlaying, currentClip?.id, currentClip?.sourceStart, currentClip?.sourceEnd, currentClip?.duration, currentClip?.start]);
 
     // ── Actions ─────────────────────────────────────────────────────────
     const onSelect = useCallback((clipId: string) => {
@@ -236,7 +302,7 @@ export default function TimelineEditor({ projectId, scenes, aspectRatio, onClose
     const onDuplicate = useCallback((clipId: string) => {
         if (!state.timeline) return;
         const clip = state.timeline.clips.find(c => c.id === clipId);
-        if (!clip) return;
+        if (!clip || !clip.sceneId) return;
 
         const timelineStore = getTimelineStore();
         const sceneStore = getSceneStore();
@@ -521,6 +587,37 @@ export default function TimelineEditor({ projectId, scenes, aspectRatio, onClose
                                 className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-white focus:border-emerald-500/50 outline-none"
                             />
                         </div>
+                        {selected.assetId && (
+                            <>
+                                <div>
+                                    <label className="block text-xs text-slate-500 mb-1">IN (s)</label>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        max={selected.sourceEnd ? selected.sourceEnd - 0.1 : 300}
+                                        step={0.1}
+                                        value={selected.sourceStart ?? 0}
+                                        onChange={e => dispatch({ type: 'UPDATE_CLIP', clipId: selected.id, patch: { sourceStart: Math.max(0, Number(e.target.value)) } })}
+                                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-white focus:border-emerald-500/50 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-slate-500 mb-1">OUT (s)</label>
+                                    <input
+                                        type="number"
+                                        min={(selected.sourceStart ?? 0) + 0.1}
+                                        max={300}
+                                        step={0.1}
+                                        value={selected.sourceEnd ?? selected.duration}
+                                        onChange={e => dispatch({ type: 'UPDATE_CLIP', clipId: selected.id, patch: { sourceEnd: Math.max((selected.sourceStart ?? 0) + 0.1, Number(e.target.value)) } })}
+                                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-white focus:border-emerald-500/50 outline-none"
+                                    />
+                                </div>
+                                <div className="text-xs text-slate-400">
+                                    Duración efectiva: {(selected.sourceEnd ?? selected.duration) - (selected.sourceStart ?? 0)}s
+                                </div>
+                            </>
+                        )}
                         <div>
                             <label className="block text-xs text-slate-500 mb-1">Transición</label>
                             <select
@@ -682,7 +779,7 @@ function TimelineRuler({
                     const isDragging = draggingIndex === idx;
                     const isHovered = hoveredClipId === clip.id;
                     const isResizing = resizeDirection !== null;
-                    const scene = sceneById.get(clip.sceneId);
+                    const scene = clip.sceneId ? sceneById.get(clip.sceneId) : undefined;
                     const status = scene ? getSceneVideoStatus(scene) : 'pending';
                     const type = determineClipType(clip);
 
@@ -713,7 +810,7 @@ function TimelineRuler({
                             <div className="flex items-center gap-1 px-1 truncate">
                                 <StatusIcon status={status} />
                                 <span className="truncate">
-                                    {clip.sceneId.slice(0, 6)} · {clip.duration}s
+                                    {(clip.sceneId ? clip.sceneId.slice(0, 6) : clip.assetId ? clip.assetId.slice(0, 6) : clip.id.slice(0, 6))} · {clip.duration}s
                                 </span>
                             </div>
                             {/* Trim handles - only show when zoomed in enough */}
@@ -780,9 +877,12 @@ function StatusLegend({ scenes }: { scenes: Scene[] }) {
 }
 
 // -- Export panel --------------------------------------------------------
+import { exportTimelineToMP4, ExportProgress } from '@/lib/video/ffmpeg-wasm-export';
+
 interface ExportState {
-    jobId: string | null;
-    status: 'idle' | 'queued' | 'processing' | 'completed' | 'failed';
+    status: 'idle' | 'loading' | 'writing' | 'processing' | 'completed' | 'error';
+    progress: number;
+    message: string;
     error: string | null;
     outputUrl: string | null;
 }
@@ -798,67 +898,66 @@ interface ExportPanelProps {
 
 function ExportPanel({ projectId, project, timeline, scenes, showToast, zoomLevel }: ExportPanelProps) {
     const [state, setState] = useState<ExportState>({
-        jobId: null, status: 'idle', error: null, outputUrl: null,
+        status: 'idle', progress: 0, message: '', error: null, outputUrl: null,
     });
     const [submitting, setSubmitting] = useState(false);
-
-    // Poll job status while queued/processing.
-    useEffect(() => {
-        if (!state.jobId) return;
-        if (state.status !== 'queued' && state.status !== 'processing') return;
-        let cancelled = false;
-        const tick = async () => {
-            try {
-                const res = await fetch(`/api/studio/jobs/${state.jobId}`);
-                if (!res.ok) return;
-                const data = await res.json();
-                if (cancelled) return;
-                const status = data.job?.status as string | undefined;
-                if (status === 'completed') {
-                    setState(s => ({ ...s, status: 'completed', outputUrl: data.job?.outputUrl ?? s.outputUrl }));
-                } else if (status === 'failed') {
-                    setState(s => ({ ...s, status: 'failed', error: data.job?.error ?? 'unknown error' }));
-                } else if (status === 'processing') {
-                    setState(s => ({ ...s, status: 'processing' }));
-                }
-            } catch { /* keep polling */ }
-        };
-        tick();
-        const interval = setInterval(tick, 2000);
-        return () => { cancelled = true; clearInterval(interval); };
-    }, [state.jobId, state.status]);
 
     async function handleExport() {
         if (!project) {
             showToast('error', 'Proyecto no disponible');
             return;
         }
+        if (timeline.clips.length === 0) {
+            showToast('error', 'El timeline está vacío. Agrega clips antes de exportar.');
+            return;
+        }
+
         setSubmitting(true);
-        setState({ jobId: null, status: 'idle', error: null, outputUrl: null });
+        setState({ status: 'loading', progress: 0, message: 'Iniciando...', error: null, outputUrl: null });
+
         try {
-            // Simulate FFmpeg export (in production, use real FFmpeg WASM)
-            showToast('info', 'Iniciando exportación...');
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate export time
-            
-            // Create a dummy blob for download
-            const blob = new Blob(['placeholder'], { type: 'video/mp4' });
-            const url = URL.createObjectURL(blob);
-            
-            setState({ 
-                jobId: 'local-export', 
-                status: 'completed', 
-                error: null, 
-                outputUrl: url 
-            });
-            showToast('success', 'Exportación completada (simulada)');
+            const result = await exportTimelineToMP4(
+                timeline as any, // Cast to Timeline type
+                (progress) => {
+                    setState(prev => ({
+                        ...prev,
+                        status: progress.stage,
+                        progress: progress.progress,
+                        message: progress.message,
+                    }));
+                }
+            );
+
+            if (result.success && result.blob) {
+                const url = URL.createObjectURL(result.blob);
+                setState({ 
+                    status: 'completed', 
+                    progress: 100, 
+                    message: 'Exportación completada', 
+                    error: null, 
+                    outputUrl: url 
+                });
+                showToast('success', 'Exportación completada');
+            } else {
+                setState({ 
+                    status: 'error', 
+                    progress: 0, 
+                    message: '', 
+                    error: result.error ?? 'Error desconocido', 
+                    outputUrl: null 
+                });
+                showToast('error', `Exportación fallida: ${result.error}`);
+            }
         } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : 'Error desconocido';
             setState({ 
-                jobId: null, 
-                status: 'failed', 
-                error: e instanceof Error ? e.message : 'failed', 
+                status: 'error', 
+                progress: 0, 
+                message: '', 
+                error: message, 
                 outputUrl: null 
             });
-            showToast('error', 'Error en la exportación');
+            showToast('error', `Error en la exportación: ${message}`);
         } finally {
             setSubmitting(false);
         }
@@ -868,27 +967,41 @@ function ExportPanel({ projectId, project, timeline, scenes, showToast, zoomLeve
         <div className="bg-slate-950 border border-white/10 rounded-xl p-4 space-y-3" data-testid="export-panel">
             <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
-                    <div className="text-xs text-slate-400 uppercase tracking-wider font-bold">Export MP4</div>
-                    <div className="text-sm text-slate-300 mt-1">Listo para exportar al resolución y FPS seleccionados</div>
+                    <div className="text-xs text-slate-400 uppercase tracking-wider font-bold">Export MP4 (FFmpeg WASM)</div>
+                    <div className="text-sm text-slate-300 mt-1">{state.message || (state.status === 'idle' ? 'Listo para exportar' : state.status)}</div>
                </div>
                 <button
                     onClick={handleExport}
-                    disabled={submitting || state.status === 'queued' || state.status === 'processing'}
+                    disabled={submitting || state.status === 'loading' || state.status === 'writing' || state.status === 'processing'}
                     className="flex items-center gap-2 px-5 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-600 text-white text-sm font-bold shadow-lg hover:brightness-110 disabled:opacity-50"
                 >
                     {submitting ? <FaSpinner className="animate-spin" /> : <FaDownload />}
-                    {submitting ? 'Iniciando...' : 'Exportar MP4'}
+                    {submitting ? 'Exportando...' : 'Exportar MP4'}
                </button>
             </div>
+            
+            {state.status !== 'idle' && state.status !== 'completed' && state.status !== 'error' && (
+                <div className="space-y-2">
+                    <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                        <div 
+                            className="h-full bg-gradient-to-r from-emerald-500 to-cyan-600 transition-all duration-300"
+                            style={{ width: `${state.progress}%` }}
+                        />
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono">{state.progress}%</div>
+                </div>
+            )}
+            
             {state.error && (
                 <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg p-3 whitespace-pre-line">
                     {state.error}
                </div>
             )}
+            
             {state.status === 'completed' && state.outputUrl && (
                 <a
                     href={state.outputUrl}
-                    download
+                    download={`${project?.name || 'video'}.mp4`}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 text-sm font-bold"
                 >
                     <FaDownload /> Descargar final.mp4
@@ -896,13 +1009,4 @@ function ExportPanel({ projectId, project, timeline, scenes, showToast, zoomLeve
             )}
         </div>
     );
-}
-
-function describeExportStatus(state: ExportState): string {
-    if (state.status === 'idle') return 'Listo para exportar';
-    if (state.status === 'queued') return 'Queued...';
-    if (state.status === 'processing') return 'Processing...';
-    if (state.status === 'completed') return 'Completed';
-    if (state.status === 'failed') return 'Failed';
-    return '';
 }

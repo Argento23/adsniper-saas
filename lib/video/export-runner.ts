@@ -128,12 +128,20 @@ export async function runExportPreFlight(opts: {
     for (let i = 0; i < timeline.clips.length; i++) {
         const clip = timeline.clips[i];
         if (!clip.sourceUrl || clip.sourceUrl.trim().length === 0) {
-            missing.push(`Scene ${i + 1} has no generated video.`);
+            if (clip.sceneId) {
+                missing.push(`Scene ${i + 1} has no generated video.`);
+            } else if (clip.assetId) {
+                missing.push(`Clip ${i + 1} (media asset ${clip.assetId}) has no source URL.`);
+            } else {
+                missing.push(`Clip ${i + 1} has no source URL.`);
+            }
             continue;
         }
-        const scene = sceneById.get(clip.sceneId);
-        if (!scene) {
-            missing.push(`Scene ${i + 1}: clip references unknown scene ${clip.sceneId}.`);
+        if (clip.sceneId) {
+            const scene = sceneById.get(clip.sceneId);
+            if (!scene) {
+                missing.push(`Scene ${i + 1}: clip references unknown scene ${clip.sceneId}.`);
+            }
         }
     }
     if (missing.length > 0) {

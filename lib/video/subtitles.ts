@@ -180,6 +180,7 @@ export function buildSubtitleEntries(opts: SubtitleGenerationOptions): SubtitleE
     let idx = 0;
     for (const clip of opts.timeline.clips) {
         if (clip.duration < minDur) continue;
+        if (!clip.sceneId) continue; // Skip media clips without sceneId
         const scene = sceneById.get(clip.sceneId);
         if (!scene) continue;
 

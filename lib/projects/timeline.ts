@@ -16,10 +16,13 @@ import { Scene } from './types';
 
 export interface TimelineClip {
     id: string;
-    sceneId: string;
+    sceneId?: string;
+    assetId?: string;
     start: number;
     duration: number;
     sourceUrl?: string;
+    sourceStart?: number;
+    sourceEnd?: number;
     transition?: 'cut' | 'fade' | 'fade-black' | 'dissolve';
     transitionDuration?: number;
     type?: 'video' | 'audio' | 'image';
@@ -81,7 +84,24 @@ export function validateTimeline(timeline: Timeline): TimelineValidationResult {
                 index,
             });
         }
-        if (seen.has(clip.sceneId)) {
+        if (clip.sourceStart !== undefined && clip.sourceStart < 0) {
+            errors.push({
+                kind: 'invalid_duration_clip',
+                message: `clip[${index}] sourceStart must be >= 0`,
+                clipId: clip.id,
+                index,
+            });
+        }
+        if (clip.sourceEnd !== undefined && clip.sourceEnd <= (clip.sourceStart ?? 0)) {
+            errors.push({
+                kind: 'invalid_duration_clip',
+                message: `clip[${index}] sourceEnd must be > sourceStart`,
+                clipId: clip.id,
+                index,
+            });
+        }
+        // For scene-based clips, check duplicate sceneId
+        if (clip.sceneId && seen.has(clip.sceneId)) {
             errors.push({
                 kind: 'unknown_scene',
                 message: `clip[${index}] duplicates sceneId ${clip.sceneId}`,
@@ -89,7 +109,7 @@ export function validateTimeline(timeline: Timeline): TimelineValidationResult {
                 index,
             });
         }
-        seen.add(clip.sceneId);
+        if (clip.sceneId) seen.add(clip.sceneId);
     });
 
     // overlap detection: sort by start and check adjacent gaps

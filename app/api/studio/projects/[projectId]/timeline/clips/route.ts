@@ -80,7 +80,7 @@ export async function POST(request: Request, { params }: RouteContext) {
         const r = sanitizeClip(body);
         if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
 
-        if (!getSceneStore().getScene(params.projectId, r.value.sceneId)) {
+        if (r.value.sceneId && !getSceneStore().getScene(params.projectId, r.value.sceneId)) {
             return NextResponse.json({ error: 'sceneId does not exist in this project' }, { status: 400 });
         }
 

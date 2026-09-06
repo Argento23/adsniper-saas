@@ -79,7 +79,7 @@ function sanitizeClip(raw: RawClip, index: number): { ok: true; value: TimelineC
 function allScenesExist(projectId: string, clips: TimelineClip[]): boolean {
     const store = getSceneStore();
     for (const c of clips) {
-        if (!store.getScene(projectId, c.sceneId)) return false;
+        if (c.sceneId && !store.getScene(projectId, c.sceneId)) return false;
     }
     return true;
 }

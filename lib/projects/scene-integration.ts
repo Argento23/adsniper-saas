@@ -153,6 +153,11 @@ export function syncTimelineWithScenes(opts: {
 
     const keptClips: TimelineClip[] = [];
     for (const clip of timeline.clips) {
+        if (!clip.sceneId) {
+            // Keep media clips (without sceneId) as-is
+            keptClips.push(clip);
+            continue;
+        }
         const scene = bySceneId.get(clip.sceneId);
         if (!scene) continue; // drop clips whose scene no longer exists
 
